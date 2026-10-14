@@ -103,6 +103,8 @@ export type TerminalUI = Readonly<{
    * may be dispatched from it until the consumer reads that input.
    */
   setBusy(busy: boolean): void;
+  setMode?(mode: "build" | "plan"): void;
+  onModeToggle?(callback: () => void): () => void;
 
   /** Optional composer hint shown near the input line; null clears any override. */
   setInputHint?(hint: string | null): void;

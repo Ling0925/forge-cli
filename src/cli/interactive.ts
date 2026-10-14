@@ -62,16 +62,18 @@ export async function interactive(
   };
   let session = sessionId
     ? await service.getSession(parseSessionId(sessionId))
-    : await service.createSession(
-        createSessionInputSchema.parse({ workspace }),
-      );
+    : undefined;
+  const requireSession = () => {
+    if (!session) throw new ForgeError("invalid_input", "No active session. Send a message, use /new, or /resume first.");
+    return session;
+  };
   let tools = new ToolTranscript();
   const appendLines = (lines: readonly RichLine[]): void => {
     if (!lines.length) return;
     if (ui) ui.append(lines);
     else io.stdout(`${lines.map((line) => renderRichLine(line, theme)).join("\n")}\n`);
   };
-  const showHistory = (): void => appendLines(historyLines(session, ui?.columns ?? 80, tools));
+  const showHistory = (): void => appendLines(historyLines(requireSession(), ui?.columns ?? 80, tools));
   const toolCommand = (value: string): void => {
     if (value && !/^[1-9]\d*$/.test(value)) {
       safe.stderr("Expected /tools [N] (positive tool number).\n");
@@ -79,7 +81,7 @@ export async function interactive(
     }
     appendLines(value ? tools.detail(Number(value), ui?.columns ?? 80) : tools.list(ui?.columns ?? 80));
   };
-  let model = session.model;
+  let model = session?.model ?? settings.model;
   let contextUsage: ContextUsage | null = null;
   let usageModel = model;
   const windows = new Map<string, number | null>();
@@ -88,7 +90,7 @@ export async function interactive(
     if (usageModel !== model) { contextUsage = null; usageModel = model; }
     const windowTokens = resolveContextWindow(model, settings, windows.get(model));
     const resolvedWindow = settings.modelContextWindows?.[model] ?? windows.get(model) ?? contextUsage?.windowTokens ?? windowTokens;
-    const measured = contextUsage ? { ...contextUsage, windowTokens: resolvedWindow } : measureContext(projectSummary(session), resolvedWindow);
+    const measured = contextUsage ? { ...contextUsage, windowTokens: resolvedWindow } : measureContext(session ? projectSummary(session) : [], resolvedWindow);
     const { budgetTokens: _oldTokens, budgetChars: _oldChars, ...currentUsage } = measured;
     ui?.setContext?.({ model, usage: { ...currentUsage, ...budgetUsage(resolveContextBudget(resolvedWindow, settings)) }, estimated: true });
     if (ui && !settings.modelContextWindows?.[model] && !windows.has(model) && !loadingWindows.has(model) && service.getModelContextWindow) {
@@ -101,10 +103,18 @@ export async function interactive(
     }
   };
   let mode: "build" | "plan" = "build";
+  const currentMode = (): "build" | "plan" => mode;
   let permission = settings.defaultPermission;
   let approvalMode = initialApproval;
   const queue = new RunQueue();
   let runInProgress = false;
+  const changeMode = (value: "build" | "plan") => {
+    mode = value;
+    ui?.setMode?.(mode);
+    safe.stdout(`Mode: ${mode}${runInProgress ? " (next run only; current run unchanged)" : ""}\n`);
+  };
+  ui?.setMode?.(mode);
+  const offMode = ui?.onModeToggle?.(() => changeMode(mode === "build" ? "plan" : "build"));
   let offRunInput: (() => void) | undefined;
   const pendingCommands: string[] = [];
   let commandBytes = 0;
@@ -168,9 +178,8 @@ export async function interactive(
           const value = text.slice(5).trim();
           if (value) {
             if (value !== "plan" && value !== "build") throw Error("Expected plan or build.");
-            mode = value;
-          }
-          safe.stdout(`Mode: ${mode}\n`);
+            changeMode(value);
+          } else safe.stdout(`Mode: ${mode}\n`);
         } else if (text === "/permission" || text.startsWith("/permission ")) {
           const value = text.slice(11).trim();
           if (value) permission = permissionSchema.parse(value);
@@ -282,8 +291,8 @@ export async function interactive(
 
   const banner = formatBanner(
     {
-      id: session.id,
-      workspace: session.workspace,
+      id: session?.id ?? "not created",
+      workspace: session?.workspace ?? workspace,
       model,
       permission,
       mode,
@@ -295,8 +304,8 @@ export async function interactive(
     ui.append(
       bannerLines(
         {
-          id: session.id,
-          workspace: session.workspace,
+          id: session?.id ?? "not created",
+          workspace: session?.workspace ?? workspace,
           model,
           permission,
           mode,
@@ -404,20 +413,19 @@ export async function interactive(
               if (value) {
                 if (value !== "plan" && value !== "build")
                   throw Error("Expected plan or build.");
-                mode = value;
-              }
-              safe.stdout(`Mode: ${mode}\n`);
+                changeMode(value);
+              } else safe.stdout(`Mode: ${mode}\n`);
               break;
             case "/plan": {
               const currentPlan =
-                (await service.getSession(session.id)).plan ?? null;
+                (await service.getSession(requireSession().id)).plan ?? null;
               if (ui) ui.append(planLines(currentPlan, ui.columns));
               else styled(`${formatPlan(currentPlan, theme)}\n`);
               break;
             }
             case "/sessions": {
               const sessions = await service.listSessions();
-              styled(`${formatSessions(sessions, session.id, theme)}\n`);
+              styled(`${formatSessions(sessions, session?.id, theme)}\n`);
               break;
             }
             case "/resume": {
@@ -429,7 +437,7 @@ export async function interactive(
               try {
                 const chosen =
                   value ||
-                  (await pickSession(service, safe, session.id, active.signal));
+                  (await pickSession(service, safe, session?.id ?? "", active.signal));
                 if (chosen === null || active.signal.aborted) break;
                 if (!value) {
                   clearStatus();
@@ -454,7 +462,7 @@ export async function interactive(
             case "/new":
               session = await service.createSession(
                 createSessionInputSchema.parse({
-                  workspace: session.workspace,
+                  workspace: session?.workspace ?? workspace,
                   model,
                 }),
               );
@@ -464,7 +472,7 @@ export async function interactive(
               break;
             case "/fork":
               session = await service.forkSession(
-                session.id,
+                requireSession().id,
                 value ? Number(value) : undefined,
               );
               tools = new ToolTranscript();
@@ -474,11 +482,11 @@ export async function interactive(
               safe.stdout("已分支会话。\n");
               break;
             case "/rename":
-              session = await service.renameSession(session.id, value);
+              session = await service.renameSession(requireSession().id, value);
               safe.stdout("已重命名会话。\n");
               break;
             case "/archive":
-              session = await service.archiveSession(session.id, true);
+              session = await service.archiveSession(requireSession().id, true);
               safe.stdout("已归档会话。\n");
               break;
             case "/compact": {
@@ -495,7 +503,7 @@ export async function interactive(
               });
               try {
                 session = await Promise.race([
-                  service.compactSession(session.id, signal),
+                  service.compactSession(requireSession().id, signal),
                   aborted,
                 ]);
               } finally {
@@ -503,37 +511,37 @@ export async function interactive(
                 clearStatus();
               }
               if (!signal.aborted) contextUsage = null;
-              if (!signal.aborted) safe.stdout(`Compacted ${session.id}\n`);
+              if (!signal.aborted) safe.stdout(`Compacted ${requireSession().id}\n`);
               break;
             }
             case "/diagnostics":
               safe.stdout(
-                `${JSON.stringify(await service.getDiagnostics(session.id), null, 2)}\n`,
+                `${JSON.stringify(await service.getDiagnostics(requireSession().id), null, 2)}\n`,
               );
               break;
             case "/context":
               safe.stdout(
-                `${JSON.stringify(await service.getProjectContext(session.id), null, 2)}\n`,
+                `${JSON.stringify(await service.getProjectContext(requireSession().id), null, 2)}\n`,
               );
               break;
             case "/skills":
               safe.stdout(
-                `${JSON.stringify((await service.getProjectContext(session.id)).skills, null, 2)}\n`,
+                `${JSON.stringify((await service.getProjectContext(requireSession().id)).skills, null, 2)}\n`,
               );
               break;
             case "/checkpoints": {
               const action = words[0] ?? "list";
               if (action === "list")
                 safe.stdout(
-                  `${JSON.stringify(await service.listCheckpoints(session.id), null, 2)}\n`,
+                  `${JSON.stringify(await service.listCheckpoints(requireSession().id), null, 2)}\n`,
                 );
               else if (action === "diff" && words[1] && words.length === 2)
                 safe.stdout(
-                  `${await service.getCheckpointDiff(session.id, words[1])}\n`,
+                  `${await service.getCheckpointDiff(requireSession().id, words[1])}\n`,
                 );
               else if (action === "restore" && words[1] && words.length === 2) {
-                session = await service.restoreCheckpoint(session.id, words[1]);
-                safe.stdout(`Restored ${session.id}\n`);
+                session = await service.restoreCheckpoint(requireSession().id, words[1]);
+                safe.stdout(`Restored ${requireSession().id}\n`);
               } else
                 throw Error("Expected /checkpoints [list|diff ID|restore ID].");
               break;
@@ -566,7 +574,7 @@ export async function interactive(
             }
             case "/export":
               safe.stdout(
-                `${JSON.stringify(await service.getSession(session.id), null, 2)}\n`,
+                `${JSON.stringify(await service.getSession(requireSession().id), null, 2)}\n`,
               );
               break;
             default:
@@ -577,30 +585,35 @@ export async function interactive(
           continue;
         }
 
+        if (lifetime.signal.aborted) break;
+        session ??= await service.createSession(createSessionInputSchema.parse({ workspace, model }));
+        if (lifetime.signal.aborted) break;
         ui?.setBusy(true);
         active = new AbortController();
         live = new LiveRun(safe, theme, tools);
         runInProgress = true;
         inputHint();
         offRunInput = io.onRunInput?.(receiveInput);
+        const runMode = currentMode();
+        const runPermission = permission;
         session = await service.run(
           runInputSchema.parse({
-            sessionId: session.id,
+            sessionId: requireSession().id,
             prompt: line,
             model,
             permission,
             mode,
           }),
           (event) => {
-            if (event.type === "context_usage" && event.sessionId === session.id) {
+            if (event.type === "context_usage" && event.sessionId === requireSession().id) {
               contextUsage = event.usage;
               refreshContext();
             }
             live?.event(event);
           },
           async (request, signal) => {
-            const ceiling = session.permissionCeiling ?? permission;
-            const eligiblePermission = mode === "plan" || ceiling === "readonly" ? "readonly" : permission;
+            const ceiling = requireSession().permissionCeiling ?? runPermission;
+            const eligiblePermission = runMode === "plan" || ceiling === "readonly" ? "readonly" : runPermission;
             if (shouldAutoApprove(approvalMode, eligiblePermission, request, signal)) {
               safe.stdout(`Auto-approved ${request.childSessionId ? `child ${request.childSessionId} ` : ""}${request.toolName}: ${JSON.stringify(request.command)}\n`);
               return true;
@@ -656,6 +669,7 @@ export async function interactive(
     return 0;
   } finally {
     offRunInput?.();
+    offMode?.();
     offClose?.();
     off();
     active?.abort();

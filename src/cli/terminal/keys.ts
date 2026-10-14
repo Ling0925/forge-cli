@@ -15,6 +15,10 @@ export function handle(controller: Controller, event: InputEvent): void {
     controller.screen.mouse(event);
     return;
   }
+  if (event.kind === "key" && event.key === "shift-tab") {
+    if (!event.pasted && !controller.fresh && !controller.picker && !controller.screen.hasSelection) controller.modeToggle?.();
+    return;
+  }
   if (controller.screen.hasSelection) {
     if (event.kind === "key" && !event.pasted && event.key === "interrupt") {
       controller.screen.copySelection();

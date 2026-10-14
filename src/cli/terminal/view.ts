@@ -21,6 +21,7 @@ export interface View {
   editor: Editor;
   prompt: string;
   fresh: boolean;
+  mode?: "build" | "plan";
   menu: SlashMenu;
   status: RunStatus | null;
   inputHint?: string | null;
@@ -64,7 +65,7 @@ export function draw(view: View): void {
     const length = Math.min(prefixRemaining, text.length);
     prefixRemaining -= length;
     return [
-      { text: text.slice(0, length), tone: "accent" },
+      { text: text.slice(0, length), tone: !picker && !view.fresh && view.mode === "plan" ? "warning" : "accent" },
       { text: text.slice(length) },
     ];
   });

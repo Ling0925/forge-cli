@@ -140,6 +140,13 @@ export class Controller implements TerminalUI {
     this.status = status;
     this.draw();
   }
+  mode: "build" | "plan" = "build";
+  modeToggle: (() => void) | undefined;
+  setMode(mode: "build" | "plan"): void { this.mode = mode; this.draw(); }
+  onModeToggle(callback: () => void): () => void {
+    this.modeToggle = callback;
+    return () => { if (this.modeToggle === callback) this.modeToggle = undefined; };
+  }
   setBusy(busy: boolean): void {
     this.busy = busy;
     this.draw();

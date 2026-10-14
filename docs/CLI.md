@@ -72,3 +72,10 @@ env -u NO_COLOR TERM=xterm-256color node scripts/qa-cli-terminal.mjs --cli dist/
 `--scenario NAME` 运行单一场景。启动、菜单、选择器与扩展场景使用指定的初始宽度；部分交互场景从 120 列开始，再执行明确的 80／40 列缩放。验收报告须区分这些覆盖范围。
 
 `QA_CHROME` 可指定现有 Chromium。主截图脚本的 `XTERM_ROOT` 指向包含 `@xterm` 的目录；单元测试的 `XTERM_ROOT` 指向 `@xterm` 目录本身。Unicode11 addon 的默认位置是 `.build/qa-deps/@xterm/addon-unicode11`。截图脚本会先验证中文、emoji、组合字符及光标的实际单元格宽度。
+
+## 会话与模式更新（2026-10-14）
+
+- CLI 启动不再立即落盘会话：首条真实消息才创建，`/new` 仍显式立即创建；空白、帮助、模式/权限/模型选择、EOF、退出不会创建。`/sessions`、`/resume` 无活动会话也可用；依赖会话的命令明确提示先发消息或新建/恢复。存量空会话沿用显式 archive，不自动删除。
+- Shift+Tab（CSI Z）在普通输入区切换 build/plan，保留草稿，文字回显模式；plan 箭头使用 warning tone。审批、picker、文字选区和粘贴不触发。终端不发送该键码时使用 `/mode plan|build`。忙时只影响下一次运行，当前运行权限与模式保持不变。
+- 新建且未显式命名的会话在 completed 后后台尝试自动命名一次。先持久化本地首行标题，再用当前模型生成短标题，2 秒超时；失败或退出保留本地标题。不会新增对话消息或消耗运行轮次/工具预算，但可能产生一次模型费用。手动标题、旧版无来源标记标题、fork 和子代理不自动覆盖。CLI 下次 sessions 刷新可见。
+- 审批仍为原有 ask/显式 auto、`[y/N]`；审批新需求中的冲突默认值尚待确认，本轮未放宽权限。

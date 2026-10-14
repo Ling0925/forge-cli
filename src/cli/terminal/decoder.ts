@@ -7,6 +7,7 @@ export type InputEvent =
   | { kind: "background"; background: "light" | "dark" };
 
 const keys: Readonly<Record<string, string>> = {
+  "\x1b[Z": "shift-tab",
   "\x1b[A": "up",
   "\x1b[B": "down",
   "\x1b[C": "right",

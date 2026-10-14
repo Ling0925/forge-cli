@@ -29,7 +29,7 @@ const snapshot = sessionSnapshotSchema.parse({
 });
 const service = (run: HarnessService["run"]): HarnessService => ({
   ...extendedService(),
-  getSettings: async () => defaultPublicSettings,
+  getSettings: async () => ({ ...defaultPublicSettings, model: "test" }),
   updateSettings: async () => defaultPublicSettings,
   listModels: async () => ["test"],
   listSessions: async () => [],
@@ -177,7 +177,7 @@ describe("interactive CLI", () => {
     });
     let captured: AbortSignal | undefined;
     let compactCalls = 0;
-    const host = consoleIO(["/compact", "/sessions"]);
+    const host = consoleIO(["/new", "/compact", "/sessions"]);
     const base = service(async () => snapshot);
     const run = runCliWithIO(
       ["chat"],
@@ -213,7 +213,7 @@ describe("interactive CLI", () => {
     const started = new Promise<void>((resolve) => {
       start = resolve;
     });
-    const host = consoleIO(["/compact"]);
+    const host = consoleIO(["/new", "/compact"]);
     const base = service(async () => snapshot);
     const run = runCliWithIO(
       ["chat"],
@@ -356,6 +356,24 @@ describe("rich integration adapters", () => {
     expect(host.contexts.some((value) => (value?.usage?.parts.memory ?? 0) > 0)).toBe(true);
     expect(host.contexts.at(-1)).toMatchObject({ model: "changed", estimated: true, usage: { usedTokens: 0, windowTokens: null } });
   });
+
+it("Shift+Tab callback shares /mode state without changing active-run approval scope", async () => {
+  const host = richHost(["hello", "/quit"], []);
+  let toggle: (() => void) | undefined;
+  const modes: string[] = [];
+  const ui = host.io.ui; if (!ui) throw Error("Missing UI fixture");
+  const base = service(async (input, _sink, approve, signal) => {
+    expect(input.mode).toBe("build");
+    toggle?.();
+    expect(await approve({id: "approval", sessionId: id, toolCallId: "call", toolName: "run_command", description: "test", command: ["node", "--version"]}, signal)).toBe(true);
+    return snapshot;
+  });
+  await runCliWithIO(["chat", "--approval", "auto"], base, {...host.io, ui: {...ui, setMode: mode => modes.push(mode), onModeToggle: callback => {toggle = callback; return () => {toggle = undefined;};}}});
+  expect(modes).toEqual(["build", "plan"]);
+  expect(host.output.join("\n")).toContain("next run only; current run unchanged");
+  expect(toggle).toBeUndefined();
+});
+
   it("renders persisted messages on chat --session and /resume before the next prompt", async () => {
     const previous = { ...snapshot, title: "Earlier", messages: [
       { role: "system" as const, content: "private-system" },
@@ -369,7 +387,7 @@ describe("rich integration adapters", () => {
     for (const [args, commands] of [
       [["chat", "--session", id], ["/tools 1", "/quit"]],
       [["chat"], [`/resume ${id}`, "/tools 1", "/quit"]],
-      [["chat"], ["/fork", "/tools 1", "/quit"]],
+      [["chat", "--session", id], ["/fork", "/tools 1", "/quit"]],
     ] as const) {
       const host = richHost([...commands], []);
       const code = await runCliWithIO([...args], {
@@ -787,5 +805,29 @@ describe("raw terminal EOF integration", () => {
       host.io.dispose?.();
       vi.unstubAllEnvs();
     }
+  });
+});
+
+describe("lazy session lifecycle", () => {
+  it.each([["/quit"], [], [" ", "/help", "/mode plan", "/permission readonly", "/sessions", "/context", "/fork", "/quit"]])("does not create for startup, EOF or commands: %j", async (...lines: string[]) => {
+    const host = consoleIO(lines);
+    const createSession = vi.fn(async () => snapshot);
+    await runCliWithIO(["chat"], { ...service(async () => snapshot), createSession }, host.io);
+    expect(createSession).not.toHaveBeenCalled();
+  });
+  it("creates only at the first real prompt and preserves selected model", async () => {
+    const host = consoleIO(["/model chosen", "first message", "second", "/quit"]);
+    const createSession = vi.fn(async () => ({...snapshot, model: "chosen"}));
+    const run = vi.fn(async () => snapshot);
+    await runCliWithIO(["chat"], {...service(run), createSession}, host.io);
+    expect(createSession).toHaveBeenCalledTimes(1);
+    expect(createSession).toHaveBeenCalledWith({workspace: process.cwd(), model: "chosen"});
+    expect(run.mock.calls).toHaveLength(2);
+  });
+  it("keeps explicit /new immediate", async () => {
+    const host = consoleIO(["/new", "/quit"]);
+    const createSession = vi.fn(async () => snapshot);
+    await runCliWithIO(["chat"], {...service(async () => snapshot), createSession}, host.io);
+    expect(createSession).toHaveBeenCalledTimes(1);
   });
 });
