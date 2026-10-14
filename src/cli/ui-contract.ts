@@ -1,0 +1,114 @@
+import type { ApprovalRequest } from "../shared/schemas";
+
+/**
+ * Typed contract between the CLI's presentation producers (formatting, command
+ * layer) and the single terminal controller that owns the screen.
+ *
+ * Trust model: every `text` in this contract is untrusted, plain Unicode. Only
+ * the terminal controller may emit terminal escape sequences, and only after
+ * sanitizing the supplied text. Producers must never pre-colorize their input.
+ */
+
+/** Semantic emphasis role. Colors are resolved by the controller, not callers. */
+export type Tone =
+  | "text"
+  | "muted"
+  | "accent"
+  | "success"
+  | "warning"
+  | "error";
+
+/** A single styled run of plain text. */
+export type Span = Readonly<{
+  readonly text: string;
+  readonly tone?: Tone;
+  readonly bold?: boolean;
+  readonly inverse?: boolean;
+}>;
+
+/** A logical output line, rendered as a sequence of spans. */
+export type RichLine = readonly Span[];
+
+export type UIOptions = Readonly<{
+  /** Requested appearance; the controller resolves "system" against the host. */
+  readonly theme: "system" | "light" | "dark";
+}>;
+
+/** Live run summary for the transient status line. */
+export type RunStatus = Readonly<{
+  readonly label: string;
+  readonly startedAt: number;
+  readonly toolCount: number;
+  readonly cancellable: boolean;
+}>;
+
+export type PickerItem = Readonly<{
+  readonly value: string;
+  readonly label: string;
+  readonly detail?: string;
+}>;
+
+export type PickerSpec = Readonly<{
+  readonly title: string;
+  readonly items: readonly PickerItem[];
+  readonly selected?: string;
+  readonly placeholder?: string;
+  readonly emptyLabel?: string;
+}>;
+
+/**
+ * The controller owns the screen: exactly one component may write escapes,
+ * reposition the cursor, or repaint the transient region.
+ */
+export type TerminalUI = Readonly<{
+  readonly columns: number;
+  readonly rows: number;
+
+  /** Resolves the theme and installs terminal modes; idempotent. */
+  configure(options: UIOptions): Promise<void>;
+
+  /**
+   * Finalizes lines above the transient region: once appended, a line is
+   * permanent scrollback and is never repainted. Use for completed output.
+   */
+  append(lines: readonly RichLine[]): void;
+
+  /**
+   * Replaces the entire unfinished assistant tail (streaming text, partial
+   * tool row). Pass an empty array to clear it. Never appends.
+   */
+  setTail(lines: readonly RichLine[]): void;
+
+  /** Sets or clears the transient status line; null removes it. */
+  setStatus(status: RunStatus | null): void;
+
+  /**
+   * Marks a run as in progress. A composed draft is preserved, but no new run
+   * may be dispatched from it until the consumer reads that input.
+   */
+  setBusy(busy: boolean): void;
+
+  /**
+   * Shows a filterable picker. Resolves the selected item's `value`, or null
+   * when dismissed or when `signal` aborts. The terminal is restored on return.
+   */
+  choose(spec: PickerSpec, signal: AbortSignal): Promise<string | null>;
+
+  /**
+   * Requests a one-shot decision for `request`. Resolves true only for fresh,
+   * intentional typed confirmation (or an explicit key selection); resolves
+   * false for decline, cancellation, or abort. Bracketed paste can never
+   * approve: pasted bytes are treated as untrusted text, not as consent.
+   */
+  approve(request: ApprovalRequest, signal: AbortSignal): Promise<boolean>;
+
+  /** Restores terminal modes and stops all repainting; safe to call once. */
+  dispose(): void;
+}>;
+
+/** What the controller actually painted, for consumers that mirror the screen. */
+export type RenderUpdate = Readonly<{
+  readonly append: readonly RichLine[];
+  readonly tail: readonly RichLine[];
+  readonly status?: RunStatus | null;
+}>;

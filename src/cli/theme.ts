@@ -1,0 +1,199 @@
+import type { Tone } from "./ui-contract";
+
+export const isColorSupported = (isTTY = true): boolean => {
+  if (process.env.NO_COLOR !== undefined) return false;
+  if (process.env.TERM === "dumb") return false;
+  return isTTY;
+};
+
+export interface Theme {
+  readonly enabled: boolean;
+  readonly variant: "plain" | "structural" | "light" | "dark";
+  bold(text: string): string;
+  dim(text: string): string;
+  italic(text: string): string;
+  underline(text: string): string;
+  inverse(text: string): string;
+  cyan(text: string): string;
+  green(text: string): string;
+  yellow(text: string): string;
+  red(text: string): string;
+  blue(text: string): string;
+  magenta(text: string): string;
+  gray(text: string): string;
+  tone(
+    text: string,
+    role: Tone,
+    options?: { bold?: boolean; inverse?: boolean },
+  ): string;
+  badge(
+    text: string,
+    color: "green" | "blue" | "yellow" | "red" | "gray" | "cyan",
+  ): string;
+}
+
+export interface ResolveThemeOptions {
+  readonly setting: "system" | "light" | "dark";
+  readonly background: "light" | "dark" | "unknown";
+  readonly colorDepth: number;
+  readonly noColor: boolean;
+  readonly dumb: boolean;
+}
+
+const wrap = (text: string, open: string, close: string): string =>
+  text ? `${open}${text}${close}` : "";
+
+const identity = (text: string): string => text;
+
+const paint = (open: string) => (text: string) => wrap(text, open, "\u001b[0m");
+
+interface Paint {
+  readonly text: (text: string) => string;
+  readonly muted: (text: string) => string;
+  readonly accent: (text: string) => string;
+  readonly success: (text: string) => string;
+  readonly warning: (text: string) => string;
+  readonly error: (text: string) => string;
+}
+
+const plainPaint: Paint = {
+  text: identity,
+  muted: identity,
+  accent: identity,
+  success: identity,
+  warning: identity,
+  error: identity,
+};
+
+/** Truecolor sage/semantic inks measured at >= 4.5:1 on DESIGN.md canvases. */
+const truecolor: Record<"light" | "dark", Paint> = {
+  light: {
+    text: identity,
+    muted: paint("\u001b[38;2;92;99;87m"),
+    accent: paint("\u001b[38;2;85;104;77m"),
+    success: paint("\u001b[38;2;34;109;64m"),
+    warning: paint("\u001b[38;2;151;90;6m"),
+    error: paint("\u001b[38;2;184;36;32m"),
+  },
+  dark: {
+    text: identity,
+    muted: paint("\u001b[38;2;164;172;160m"),
+    accent: paint("\u001b[38;2;143;173;130m"),
+    success: paint("\u001b[38;2;126;217;158m"),
+    warning: paint("\u001b[38;2;240;190;101m"),
+    error: paint("\u001b[38;2;255;143;133m"),
+  },
+};
+
+/** 256-color fallbacks that also clear 4.5:1 on the same canvases. */
+const cube: Record<"light" | "dark", Paint> = {
+  light: {
+    text: identity,
+    muted: paint("\u001b[38;5;59m"),
+    accent: paint("\u001b[38;5;59m"),
+    success: paint("\u001b[38;5;23m"),
+    warning: paint("\u001b[38;5;94m"),
+    error: paint("\u001b[38;5;124m"),
+  },
+  dark: {
+    text: identity,
+    muted: paint("\u001b[38;5;145m"),
+    accent: paint("\u001b[38;5;108m"),
+    success: paint("\u001b[38;5;115m"),
+    warning: paint("\u001b[38;5;215m"),
+    error: paint("\u001b[38;5;210m"),
+  },
+};
+
+const build = (
+  enabled: boolean,
+  variant: Theme["variant"],
+  colors: Paint,
+  structural: boolean,
+): Theme => {
+  const accent = colors.accent;
+  const bold = (text: string): string =>
+    enabled && text ? wrap(text, "\u001b[1m", "\u001b[22m") : text;
+  const tone: Theme["tone"] = (text, role, options) => {
+    const painted = colors[role](text);
+    const marked = options?.bold ? bold(painted) : painted;
+    return options?.inverse && enabled && marked
+      ? wrap(marked, "\u001b[7m", "\u001b[27m")
+      : marked;
+  };
+  return {
+    enabled,
+    variant,
+    bold:
+      structural || variant === "light" || variant === "dark" ? bold : identity,
+    dim: colors.muted,
+    italic: enabled
+      ? (text) => wrap(text, "\u001b[3m", "\u001b[23m")
+      : identity,
+    underline: enabled
+      ? (text) => wrap(text, "\u001b[4m", "\u001b[24m")
+      : identity,
+    inverse: enabled
+      ? (text) => wrap(text, "\u001b[7m", "\u001b[27m")
+      : identity,
+    cyan: accent,
+    blue: accent,
+    magenta: accent,
+    green: colors.success,
+    yellow: colors.warning,
+    red: colors.error,
+    gray: colors.muted,
+    tone,
+    badge: (text) => bold(`[${text}]`),
+  };
+};
+
+export const resolveTheme = (options: ResolveThemeOptions): Theme => {
+  if (options.noColor || options.dumb || options.colorDepth < 4) {
+    return build(false, "plain", plainPaint, false);
+  }
+  const variant =
+    options.setting === "system" ? options.background : options.setting;
+  if (variant === "unknown") return build(true, "structural", plainPaint, true);
+  const colors = options.colorDepth >= 24 ? truecolor[variant] : cube[variant];
+  return build(true, variant, colors, true);
+};
+
+export const createTheme = (
+  options: { isTTY?: boolean; forceColor?: boolean } = {},
+): Theme => {
+  const enabled =
+    (options.isTTY ?? true) &&
+    isColorSupported(true) &&
+    (options.forceColor ?? true);
+  if (!enabled)
+    return resolveTheme({
+      setting: "system",
+      background: "unknown",
+      colorDepth: 1,
+      noColor: true,
+      dumb: false,
+    });
+  return resolveTheme({
+    setting: "dark",
+    background: "dark",
+    colorDepth: 8,
+    noColor: false,
+    dumb: false,
+  });
+};
+
+export const defaultTheme = createTheme();
+
+export {
+  codePointWidth,
+  getTerminalWidth,
+  graphemeWidth,
+  graphemes,
+  padLeft,
+  padRight,
+  stringWidth,
+  stripAnsi,
+  truncate,
+  visibleWidth,
+} from "./render/width";
