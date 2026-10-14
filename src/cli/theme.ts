@@ -110,12 +110,24 @@ const build = (
   variant: Theme["variant"],
   colors: Paint,
   structural: boolean,
+  extendedColor = false,
 ): Theme => {
   const accent = colors.accent;
   const bold = (text: string): string =>
     enabled && text ? wrap(text, "\u001b[1m", "\u001b[22m") : text;
   const tone: Theme["tone"] = (text, role, options) => {
-    const painted = colors[role](text);
+    const contextRoles: Partial<Record<Tone, number>> = {
+      contextInstructions: 0, contextMemory: 1, contextConversation: 2, contextTools: 3,
+    };
+    const index = contextRoles[role];
+    const inks = extendedColor && variant === "light"
+      ? ["38;5;25", "38;5;90", "38;5;23", "38;5;94"]
+      : extendedColor && variant === "dark"
+        ? ["38;5;75", "38;5;177", "38;5;115", "38;5;215"]
+        : ["34", "35", "32", "33"];
+    const painted = index === undefined
+      ? colors[role as keyof Paint](text)
+      : enabled ? paint(`\u001b[${inks[index]}m`)(text) : text;
     const marked = options?.bold ? bold(painted) : painted;
     return options?.inverse && enabled && marked
       ? wrap(marked, "\u001b[7m", "\u001b[27m")
@@ -156,7 +168,7 @@ export const resolveTheme = (options: ResolveThemeOptions): Theme => {
     options.setting === "system" ? options.background : options.setting;
   if (variant === "unknown") return build(true, "structural", plainPaint, true);
   const colors = options.colorDepth >= 24 ? truecolor[variant] : cube[variant];
-  return build(true, variant, colors, true);
+  return build(true, variant, colors, true, options.colorDepth >= 8);
 };
 
 export const createTheme = (

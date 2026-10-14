@@ -9,6 +9,10 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS: readonly SlashCommand[] = [
+  { name: "/steer", args: "<message>", description: "向当前运行插话，在模型/工具交换结束后生效", category: "workflow" },
+  { name: "/approval", args: "[ask|auto]", description: "本会话命令审批：逐次询问或显式自动批准（非沙箱）", category: "config" },
+  { name: "/queue", args: "[clear|run]", description: "查看/清空待发消息，失败后显式继续", category: "workflow" },
+  { name: "/tools", args: "[N]", description: "查看工具摘要或第 N 次调用的参数与结果", category: "workflow" },
   {
     name: "/model",
     args: "[id]",
@@ -121,9 +125,14 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   },
   {
     name: "/quit",
-    description: "退出 Forge",
+    description: "退出 Forge（同 /exit）",
     category: "general",
     onboarding: true,
+  },
+  {
+    name: "/exit",
+    description: "退出 Forge（/quit 的别名）",
+    category: "general",
   },
 ];
 

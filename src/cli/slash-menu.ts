@@ -44,14 +44,18 @@ export class SlashMenu {
    * or stays active as long as the command prefix is being typed.
    */
   update(draft: string): boolean {
-    const trimmed = draft.trimStart();
-    if (!trimmed.startsWith("/") || trimmed.includes(" ")) {
+    // Only a bare command at the start of a single-line draft is completable.
+    // Never discard arguments, pasted lines or leading whitespace on selection.
+    if (!draft.startsWith("/") || /\s/.test(draft)) {
       this.close();
       return false;
     }
 
-    this.query = trimmed;
+    if (draft === this.query) return this.active;
+    this.query = draft;
     this.items = matchSlashCommands(this.query);
+    // New input starts from an exact match, otherwise the first suggestion.
+    this.selectedIndex = Math.max(0, this.items.findIndex((item) => item.name === draft.toLowerCase()));
     if (this.items.length === 0) {
       this.active = false;
       this.selectedIndex = 0;

@@ -1,5 +1,7 @@
+import { projectSummary } from "../core/context";
 import { mcpRegisterInputSchema } from "../mcp/types";
 import type { HarnessService } from "../shared/contracts";
+import { budgetUsage, measureContext, resolveContextBudget, resolveContextWindow } from "../shared/context-usage";
 import { ForgeError, toErrorInfo } from "../shared/errors";
 import {
   createSessionInputSchema,
@@ -8,7 +10,8 @@ import {
   runInputSchema,
   settingsFields,
 } from "../shared/schemas";
-import type { AgentEvent } from "../shared/schemas";
+import type { AgentEvent, ContextUsage } from "../shared/schemas";
+import { type ApprovalMode, COMMAND_APPROVAL_WARNING, parseApprovalMode, shouldAutoApprove } from "./approval-policy";
 import type { CliIO } from "./cli";
 import { formatHelp } from "./commands";
 import {
@@ -26,10 +29,13 @@ import {
   pickReasoningEffort,
   pickSession,
 } from "./interactive/pickers";
+import { RunQueue } from "./interactive/run-queue";
 import { LiveRun } from "./live-run";
-import { plainLines } from "./render/rich";
+import { historyLines } from "./render/history";
+import { plainLines, renderRichLine } from "./render/rich";
+import { ToolTranscript } from "./render/tool-transcript";
 import { createTheme } from "./theme";
-import type { RunStatus } from "./ui-contract";
+import type { RichLine, RunStatus } from "./ui-contract";
 
 export { terminalText };
 
@@ -39,6 +45,7 @@ export async function interactive(
   workspace: string,
   sessionId: string | undefined,
   _render: (io: CliIO, event: AgentEvent) => void,
+  initialApproval: ApprovalMode = "ask",
 ): Promise<number> {
   const settings = await service.getSettings();
   const ui = io.ui;
@@ -58,9 +65,49 @@ export async function interactive(
     : await service.createSession(
         createSessionInputSchema.parse({ workspace }),
       );
+  let tools = new ToolTranscript();
+  const appendLines = (lines: readonly RichLine[]): void => {
+    if (!lines.length) return;
+    if (ui) ui.append(lines);
+    else io.stdout(`${lines.map((line) => renderRichLine(line, theme)).join("\n")}\n`);
+  };
+  const showHistory = (): void => appendLines(historyLines(session, ui?.columns ?? 80, tools));
+  const toolCommand = (value: string): void => {
+    if (value && !/^[1-9]\d*$/.test(value)) {
+      safe.stderr("Expected /tools [N] (positive tool number).\n");
+      return;
+    }
+    appendLines(value ? tools.detail(Number(value), ui?.columns ?? 80) : tools.list(ui?.columns ?? 80));
+  };
   let model = session.model;
+  let contextUsage: ContextUsage | null = null;
+  let usageModel = model;
+  const windows = new Map<string, number | null>();
+  const loadingWindows = new Set<string>();
+  const refreshContext = (): void => {
+    if (usageModel !== model) { contextUsage = null; usageModel = model; }
+    const windowTokens = resolveContextWindow(model, settings, windows.get(model));
+    const resolvedWindow = settings.modelContextWindows?.[model] ?? windows.get(model) ?? contextUsage?.windowTokens ?? windowTokens;
+    const measured = contextUsage ? { ...contextUsage, windowTokens: resolvedWindow } : measureContext(projectSummary(session), resolvedWindow);
+    const { budgetTokens: _oldTokens, budgetChars: _oldChars, ...currentUsage } = measured;
+    ui?.setContext?.({ model, usage: { ...currentUsage, ...budgetUsage(resolveContextBudget(resolvedWindow, settings)) }, estimated: true });
+    if (ui && !settings.modelContextWindows?.[model] && !windows.has(model) && !loadingWindows.has(model) && service.getModelContextWindow) {
+      const requestedModel = model;
+      loadingWindows.add(requestedModel);
+      void service.getModelContextWindow(requestedModel, lifetime.signal).then(value => {
+        windows.set(requestedModel, value);
+        if (!lifetime.signal.aborted && model === requestedModel) refreshContext();
+      }).catch(() => windows.set(requestedModel, null)).finally(() => loadingWindows.delete(requestedModel));
+    }
+  };
   let mode: "build" | "plan" = "build";
   let permission = settings.defaultPermission;
+  let approvalMode = initialApproval;
+  const queue = new RunQueue();
+  let runInProgress = false;
+  let offRunInput: (() => void) | undefined;
+  const pendingCommands: string[] = [];
+  let commandBytes = 0;
   try {
     await ui?.configure({ theme: settings.theme });
   } catch (error) {
@@ -68,12 +115,93 @@ export async function interactive(
     throw error;
   }
   const lifetime = new AbortController();
+  refreshContext();
   let active: AbortController | undefined;
   let awaitingInput: AbortController | undefined;
   let interruptedOnce = false;
   let live: LiveRun | undefined;
   let statusGeneration = 0;
   let activeStatus: number | undefined;
+
+  const inputHint = (): void => {
+    ui?.setInputHint?.(runInProgress
+      ? "Enter queues · /steer <message> or Shift+Enter steers"
+      : queue.length ? `${queue.length} pending${queue.paused ? " · paused · /queue run" : ""} · /queue` : null);
+    ui?.setPendingInput?.(queue.preview());
+  };
+  const addSteering = (text: string): void => {
+    if (!text.trim()) throw new ForgeError("invalid_input", "Expected /steer <message>.");
+    queue.add("steer", text);
+    safe.stdout("Steer accepted for this run; waiting for the current model/tool exchange to finish.\n");
+  };
+  const resetSessionControls = (): void => {
+    contextUsage = null;
+    if (queue.length) safe.stdout("Pending input cleared on session change.\n");
+    queue.clear();
+    approvalMode = "ask";
+    safe.stdout("Command approval: ask (session reset).\n");
+    inputHint();
+  };
+  const queueCommand = (value: string): void => {
+    if (!value) safe.stdout(queue.describe());
+    else if (value === "clear") { queue.clear(); safe.stdout("Queue cleared.\n"); }
+    else if (value === "run" && !runInProgress) { queue.paused = false; safe.stdout("Queue resumed.\n"); }
+    else throw new ForgeError("invalid_input", "Expected /queue [clear|run]; run is available only at the prompt.");
+    inputHint();
+  };
+  const receiveInput = (raw: string, steer = false): void => {
+    if (lifetime.signal.aborted) return;
+    const text = terminalText(raw).trim();
+    if (!text) return;
+    try {
+      if (text.startsWith("/")) {
+        if (/^\/steer(?:\s|$)/.test(text)) addSteering(text.slice(6).trim());
+        else if (text === "/queue" || text.startsWith("/queue ")) queueCommand(text.slice(6).trim());
+        else if (text === "/tools" || text.startsWith("/tools ")) toolCommand(text.slice(6).trim());
+        else if (text === "/help") {
+          if (ui) ui.append(helpLines(ui.columns));
+          else styled(`${formatHelp(theme)}\n`);
+        } else if (text === "/quit" || text === "/exit") {
+          lifetime.abort();
+          active?.abort();
+        } else if (text === "/mode" || text.startsWith("/mode ")) {
+          const value = text.slice(5).trim();
+          if (value) {
+            if (value !== "plan" && value !== "build") throw Error("Expected plan or build.");
+            mode = value;
+          }
+          safe.stdout(`Mode: ${mode}\n`);
+        } else if (text === "/permission" || text.startsWith("/permission ")) {
+          const value = text.slice(11).trim();
+          if (value) permission = permissionSchema.parse(value);
+          safe.stdout(`Permission: ${permission}\n`);
+        } else if (text === "/approval" || text.startsWith("/approval ")) {
+          const value = text.slice(9).trim();
+          if (value) {
+            approvalMode = parseApprovalMode(value);
+            if (approvalMode === "auto") safe.stdout(`${COMMAND_APPROVAL_WARNING}\n`);
+          }
+          safe.stdout(`Command approval: ${approvalMode} (session only).\n`);
+        } else {
+          const size = Buffer.byteLength(text);
+          if (pendingCommands.length >= 1_000 || commandBytes + size > 1_000_000)
+            throw new ForgeError("invalid_input", "Pending command limit exceeded.");
+          pendingCommands.push(text);
+          commandBytes += size;
+          safe.stdout("Command accepted; will execute after the current run.\n");
+        }
+      } else if (steer) {
+        addSteering(text);
+      } else {
+        queue.add("follow-up", text);
+        safe.stdout(`Follow-up queued (${queue.length} pending).\n`);
+      }
+      inputHint();
+    } catch (error) {
+      const info = toErrorInfo(error);
+      safe.stderr(`${info.code}: ${info.message}\n`);
+    }
+  };
 
   /**
    * Shows a real operation on the existing status line. The controller timer
@@ -178,18 +306,26 @@ export async function interactive(
       ),
     );
   else styled(`\n${banner}\n`);
+  if (approvalMode === "auto") safe.stdout(`${COMMAND_APPROVAL_WARNING}\n`);
+  if (sessionId) showHistory();
 
   try {
     while (!lifetime.signal.aborted) {
       let line: string;
+      let fromQueue = false;
       const inputCtrl = new AbortController();
       awaitingInput = inputCtrl;
       const inputSignal = AbortSignal.any([lifetime.signal, inputCtrl.signal]);
       const prompt = io.isTTY ? "❯ " : "forge> ";
 
       try {
-        line = await io.question(prompt, inputSignal);
-        while (line.endsWith("\\"))
+        const command = pendingCommands.shift();
+        if (command !== undefined) commandBytes -= Buffer.byteLength(command);
+        const queued = command === undefined ? queue.take() : undefined;
+        fromQueue = queued !== undefined;
+        inputHint();
+        line = command ?? queued ?? await io.question(prompt, inputSignal);
+        while (command === undefined && queued === undefined && line.endsWith("\\"))
           line = `${line.slice(0, -1)}\n${await io.question("... ", inputSignal)}`;
       } catch {
         if (inputCtrl.signal.aborted && !lifetime.signal.aborted) {
@@ -205,12 +341,15 @@ export async function interactive(
       if (!line.trim()) continue;
 
       try {
-        if (line.startsWith("/")) {
+        if (!fromQueue && line.startsWith("/")) {
           const [command, ...words] = line.trim().split(/\s+/);
           const value = words.join(" ");
           switch (command) {
             case "/quit":
+            case "/exit":
               return 0;
+            case "/steer":
+              throw new ForgeError("invalid_input", "/steer requires an active run; send a normal prompt when idle.");
             case "/help":
               if (ui) ui.append(helpLines(ui.columns));
               else styled(`${formatHelp(theme)}\n`);
@@ -243,6 +382,19 @@ export async function interactive(
               break;
             case "/reasoning":
               await changeReasoning(value);
+              break;
+            case "/approval":
+              if (value) {
+                approvalMode = parseApprovalMode(value);
+                if (approvalMode === "auto") safe.stdout(`${COMMAND_APPROVAL_WARNING}\n`);
+              }
+              safe.stdout(`Command approval: ${approvalMode} (session only).\n`);
+              break;
+            case "/queue":
+              queueCommand(value);
+              break;
+            case "/tools":
+              toolCommand(value);
               break;
             case "/permission":
               if (value) permission = permissionSchema.parse(value);
@@ -289,8 +441,11 @@ export async function interactive(
                 );
                 if (active.signal.aborted) break;
                 session = resumed;
+                tools = new ToolTranscript();
+                resetSessionControls();
                 model = session.model;
                 safe.stdout("已恢复会话。\n");
+                showHistory();
               } finally {
                 clearStatus();
               }
@@ -303,6 +458,8 @@ export async function interactive(
                   model,
                 }),
               );
+              tools = new ToolTranscript();
+              resetSessionControls();
               safe.stdout("已创建新会话。\n");
               break;
             case "/fork":
@@ -310,6 +467,9 @@ export async function interactive(
                 session.id,
                 value ? Number(value) : undefined,
               );
+              tools = new ToolTranscript();
+              resetSessionControls();
+              showHistory();
               model = session.model;
               safe.stdout("已分支会话。\n");
               break;
@@ -342,6 +502,7 @@ export async function interactive(
                 signal.removeEventListener("abort", cancel);
                 clearStatus();
               }
+              if (!signal.aborted) contextUsage = null;
               if (!signal.aborted) safe.stdout(`Compacted ${session.id}\n`);
               break;
             }
@@ -418,7 +579,10 @@ export async function interactive(
 
         ui?.setBusy(true);
         active = new AbortController();
-        live = new LiveRun(safe, theme);
+        live = new LiveRun(safe, theme, tools);
+        runInProgress = true;
+        inputHint();
+        offRunInput = io.onRunInput?.(receiveInput);
         session = await service.run(
           runInputSchema.parse({
             sessionId: session.id,
@@ -427,8 +591,20 @@ export async function interactive(
             permission,
             mode,
           }),
-          (event) => live?.event(event),
+          (event) => {
+            if (event.type === "context_usage" && event.sessionId === session.id) {
+              contextUsage = event.usage;
+              refreshContext();
+            }
+            live?.event(event);
+          },
           async (request, signal) => {
+            const ceiling = session.permissionCeiling ?? permission;
+            const eligiblePermission = mode === "plan" || ceiling === "readonly" ? "readonly" : permission;
+            if (shouldAutoApprove(approvalMode, eligiblePermission, request, signal)) {
+              safe.stdout(`Auto-approved ${request.childSessionId ? `child ${request.childSessionId} ` : ""}${request.toolName}: ${JSON.stringify(request.command)}\n`);
+              return true;
+            }
             try {
               live?.pause();
               if (ui) return await ui.approve(request, signal);
@@ -449,19 +625,37 @@ export async function interactive(
             }
           },
           active.signal,
+          { drainSteering: () => {
+            const messages = queue.drainSteering();
+            if (messages.length) safe.stdout(`Steer handed to the active run (${messages.length}); preparing the next model request.\n`);
+            inputHint();
+            return messages;
+          } },
         );
+        queue.finish(session.status === "completed" && !active.signal.aborted);
+        if (queue.length && queue.paused) safe.stdout("Pending input paused; /queue to inspect, /queue run to continue, /queue clear to discard.\n");
       } catch (error) {
+        if (runInProgress) {
+          queue.finish(false);
+          if (queue.length) safe.stdout("Pending input paused; /queue run to continue.\n");
+        }
         const info = toErrorInfo(error);
         safe.stderr(`${info.code}: ${info.message}\n`);
       } finally {
+        offRunInput?.();
+        offRunInput = undefined;
+        runInProgress = false;
+        inputHint();
         live?.dispose();
         live = undefined;
         active = undefined;
+        refreshContext();
         ui?.setBusy(false);
       }
     }
     return 0;
   } finally {
+    offRunInput?.();
     offClose?.();
     off();
     active?.abort();

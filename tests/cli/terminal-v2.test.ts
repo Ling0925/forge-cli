@@ -76,7 +76,7 @@ it("keeps filtered menu through resize and Esc preserves draft; CtrlP/N selects"
   expect(await draft).toBe("/mod");
   f.reader.dispose();
 });
-it("appends transcript only once without display/scrollback erase, restores on EOF", async () => {
+it("retains transcript in alternate viewport and restores terminal modes on EOF", async () => {
   const f = fixture();
   await f.reader.ui.configure({ theme: "dark" });
   for (let i = 0; i < 30; i++)
@@ -85,12 +85,14 @@ it("appends transcript only once without display/scrollback erase, restores on E
   f.reader.ui.setTail([[{ text: "tail" }]]);
   f.output.columns = 12;
   f.output.emit("resize");
-  for (let i = 0; i < 30; i++)
-    expect(stripAnsi(f.bytes()).split(`transcript-${i}\n`).length - 1).toBe(1);
+  expect(stripAnsi(f.bytes())).toContain("transcript");
+  expect(f.bytes()).toContain("\x1b[?1049h");
+  expect(f.bytes()).toContain("\x1b[?1006h");
   // biome-ignore lint/suspicious/noControlCharactersInRegex: verifies absence of destructive terminal sequences
-  expect(f.bytes()).not.toMatch(/\x1b\[[23]J|\x1b\[\?1049h/);
+  expect(f.bytes()).not.toMatch(/\x1b\[3J/);
   f.input.write("\x04");
   expect(f.input.isRaw).toBe(false);
+  expect(f.bytes()).toContain("\x1b[?1002l\x1b[?1006l");
   f.reader.dispose();
 });
 it("idle CtrlC clears first, exits second and resets after question return", async () => {
@@ -218,13 +220,15 @@ it("CtrlC during approval denies and interrupts the active run", async () => {
   f.reader.dispose();
 });
 
-it("composer placeholder, accent spans, spacer and aligned menu preserve input cursor", async () => {
+it("composer placeholder, accent spans, stable dock and aligned menu preserve input cursor", async () => {
   const paint = vi.spyOn(Screen.prototype, "paint");
   const f = fixture();
   try {
     await f.reader.ui.configure({ theme: "dark" });
     const empty = paint.mock.calls.at(-1);
-    expect(empty?.[0][0]?.map((span) => span.text).join("")).toBe("");
+    expect(empty?.[0][empty?.[1] ?? 0]?.map((span) => span.text).join("")).toContain("Ask anything");
+    expect(empty?.[1]).toBe(1);
+    expect(empty?.[0]).toHaveLength(4);
     expect(
       empty?.[0].flat().find((span) => span.text.includes("Ask anything"))
         ?.tone,

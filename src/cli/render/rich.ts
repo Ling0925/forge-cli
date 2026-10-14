@@ -61,7 +61,8 @@ export const wrapRichLines = (
           last &&
           last.tone === item.tone &&
           last.bold === item.bold &&
-          last.inverse === item.inverse
+          last.inverse === item.inverse &&
+          last.animation === item.animation
         ) {
           current[current.length - 1] = { ...last, text: last.text + text };
         } else {

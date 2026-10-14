@@ -3,6 +3,7 @@ import { StringDecoder } from "node:string_decoder";
 export type InputEvent =
   | { kind: "text"; text: string; pasted: boolean }
   | { kind: "key"; key: string; pasted: boolean }
+  | { kind: "mouse"; action: "press" | "drag" | "release" | "wheel-up" | "wheel-down"; row: number; column: number; shift: boolean }
   | { kind: "background"; background: "light" | "dark" };
 
 const keys: Readonly<Record<string, string>> = {
@@ -15,6 +16,11 @@ const keys: Readonly<Record<string, string>> = {
   "\x1b[1~": "home",
   "\x1b[4~": "end",
   "\x1b[3~": "delete",
+  "\x1b[5~": "page-up",
+  "\x1b[6~": "page-down",
+  "\x1b[13;2u": "shift-enter",
+  "\x1b[27;2;13~": "shift-enter",
+  "\x1b[13;2~": "shift-enter",
   "\x1bOH": "home",
   "\x1bOF": "end",
 };
@@ -94,6 +100,25 @@ export class InputDecoder {
             });
           }
           this.pending = this.pending.slice(match[0].length);
+          continue;
+        }
+        if (this.pending.startsWith("\x1b[<")) {
+          // biome-ignore lint/suspicious/noControlCharactersInRegex: SGR mouse protocol
+          const mouse = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/.exec(this.pending);
+          if (!mouse) {
+            if (this.pending.length > 128) this.pending = "";
+            return;
+          }
+          this.pending = this.pending.slice(mouse[0].length);
+          const button = Number(mouse[1]);
+          const x = Number(mouse[2]);
+          const y = Number(mouse[3]);
+          if (!this.paste && [button, x, y].every(Number.isSafeInteger) && x > 0 && y > 0
+            && ((button & 64) !== 0 || (button & 3) === 0)) {
+            this.emit({ kind: "mouse", row: y - 1, column: x - 1, shift: (button & 4) !== 0,
+              action: button & 64 ? (button & 1 ? "wheel-down" : "wheel-up")
+                : mouse[4] === "m" ? "release" : button & 32 ? "drag" : "press" });
+          }
           continue;
         }
         const found = Object.keys(keys).find((value) =>

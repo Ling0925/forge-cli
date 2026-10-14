@@ -2,6 +2,8 @@ import { terminalText } from "../format";
 import { renderRichLine, wrapRichLines } from "../render/rich";
 import { type Theme, graphemeWidth, graphemes, visibleWidth } from "../theme";
 import type { RichLine } from "../ui-contract";
+import { type Cell, ScreenSelection } from "./selection";
+import type { InputEvent } from "./decoder";
 
 export const plain = (text: string): RichLine => [{ text: terminalText(text) }];
 
@@ -76,6 +78,73 @@ export function composerLayout(
 
 export class Screen {
   enabled = false;
+  /** Alternate-screen viewport with a docked composer. */
+  fixed = false;
+  private history: RichLine[] = [];
+  private scrollOffset = 0;
+  private transcript: readonly RichLine[] = [];
+  private transcriptLength = 0;
+  private wrapColumns = 0;
+  private historyDirty = true;
+  private transcriptDirty = true;
+  private wrappedHistory: readonly RichLine[] = [];
+  private wrappedTail: readonly RichLine[] = [];
+  private wrappedTranscript: readonly RichLine[] = [];
+  private layoutTranscript(columns: number): readonly RichLine[] {
+    const resized = this.wrapColumns !== columns;
+    if (resized || this.historyDirty || this.transcriptDirty) {
+      // Typing, scrolling and status ticks must not re-segment restored history.
+      // A streaming tail also must not invalidate the committed-history layout.
+      if (resized || this.historyDirty)
+        this.wrappedHistory = wrapRichLines(this.history, columns);
+      if (resized || this.transcriptDirty)
+        this.wrappedTail = wrapRichLines(this.transcript, columns);
+      this.wrappedTranscript = [...this.wrappedHistory, ...this.wrappedTail];
+      this.wrapColumns = columns;
+      this.historyDirty = false;
+      this.transcriptDirty = false;
+    }
+    return this.wrappedTranscript;
+  }
+  private viewport: readonly RichLine[] = [];
+  private selection: ScreenSelection | undefined;
+  private fixedTarget = -1;
+  private fixedColumn = -1;
+  get hasSelection(): boolean { return this.selection !== undefined; }
+  selectedText(): string { return this.selection?.text() ?? ""; }
+  clearSelection(): void { this.selection = undefined; }
+  copySelection(): void {
+    const text = this.selectedText();
+    // OSC 52 is emitted only on an explicit copy key, never on model output.
+    if (text && Buffer.byteLength(text) <= 100_000)
+      this.output.write(`\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
+  }
+  mouse(event: Extract<InputEvent, { kind: "mouse" }>): void {
+    if (!this.fixed || event.shift) return;
+    if (event.action === "wheel-up" || event.action === "wheel-down") {
+      this.scroll(event.action === "wheel-up" ? 3 : -3);
+      return;
+    }
+    const cell: Cell = {
+      row: Math.min(Math.max(0, this.fixedRows - 1), safeIndex(event.row)),
+      column: safeColumn(event.column, this.fixedColumns),
+    };
+    if (event.action === "press") this.selection = new ScreenSelection(this.viewport, cell);
+    else if (this.selection) this.selection.focus = cell;
+    if (this.selection) this.writeFixed(this.selection.highlight(), this.fixedTarget, this.fixedColumn);
+  }
+  setTranscript(lines: readonly RichLine[]): void {
+    // Render updates replace immutable tail snapshots; draw reuses the same one.
+    if (this.transcript === lines) return;
+    this.transcript = lines;
+    this.transcriptDirty = true;
+  }
+  private fixedRendered: string[] = [];
+  private fixedColumns = 0;
+  private fixedRows = 0;
+  private lastFixedLines: readonly RichLine[] = [];
+  private lastFixedRow = 0;
+  private lastFixedColumn = 0;
   private count = 0;
   private cursorRow = 0;
   private cursorColumn = 0;
@@ -162,7 +231,64 @@ export class Screen {
     this.columns = frame.columns;
     this.rows = frame.rows;
   }
+  /** Scroll only the transcript; the composer and editor cursor stay docked. */
+  scroll(delta: number): void {
+    if (!this.fixed || !Number.isFinite(delta)) return;
+    this.clearSelection();
+    this.scrollOffset = Math.max(0, this.scrollOffset + Math.trunc(delta));
+    this.paintFixed(this.lastFixedLines, this.lastFixedRow, this.lastFixedColumn);
+  }
+  private paintFixed(lines: readonly RichLine[], row: number, column: number): void {
+    this.lastFixedLines = lines;
+    this.lastFixedRow = row;
+    this.lastFixedColumn = column;
+    const { columns: rawColumns, rows: rawRows } = this.dimensions();
+    const columns = positiveDimension(rawColumns);
+    const rows = positiveDimension(rawRows);
+    if (this.selection && this.fixedColumns === columns && this.fixedRows === rows) return;
+    this.clearSelection();
+    const composer = lines.slice(0, Math.max(1, rows - 1));
+    const available = Math.max(0, rows - composer.length);
+    const wrapped = this.layoutTranscript(Math.max(1, columns - 1));
+    if (this.scrollOffset && this.fixedColumns === columns)
+      this.scrollOffset = Math.max(0, this.scrollOffset + wrapped.length - this.transcriptLength);
+    this.transcriptLength = wrapped.length;
+    const maxScroll = Math.max(0, wrapped.length - available);
+    this.scrollOffset = Math.min(maxScroll, this.scrollOffset);
+    const end = wrapped.length - this.scrollOffset;
+    const start = Math.max(0, end - available);
+    const shown = wrapped.slice(start, end);
+    const top = rows - composer.length - shown.length;
+    this.viewport = [...Array.from({ length: top }, () => plain("")), ...shown, ...composer];
+    const target = Math.min(rows - 1, top + shown.length + Math.min(safeIndex(row), composer.length - 1));
+    this.writeFixed(this.viewport, target, safeColumn(column, columns));
+  }
+  private writeFixed(lines: readonly RichLine[], target: number, column: number): void {
+    const { columns: rawColumns, rows: rawRows } = this.dimensions();
+    const columns = positiveDimension(rawColumns);
+    const rows = positiveDimension(rawRows);
+    const desired = lines.map((line) => renderRichLine(line, this.theme));
+    const resized = this.fixedColumns !== columns || this.fixedRows !== rows;
+    const changed = Array.from({ length: rows }, (_, i) => i)
+      .filter((i) => resized || desired[i] !== this.fixedRendered[i]);
+    if (!changed.length && target === this.fixedTarget && column === this.fixedColumn) return;
+    let output = "\x1b[?2026h\x1b[?25l";
+    if (resized) output += "\x1b[2J";
+    for (const i of changed) output += `\x1b[${i + 1};1H\x1b[2K${desired[i] ?? ""}`;
+    output += `\x1b[${target + 1};${column + 1}H\x1b[?25h\x1b[?2026l`;
+    this.output.write(output);
+    this.fixedRendered = desired;
+    this.fixedColumns = columns;
+    this.fixedRows = rows;
+    this.fixedTarget = target;
+    this.fixedColumn = column;
+  }
   clear(): void {
+    if (this.fixed) {
+      this.fixedRendered = [];
+      this.fixedRows = 0;
+      return;
+    }
     if (!this.count) {
       this.reset();
       return;
@@ -174,6 +300,14 @@ export class Screen {
     this.reset();
   }
   append(lines: readonly RichLine[]): void {
+    if (this.fixed) {
+      if (!lines.length) return;
+      this.historyDirty = true;
+      this.history.push(...lines);
+      // Bound retained transcript; persisted sessions can be reopened for older content.
+      if (this.history.length > 4000) this.history.splice(0, this.history.length - 4000);
+      return;
+    }
     this.clear();
     const width = positiveDimension(this.dimensions().columns);
     for (const line of wrapRichLines(lines, width))
@@ -183,6 +317,7 @@ export class Screen {
   }
   paint(lines: readonly RichLine[], row: number, column: number): void {
     if (!this.enabled) return;
+    if (this.fixed) { this.paintFixed(lines, row, column); return; }
     const frame = this.frame(lines, row, column);
     if (!frame.rendered.length) {
       this.clear();
@@ -220,6 +355,7 @@ export class Screen {
     this.commit(frame);
   }
   invalidate(): void {
+    if (this.fixed) { this.clearSelection(); this.fixedRendered = []; this.fixedRows = 0; return; }
     const columns = positiveDimension(this.dimensions().columns);
     // Normal-screen terminals preserve the cursor's physical line during
     // reflow. Its column is clamped, not wrapped into an extra row. Counting

@@ -11,11 +11,30 @@ export function handle(controller: Controller, event: InputEvent): void {
     }
     return;
   }
+  if (event.kind === "mouse") {
+    controller.screen.mouse(event);
+    return;
+  }
+  if (controller.screen.hasSelection) {
+    if (event.kind === "key" && !event.pasted && event.key === "interrupt") {
+      controller.screen.copySelection();
+      return;
+    }
+    controller.screen.clearSelection();
+    if (event.kind === "key" && !event.pasted && event.key === "escape") {
+      controller.draw();
+      return;
+    }
+  }
+  if (event.kind === "key" && !event.pasted && (event.key === "page-up" || event.key === "page-down")) {
+    controller.screen.scroll((event.key === "page-up" ? 1 : -1) * Math.max(1, controller.rows - 5));
+    return;
+  }
   const editor = controller.picker?.editor ?? controller.editor;
+  const previousText = editor.text;
   if (event.kind === "text") {
     editor.insert(event.text, event.pasted);
     controller.dismissed = false;
-    controller.navigated = false;
     if (controller.picker) controller.picker.index = 0;
   } else if (event.key === "tab" && !controller.screen.enabled) {
     editor.insert("\t", event.pasted);
@@ -41,7 +60,15 @@ export function handle(controller: Controller, event: InputEvent): void {
       controller.dismissed = true;
       controller.menu.close();
     }
-  } else if (event.key === "enter" || event.key === "tab") {
+  } else if (event.key === "tab") {
+    // Completion edits the draft only, including while a run is busy.
+    // With no active suggestion, Tab must not silently insert a space.
+    const selected = !controller.fresh && !controller.picker ? controller.menu.getSelected() : undefined;
+    if (selected) {
+      editor.set(`${selected.name} `);
+      controller.menu.close();
+    }
+  } else if (event.key === "enter" || event.key === "shift-enter") {
     if (controller.picker) {
       if (event.key === "enter")
         controller.picker.resolve(
@@ -51,28 +78,19 @@ export function handle(controller: Controller, event: InputEvent): void {
       const answer = editor.tainted ? "" : editor.text;
       editor.clear();
       controller.submit(answer);
-    } else if (!controller.busy) {
+    } else if (
+      !controller.busy ||
+      ((event.key === "enter" || event.key === "shift-enter") &&
+        (controller.runInputActive() || editor.text.startsWith("/")))
+    ) {
       if (controller.menu.isActive)
-        editor.set(
-          (controller.navigated
-            ? undefined
-            : controller.menu.state.items.find(
-                (item) => item.name === editor.text,
-              )
-          )?.name ??
-            controller.menu.getSelected()?.name ??
-            editor.text,
-        );
-      if (event.key === "enter") {
+        editor.set(controller.menu.getSelected()?.name ?? editor.text);
+      if (event.key === "enter" || event.key === "shift-enter") {
         if (editor.text.endsWith("\\")) {
           editor.text = editor.text.slice(0, -1);
           editor.cursor = editor.text.length;
           editor.insert("\n");
-        } else controller.finish();
-      } else {
-        editor.insert(" ");
-        controller.menu.close();
-        controller.dismissed = true;
+        } else controller.finish(event.key === "shift-enter");
       }
     }
   } else if (
@@ -87,17 +105,19 @@ export function handle(controller: Controller, event: InputEvent): void {
     controller.menu.isActive &&
     (event.key === "up" || event.key === "down")
   ) {
-    controller.navigated = true;
     if (event.key === "up") controller.menu.moveUp();
     else controller.menu.moveDown();
   } else if (!controller.fresh || !["up", "down"].includes(event.key))
     editor.key(event.key);
+  if (editor.text !== previousText) controller.dismissed = false;
   if (
     controller.screen.enabled &&
     !controller.fresh &&
     !controller.picker &&
-    !controller.dismissed
+    !controller.dismissed &&
+    editor.cursor === editor.text.length
   )
     controller.menu.update(editor.text);
+  else controller.menu.close();
   controller.draw();
 }

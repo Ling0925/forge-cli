@@ -1,7 +1,7 @@
 import type { ToolResult } from "../../shared/schemas";
 import { sanitizeText } from "./sanitize";
 
-const PREVIEW_LINES = 4;
+const PREVIEW_LINES = 12;
 
 const readValue = (raw: string): unknown => {
   try {

@@ -17,6 +17,7 @@ import {
 } from "../shared/schemas";
 import type { AgentEvent, SessionStatus } from "../shared/schemas";
 
+import { parseApprovalMode } from "./approval-policy";
 import { interactive, terminalText } from "./interactive";
 import { createNodeIO } from "./node-io";
 export { createNodeIO, nodeIO } from "./node-io";
@@ -28,12 +29,13 @@ const promptLimit = 1_000_000;
 const keyLimit = 16_386;
 const help = `Forge — shared-core agent CLI
 
-forge chat [--workspace PATH] [--session UUID]
+forge chat [--workspace PATH] [--session UUID] [--approval ask|auto]
 forge config show
 forge config set [--base-url URL] [--model MODEL] [--api-mode chat-completions|responses] [--api-key-stdin]
                  [--reasoning-effort default|none|minimal|low|medium|high|xhigh]
                  [--theme system|light|dark] [--permission readonly|workspace|unrestricted]
-                 [--timeout-ms NUMBER] [--max-turns NUMBER] [--max-tools NUMBER] [--context-chars NUMBER]
+                 [--timeout-ms NUMBER] [--max-turns NUMBER] [--max-tools NUMBER] [--context-chars NUMBER] [--context-budget-tokens NUMBER|auto]
+                  [--context-tokens NUMBER|auto] (window for --model or current model)
                  [--browser-origins ORIGIN[,ORIGIN...]] [--browser-executable PATH]
 --browser-origins accepts exact canonical HTTP(S) origins only (scheme, host,
 optional port; no credentials, path, query, fragment or wildcard; at most 32).
@@ -59,6 +61,11 @@ Run options: --model MODEL --mode plan|build --permission readonly|workspace|unr
              --json --yes
 Use exactly one prompt source. Stdin is never read implicitly.
 --yes approves calls only with explicitly selected --permission unrestricted.
+Chat --approval auto opts into command approvals for this session only. Commands
+are not sandboxed and may access external files/network. /approval ask disables it.
+During a run: Enter queues a follow-up; /steer <message> or Shift+Enter steers at a safe boundary.
+Slash commands remain available; commands requiring idle execute after the run.
+/queue lists pending input, /queue clear discards it.
 JSON runs emit version 1 JSONL event envelopes followed by a result envelope.
 `;
 
@@ -77,6 +84,8 @@ export interface CliIO {
     text: string,
     signal: AbortSignal,
   ) => Promise<boolean>;
+  /** Receives ordinary submitted lines during a run; approval input is isolated. */
+  readonly onRunInput?: (callback: (line: string, steer?: boolean) => void) => () => void;
   /** Interactive input lifetime only; machine stdin EOF is not cancellation. */
   readonly onClose?: (callback: () => void) => () => void;
   readonly onInterrupt: (callback: () => void) => () => void;
@@ -222,6 +231,7 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
       return;
     case "state_changed":
     case "approval_requested":
+    case "context_usage":
     case "context_compacted":
       return;
     default:
@@ -266,10 +276,11 @@ export const runCliWithIO = async (
         );
       if (argv.includes("--json"))
         invalid("Interactive chat does not support --json.");
-      const args = parseArgs(argv.slice(1), ["workspace", "session"], []);
+      const args = parseArgs(argv.slice(1), ["workspace", "session", "approval"], []);
       noPositionals(args);
       const chatWorkspace = stringOption(args, "workspace");
       const chatSession = stringOption(args, "session");
+      const approval = parseApprovalMode(stringOption(args, "approval") ?? "ask");
       if (chatWorkspace && !(await stat(resolve(chatWorkspace))).isDirectory())
         invalid("Workspace must be an existing directory.");
       if (
@@ -287,6 +298,7 @@ export const runCliWithIO = async (
         resolve(stringOption(args, "workspace") ?? "."),
         stringOption(args, "session"),
         renderEvent,
+        approval,
       );
     }
     if (
@@ -319,6 +331,8 @@ export const runCliWithIO = async (
           "max-turns",
           "max-tools",
           "context-chars",
+          "context-tokens",
+          "context-budget-tokens",
           "browser-origins",
           "browser-executable",
         ],
@@ -341,6 +355,13 @@ export const runCliWithIO = async (
         if (list.some((value) => value === "") || list.length > 32)
           invalid("--browser-origins expects up to 32 exact HTTP(S) origins.");
       }
+      const tokenBudget = stringOption(args, "context-budget-tokens");
+      if (tokenBudget !== undefined && tokenBudget !== "auto" && !/^[1-9]\d*$/.test(tokenBudget)) invalid("--context-budget-tokens expects a positive integer or auto.");
+      const tokenWindow = stringOption(args, "context-tokens");
+      const current = tokenWindow === undefined ? undefined : await service.getSettings();
+      const targetModel = stringOption(args, "model") ?? current?.model;
+      if (tokenWindow !== undefined && !targetModel) invalid("--context-tokens requires a configured model or --model.");
+      if (tokenWindow !== undefined && tokenWindow !== "auto" && !/^[1-9]\d*$/.test(tokenWindow)) invalid("--context-tokens expects a positive integer or auto.");
       const settings = configureInputSchema.parse({
         settings: {
           ...(stringOption(args, "base-url") !== undefined
@@ -374,6 +395,8 @@ export const runCliWithIO = async (
           ...(numeric("max-tools") !== undefined
             ? { maxToolCalls: numeric("max-tools") }
             : {}),
+          ...(tokenWindow !== undefined ? { modelContextWindows: { ...current?.modelContextWindows, [targetModel!]: tokenWindow === "auto" ? null : Number(tokenWindow) } } : {}),
+          ...(tokenBudget !== undefined ? { contextBudgetTokens: tokenBudget === "auto" ? null : Number(tokenBudget) } : {}),
           ...(numeric("context-chars") !== undefined
             ? { contextBudgetChars: numeric("context-chars") }
             : {}),

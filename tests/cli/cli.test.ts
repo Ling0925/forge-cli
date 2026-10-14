@@ -182,6 +182,20 @@ describe("Forge CLI", () => {
     expect(f.reads()).toBe(0);
   });
 
+  it("configures token windows per model, preserves others and supports auto", async () => {
+    const f = fixture("/unused");
+    f.service.getSettings = async () => ({ ...defaultPublicSettings, model: "current", modelContextWindows: { other: 32000 } });
+    expect(await runCliWithIO(["config", "set", "--context-tokens", "128000"], f.service, f.io)).toBe(0);
+    expect(f.updates.at(-1)?.settings?.modelContextWindows).toEqual({ other: 32000, current: 128000 });
+    expect(await runCliWithIO(["config", "set", "--model", "alias", "--context-tokens", "auto"], f.service, f.io)).toBe(0);
+    expect(f.updates.at(-1)?.settings?.modelContextWindows).toEqual({ other: 32000, alias: null });
+    const count = f.updates.length;
+    for (const invalid of ["-1", "0", "1.5", "foo", "10000001"]) {
+      expect(await runCliWithIO(["config", "set", "--context-tokens", invalid], f.service, f.io)).toBe(1);
+    }
+    expect(f.updates).toHaveLength(count);
+  });
+
   it("forwards reasoning effort and rejects invalid values before updating", async () => {
     const f = fixture("/unused");
     for (const effort of [
@@ -643,4 +657,16 @@ it("keeps machine catalog JSON byte-exact without touching UI", async () => {
   };
   expect(await runCliWithIO(["models", "--json"], f.service, io)).toBe(0);
   expect(f.output.join("")).toBe('["test-model"]\n');
+});
+
+it("configures and clears an explicit token budget without changing the model window", async () => {
+  const f = fixture("/workspace");
+  expect(await runCliWithIO(["config", "set", "--context-budget-tokens", "64000"], f.service, f.io)).toBe(0);
+  expect(f.updates.at(-1)?.settings).toEqual({ contextBudgetTokens: 64000 });
+  expect(await runCliWithIO(["config", "set", "--context-budget-tokens", "auto"], f.service, f.io)).toBe(0);
+  expect(f.updates.at(-1)?.settings).toEqual({ contextBudgetTokens: null });
+  for (const value of ["0", "NaN", "1.5", "2000"]) {
+    expect(await runCliWithIO(["config", "set", "--context-budget-tokens", value], f.service, f.io)).not.toBe(0);
+  }
+  expect(f.updates).toHaveLength(2);
 });

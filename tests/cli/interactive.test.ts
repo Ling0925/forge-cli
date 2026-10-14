@@ -4,7 +4,7 @@ import { createNodeIO } from "../../src/cli/cli";
 import { runCliWithIO } from "../../src/cli/cli";
 import type { CliIO } from "../../src/cli/cli";
 import { sessionDetail } from "../../src/cli/interactive/pickers";
-import type { RunStatus } from "../../src/cli/ui-contract";
+import type { ComposerContext, RunStatus } from "../../src/cli/ui-contract";
 import type { HarnessService } from "../../src/shared/contracts";
 import {
   defaultPublicSettings,
@@ -311,6 +311,7 @@ describe("rich integration adapters", () => {
     const output: string[] = [];
     const busy: boolean[] = [];
     const statuses: (RunStatus | null)[] = [];
+    const contexts: (ComposerContext | null)[] = [];
     const specs: import("../../src/cli/ui-contract").PickerSpec[] = [];
     const ui: import("../../src/cli/ui-contract").TerminalUI = {
       columns: 80,
@@ -325,6 +326,7 @@ describe("rich integration adapters", () => {
       setTail: () => {},
       setStatus: (status) => statuses.push(status),
       setBusy: (value) => busy.push(value),
+      setContext: (value) => contexts.push(value),
       choose: async (spec) => {
         specs.push(spec);
         return choices.shift() ?? null;
@@ -332,8 +334,61 @@ describe("rich integration adapters", () => {
       approve: async () => false,
       dispose: () => {},
     };
-    return { ...host, io: { ...host.io, ui }, output, busy, statuses, specs };
+    return { ...host, io: { ...host.io, ui }, output, busy, statuses, specs, contexts };
   };
+  it("refreshes context footer for runtime projection, model changes, session resets and compaction", async () => {
+    const host = richHost(["hello", "/model changed", "/compact", "/new", "/quit"], []);
+    const usage = { windowTokens: 1000, usedTokens: 200, estimated: true, basis: "projected" as const, parts: { instructions: 50, memory: 0, conversation: 100, tools: 50 } };
+    const updated = { ...snapshot, messages: [{ role: "user" as const, content: "hello" }, { role: "assistant" as const, content: "answer" }] };
+    const compacted = { ...updated, contextSummary: { content: "memory", boundary: 2, fallback: false, createdAt: new Date().toISOString() } };
+    const base = service(async (_input, sink) => {
+      sink({ type: "context_usage", sessionId: id, timestamp: new Date().toISOString(), usage });
+      const count = host.contexts.length;
+      sink({ type: "context_usage", sessionId: parseSessionId("10000000-0000-4000-8000-000000000002"), timestamp: new Date().toISOString(), usage: { ...usage, usedTokens: 999 } });
+      expect(host.contexts.length).toBe(count);
+      return updated;
+    });
+    expect(await runCliWithIO(["chat"], { ...base, compactSession: async () => compacted }, host.io)).toBe(0);
+    expect(host.err).toEqual([]);
+    expect(host.contexts[0]).toMatchObject({ model: "test", estimated: true });
+    expect(host.contexts).toContainEqual({ model: "test", usage: { ...usage, budgetTokens: 800 }, estimated: true });
+    expect(host.contexts.some((value) => value?.model === "changed" && value.estimated)).toBe(true);
+    expect(host.contexts.some((value) => (value?.usage?.parts.memory ?? 0) > 0)).toBe(true);
+    expect(host.contexts.at(-1)).toMatchObject({ model: "changed", estimated: true, usage: { usedTokens: 0, windowTokens: null } });
+  });
+  it("renders persisted messages on chat --session and /resume before the next prompt", async () => {
+    const previous = { ...snapshot, title: "Earlier", messages: [
+      { role: "system" as const, content: "private-system" },
+      { role: "user" as const, content: "earlier question" },
+      { role: "assistant" as const, content: "earlier answer", tool_calls: [{
+        id: "tool-1", type: "function" as const,
+        function: { name: "read_file", arguments: JSON.stringify({ path: "note.txt", offset: 2 }) },
+      }] },
+      { role: "tool" as const, tool_call_id: "tool-1", content: JSON.stringify({ content: "saved tool result" }) },
+    ] };
+    for (const [args, commands] of [
+      [["chat", "--session", id], ["/tools 1", "/quit"]],
+      [["chat"], [`/resume ${id}`, "/tools 1", "/quit"]],
+      [["chat"], ["/fork", "/tools 1", "/quit"]],
+    ] as const) {
+      const host = richHost([...commands], []);
+      const code = await runCliWithIO([...args], {
+        ...service(async () => snapshot), getSession: async () => previous,
+        forkSession: async () => previous,
+      }, host.io);
+      expect(code).toBe(0);
+      const rendered = host.output.join("\n");
+      expect(rendered).toContain("earlier question");
+      expect(rendered).toContain("earlier answer");
+      expect(rendered).toContain("saved tool result");
+      expect(rendered).toContain("details: /tools 1");
+      expect(rendered).toContain("offset: 2");
+      expect(rendered.indexOf("End of history")).toBeLessThan(rendered.indexOf("Tool #1"));
+      expect(rendered).not.toContain("private-system");
+      expect(rendered).not.toContain("· running");
+    }
+  });
+
   it("uses exact picked model and resumed session on the next run and routes output", async () => {
     const resumed = parseSessionId("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
     const host = richHost(

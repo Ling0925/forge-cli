@@ -12,8 +12,10 @@ import { createEventRenderer } from "../../src/cli/render/events";
 import { MarkdownStream } from "../../src/cli/render/markdown";
 import { plainLines } from "../../src/cli/render/rich";
 import { ControlFilter } from "../../src/cli/render/sanitize";
+import { ToolTranscript } from "../../src/cli/render/tool-transcript";
 import {
   compactToolLine,
+  toolArgumentLines,
   toolFinishLines,
   toolStartLine,
 } from "../../src/cli/render/tools";
@@ -156,8 +158,10 @@ describe("tools and diffs", () => {
         JSON.stringify({ command: ["ls", "src"] }),
       ),
     } as AgentEvent);
-    expect(textOf(started.append)).toContain("run_command");
-    expect(textOf(started.append)).toContain("running");
+    expect(started.append).toEqual([]);
+    expect(textOf(started.tail)).toContain("run_command");
+    expect(textOf(started.tail)).toContain("running");
+    expect(started.tail[0]?.[0]?.animation).toBe("spinner");
     const result: ToolResult = {
       content: JSON.stringify({
         stdout: "a\nb\nc\nd\ne\n",
@@ -172,10 +176,50 @@ describe("tools and diffs", () => {
     );
     const body = textOf(finished);
     expect(body).toContain("exit 2");
-    expect(body).toContain("more lines");
+    expect(body).not.toContain("more lines");
     expect(
       body.split("\n").filter((line) => /^stdout [abcde]$/.test(line)),
-    ).toHaveLength(4);
+    ).toHaveLength(5);
+  });
+
+  it("shows bounded arguments and more structured matches", () => {
+    const args = textOf(toolArgumentLines(call("x", "run_command", JSON.stringify({
+      argv: ["node", "script.mjs"], cwd: "repo", note: "safe",
+    })), 80));
+    expect(args).toContain('argv: ["node","script.mjs"]');
+    expect(args).toContain("cwd: repo");
+    const matches = toolFinishLines(call("x", "search_files", '{"query":"needle"}'), {
+      content: JSON.stringify({ matches: Array.from({ length: 15 }, (_, i) => ({
+        path: `file-${i}.ts`, line: i + 1, excerpt: `hit-${i}`,
+      })) }),
+      isError: false,
+    }, 80);
+    const preview = textOf(matches);
+    expect(preview).toContain("file-10.ts:11 hit-10");
+    expect(preview).not.toContain("file-14.ts");
+    expect(matches.length).toBeLessThanOrEqual(20);
+  });
+
+  it("indexes tool summaries and expands bounded details without rerunning", () => {
+    const tools = new ToolTranscript();
+    const command = call("cmd", "run_command", JSON.stringify({ argv: ["echo"], note: "private-text" }));
+    expect(tools.start(command)).toBe(1);
+    expect(tools.start(command)).toBe(1);
+    const result = { content: JSON.stringify({ stdout: "first\nsecond", exit_code: 0 }), isError: false };
+    const summary = textOf(tools.summary(command.id, result, 80));
+    expect(summary).toContain("#1");
+    expect(summary).toContain("first");
+    expect(summary).not.toContain("second");
+    expect(summary).not.toContain("private-text");
+    expect(textOf(tools.list(80))).toContain("#1");
+    const detail = textOf(tools.detail(1, 80));
+    expect(detail).toContain("private-text");
+    expect(detail).toContain("second");
+    expect(textOf(tools.detail(2, 80))).toContain("No tool #2");
+    const renderer = createEventRenderer({ tools });
+    const next = call("next", "read_file", '{"path":"next.txt"}');
+    expect(textOf(renderer.push({ type: "tool_started", call: next } as AgentEvent).tail)).toContain("read_file");
+    expect(textOf(renderer.push({ type: "tool_finished", toolCallId: next.id, result } as AgentEvent).append)).toContain("#2");
   });
 
   it("bounds a real unified diff and does not invent missing content", () => {
@@ -314,7 +358,7 @@ describe("tools and diffs", () => {
         call: call("t", "read_file", JSON.stringify({ path: "p".repeat(200) })),
       } as AgentEvent);
       const toolWidth = Math.max(
-        ...started.append.map((line) =>
+        ...started.tail.map((line) =>
           line.reduce((sum, item) => sum + item.text.length, 0),
         ),
       );

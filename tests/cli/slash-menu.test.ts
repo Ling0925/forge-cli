@@ -9,6 +9,13 @@ import { SlashMenu } from "../../src/cli/slash-menu";
 import { createTheme } from "../../src/cli/theme";
 
 describe("SlashCommands metadata", () => {
+  it.each(["/quit", "/exit"])("offers %s in the menu and help", (name) => {
+    const menu = new SlashMenu(5);
+    expect(menu.update(name.slice(0, -1))).toBe(true);
+    expect(menu.getSelected()?.name).toBe(name);
+    expect(formatCommandUsage()).toContain(name);
+    expect(formatHelp(createTheme({ forceColor: false }))).toContain(name);
+  });
   it("includes all interactive slash commands", () => {
     const names = SLASH_COMMANDS.map((c) => c.name);
     expect(names).toContain("/model");
@@ -42,6 +49,7 @@ describe("SlashCommands metadata", () => {
       expect.objectContaining({ name: "/mode" }),
     ]);
     expect(matchSlashCommands("/q")).toEqual([
+      expect.objectContaining({ name: "/queue" }),
       expect.objectContaining({ name: "/quit" }),
     ]);
     expect(matchSlashCommands("not-slash")).toEqual([]);

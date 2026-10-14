@@ -35,7 +35,7 @@ describe("live slash composer", () => {
     expect(await next).toBe("/help");
     reader.dispose();
   });
-  it("preserves exact command on Enter unless selection was navigated", async () => {
+  it("selects exact commands by default and respects an explicit arrow selection", async () => {
     const input = new PassThrough();
     const output = new PassThrough();
     const reader = new TerminalReader({ input, output, isTTY: true });
@@ -44,7 +44,7 @@ describe("live slash composer", () => {
     input.write("/mode\r");
     expect(await pending).toBe("/mode");
     const next = reader.question("❯ ", new AbortController().signal);
-    input.write("/mode\u001b[B\u001b[A\r");
+    input.write("/mode\u001b[A\r");
     expect(await next).toBe("/model");
     reader.dispose();
   });
@@ -106,11 +106,18 @@ function cells(text: string) {
   let row = 0;
   let col = 0;
   // biome-ignore lint/suspicious/noControlCharactersInRegex: parse terminal output
-  const tokens = text.match(/\x1b\[[0-9;]*[A-Za-z]|[^\x1b]/gu) ?? [];
+  const tokens = text.match(/\x1b\[[0-9;?]*[A-Za-z~]|\x1b\][^\x07]*\x07|[^\x1b]/gu) ?? [];
   for (const token of tokens) {
     if (token.startsWith("\u001b[")) {
+      if (token.startsWith("\x1b[?")) continue;
       const n = Number(token.slice(2, -1)) || 1;
       switch (token.at(-1)) {
+        case "H": {
+          const [y, x] = token.slice(2, -1).split(";").map(Number);
+          row = (y || 1) - 1;
+          col = (x || 1) - 1;
+          break;
+        }
         case "A":
           row = Math.max(0, row - n);
           break;

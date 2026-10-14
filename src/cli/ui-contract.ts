@@ -1,4 +1,4 @@
-import type { ApprovalRequest } from "../shared/schemas";
+import type { ApprovalRequest, ContextUsage } from "../shared/schemas";
 
 /**
  * Typed contract between the CLI's presentation producers (formatting, command
@@ -16,7 +16,11 @@ export type Tone =
   | "accent"
   | "success"
   | "warning"
-  | "error";
+  | "error"
+  | "contextInstructions"
+  | "contextMemory"
+  | "contextConversation"
+  | "contextTools";
 
 /** A single styled run of plain text. */
 export type Span = Readonly<{
@@ -24,10 +28,19 @@ export type Span = Readonly<{
   readonly tone?: Tone;
   readonly bold?: boolean;
   readonly inverse?: boolean;
+  /** Local presentation marker; animated only in the transient terminal tail. */
+  readonly animation?: "spinner";
 }>;
 
 /** A logical output line, rendered as a sequence of spans. */
 export type RichLine = readonly Span[];
+
+export type ComposerContext = Readonly<{
+  model: string;
+  usage: ContextUsage | null;
+  /** Session estimate until a projected runtime request is available. */
+  estimated?: boolean;
+}>;
 
 export type UIOptions = Readonly<{
   /** Requested appearance; the controller resolves "system" against the host. */
@@ -40,6 +53,9 @@ export type RunStatus = Readonly<{
   readonly startedAt: number;
   readonly toolCount: number;
   readonly cancellable: boolean;
+  /** Generated output in this user turn, across model requests; excludes input/history. */
+  readonly tokens?: number;
+  readonly tokensEstimated?: boolean;
 }>;
 
 export type PickerItem = Readonly<{
@@ -87,6 +103,21 @@ export type TerminalUI = Readonly<{
    * may be dispatched from it until the consumer reads that input.
    */
   setBusy(busy: boolean): void;
+
+  /** Optional composer hint shown near the input line; null clears any override. */
+  setInputHint?(hint: string | null): void;
+
+  /** Bounded pending-message previews pinned outside the scrolling transcript. */
+  setPendingInput?(lines: readonly string[]): void;
+
+  /** Persistent model and context budget footer, independent of run status. */
+  setContext?(context: ComposerContext | null): void;
+
+  /**
+   * Applies one renderer frame atomically when supported. Older fake UIs may
+   * implement only append/setTail/setStatus; callers must feature-detect.
+   */
+  update?(update: RenderUpdate): void;
 
   /**
    * Shows a filterable picker. Resolves the selected item's `value`, or null

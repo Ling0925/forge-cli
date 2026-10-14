@@ -1,13 +1,16 @@
 import type { AgentEvent, TaskPlan, ToolCall } from "../../shared/schemas";
 import type { RenderUpdate, RichLine, RunStatus } from "../ui-contract";
+import { estimateTokens } from "../../shared/context-usage";
 import { MarkdownStream } from "./markdown";
 import { wrapRichLines } from "./rich";
 import { sanitizeText } from "./sanitize";
-import { toolFinishLines, toolStartLine } from "./tools";
+import { ToolTranscript } from "./tool-transcript";
+import { compactToolLine, toolRunningLine, toolTarget } from "./tools";
 
 export interface EventRendererOptions {
   readonly width?: () => number;
   readonly now?: () => number;
+  readonly tools?: ToolTranscript;
 }
 
 export interface EventRenderer {
@@ -26,12 +29,29 @@ export const createEventRenderer = (
   options: EventRendererOptions = {},
 ): EventRenderer => {
   const markdown = new MarkdownStream();
-  const calls = new Map<string, ToolCall>();
+  const tools = options.tools ?? new ToolTranscript();
   const now = options.now ?? Date.now;
   let startedAt = now();
   let toolCount = 0;
   let running = false;
+  let currentStatus: RunStatus | null = null;
+  let completedOutputTokens = 0;
+  let tokensEstimated = false;
+  let streamedText = "";
+  const withTokens = (status: RunStatus): RunStatus => ({
+    ...status,
+    tokens: completedOutputTokens + estimateTokens(streamedText),
+    tokensEstimated: tokensEstimated || streamedText.length > 0,
+  });
   let tail: readonly RichLine[] = [];
+  const active = new Map<string, ToolCall>();
+  const stopTools = (label = "interrupted"): RichLine[] => {
+    const lines = [...active.values()].map((call) => compactToolLine(
+      call.function.name, toolTarget(call), ` · ${label}`, "warning", options.width?.() ?? 80,
+    ));
+    active.clear();
+    return lines;
+  };
 
   const flushText = (): RichLine[] => {
     const done = markdown.finish();
@@ -44,17 +64,23 @@ export const createEventRenderer = (
     nextTail: readonly RichLine[],
     status: RunStatus | null,
   ): RenderUpdate => {
-    tail = nextTail;
+    currentStatus = status ? withTokens(status) : null;
     const width = options.width?.() ?? 80;
+    tail = wrapRichLines([
+      ...nextTail,
+      ...[...active.values()].map((call) => toolRunningLine(call, width)),
+    ], width);
     return {
       append: wrapRichLines(append, width),
-      tail: wrapRichLines(nextTail, width),
-      status,
+      tail,
+      status: currentStatus,
     };
   };
 
-  const live = (label: string): RunStatus =>
-    statusFor(label, startedAt, toolCount, true);
+  const live = (label: string): RunStatus => {
+    currentStatus = withTokens(statusFor(label, startedAt, toolCount, true));
+    return currentStatus;
+  };
 
   return {
     push(event): RenderUpdate {
@@ -62,33 +88,34 @@ export const createEventRenderer = (
         case "run_started":
           startedAt = now();
           toolCount = 0;
+          completedOutputTokens = 0;
+          tokensEstimated = false;
+          streamedText = "";
           running = true;
           return update(flushText(), [], live("thinking"));
         case "text_delta": {
           running = true;
+          streamedText += event.text;
           const chunk = markdown.push(event.text);
           return update(chunk.append, chunk.tail, live("responding"));
         }
         case "tool_started": {
           running = true;
-          toolCount += 1;
-          calls.set(event.call.id, event.call);
+          if (!active.has(event.call.id)) toolCount += 1;
+          tools.start(event.call);
+          active.set(event.call.id, event.call);
           return update(
-            [
-              ...flushText(),
-              toolStartLine(event.call, options.width?.() ?? 80),
-            ],
+            flushText(),
             [],
             live(event.call.function.name),
           );
         }
         case "tool_finished": {
-          const call = calls.get(event.toolCallId);
-          calls.delete(event.toolCallId);
+          active.delete(event.toolCallId);
           return update(
             [
               ...flushText(),
-              ...toolFinishLines(call, event.result, options.width?.() ?? 80),
+              ...tools.summary(event.toolCallId, event.result, options.width?.() ?? 80),
             ],
             [],
             live("thinking"),
@@ -105,6 +132,7 @@ export const createEventRenderer = (
           return update(
             [
               ...flushText(),
+              ...stopTools(),
               [{ text: sanitizeText(event.error.message), tone: "error" }],
             ],
             [],
@@ -121,6 +149,7 @@ export const createEventRenderer = (
           return update(
             [
               ...flushText(),
+              ...stopTools(event.status === "cancelled" ? "cancelled" : "interrupted"),
               [{ text: `${event.status} · ${event.toolCalls} tools`, tone }],
             ],
             [],
@@ -136,13 +165,31 @@ export const createEventRenderer = (
         case "state_changed":
           if (event.status === "cancelled") {
             running = false;
-            return update(flushText(), [], null);
+            return update([...flushText(), ...stopTools("cancelled")], [], null);
           }
           return {
             append: [],
             tail,
             ...(running ? { status: live("thinking") } : {}),
           };
+        case "context_usage": {
+          if (!running) return { append: [], tail };
+          // A user turn may contain multiple model requests. Count only their
+          // outputs, never the projected context or prompt tokens. A reported
+          // completion replaces this request's streaming estimate, not prior outputs.
+          if (event.usage.completionTokens !== undefined) {
+            completedOutputTokens += event.usage.completionTokens;
+          } else if (streamedText) {
+            completedOutputTokens += estimateTokens(streamedText);
+            tokensEstimated = true;
+          }
+          streamedText = "";
+          if (running && currentStatus) {
+            currentStatus = withTokens(currentStatus);
+            return { append: [], tail, status: currentStatus };
+          }
+          return { append: [], tail };
+        }
         case "agent_update":
         case "context_compacted":
           return {
@@ -158,7 +205,7 @@ export const createEventRenderer = (
     },
     finish(): RenderUpdate {
       running = false;
-      return update(flushText(), [], null);
+      return update([...flushText(), ...stopTools()], [], null);
     },
   };
 };

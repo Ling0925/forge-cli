@@ -6,8 +6,8 @@ import { wrapRichLines } from "./rich";
 import { sanitizeText } from "./sanitize";
 import { stringWidth, truncate } from "./width";
 
-const PREVIEW_LINES = 4;
-const PREVIEW_ROWS = 6;
+const PREVIEW_LINES = 12;
+const PREVIEW_ROWS = 18;
 const DEFAULT_WIDTH = 80;
 
 const span = (text: string, tone?: Tone): Span => ({
@@ -35,7 +35,7 @@ const readObject = (raw: string): Record<string, unknown> | null => {
 
 export const toolTarget = (call: ToolCall): string => {
   const args = readObject(call.function.arguments);
-  if (!args) return sanitizeText(call.function.arguments);
+  if (!args) return "(arguments unavailable)";
   for (const key of ["path", "argv", "command", "query", "url", "id", "cwd"]) {
     const field = args[key];
     if (typeof field === "string" && field) return field;
@@ -88,6 +88,31 @@ export const toolStartLine = (
     width,
   );
 
+/** Animated only by the terminal; never committed as a completed record. */
+export const toolRunningLine = (call: ToolCall, width = DEFAULT_WIDTH): RichLine => [
+  { text: "⠋", tone: "muted", animation: "spinner" },
+  span(" "),
+  ...toolStartLine(call, Math.max(1, width - 2)),
+];
+
+export const toolArgumentLines = (call: ToolCall, width = DEFAULT_WIDTH, expanded = false): RichLine[] => {
+  const args = readObject(call.function.arguments);
+  if (!args) return [];
+  const rows: RichLine[] = [];
+  for (const [key, value] of Object.entries(args)) {
+    const text = typeof value === "string" ? value : JSON.stringify(value);
+    if (text === undefined) continue;
+    const parts = textLines(text);
+    const limit = expanded ? 80 : 3;
+    rows.push(...parts.slice(0, limit).map((part, index) =>
+      [span(`  ${index ? "  " : `${key}: `}${part}`, "muted")],
+    ));
+    if (parts.length > limit) rows.push([span(`  … ${parts.length - limit} more ${key} lines`, "muted")]);
+  }
+  const clipped = clipRows(rows, width, expanded ? 120 : 6);
+  return clipped.hidden ? [...clipped.shown, [span(`  … ${clipped.hidden} more arguments`, "muted")]] : clipped.shown;
+};
+
 const clipRows = (
   rows: readonly RichLine[],
   width: number,
@@ -115,10 +140,33 @@ const clipRows = (
   return { shown, hidden };
 };
 
+export const toolSummaryLines = (
+  call: ToolCall | undefined,
+  result: ToolResult,
+  width = DEFAULT_WIDTH,
+  index?: number,
+): RichLine[] => {
+  const parsed = envelope(result);
+  const failed = result.isError || (parsed.exitCode !== null && parsed.exitCode !== 0);
+  const label = failed ? "failed" : "done";
+  const exit = parsed.exitCode === null ? "" : ` · exit ${parsed.exitCode}`;
+  const header = compactToolLine(
+    call?.function.name ?? "tool",
+    call ? toolTarget(call) : "",
+    ` · ${label}${exit}${index === undefined ? "" : ` · #${index}`}`,
+    failed ? "error" : "success",
+    width,
+  );
+  const body = textLines(parsed.stderr || parsed.body || parsed.stdout)[0];
+  const detail = [parsed.note, body].filter(Boolean).join(" · ");
+  return detail ? [header, [span(`  ${truncate(detail, Math.max(1, width - 2))}`, failed ? "error" : "muted")]] : [header];
+};
+
 export const toolFinishLines = (
   call: ToolCall | undefined,
   result: ToolResult,
   width = DEFAULT_WIDTH,
+  expanded = false,
 ): RichLine[] => {
   const name = call?.function.name ?? "tool";
   const target = call ? toolTarget(call) : "";
@@ -137,11 +185,8 @@ export const toolFinishLines = (
   );
   const logical: RichLine[] = [];
   if (parsed.note) logical.push([span(parsed.note, "muted")]);
-  const stdout = textLines(parsed.body || parsed.stdout).slice(
-    0,
-    PREVIEW_LINES,
-  );
   const stdoutAll = textLines(parsed.body || parsed.stdout);
+  const stdout = stdoutAll.slice(0, expanded ? 80 : PREVIEW_LINES);
   for (const item of stdout)
     logical.push([span(parsed.body ? item : `stdout ${item}`, "muted")]);
   if (stdoutAll.length > stdout.length) {
@@ -149,12 +194,13 @@ export const toolFinishLines = (
       span(`… ${stdoutAll.length - stdout.length} more lines`, "muted"),
     ]);
   }
-  const stderr = textLines(parsed.stderr).slice(0, 2);
+  const stderrAll = textLines(parsed.stderr);
+  const stderr = stderrAll.slice(0, expanded ? 40 : 2);
   for (const item of stderr) logical.push([span(`stderr ${item}`, "error")]);
-  if (textLines(parsed.stderr).length > stderr.length) {
+  if (stderrAll.length > stderr.length) {
     logical.push([span("… more stderr", "muted")]);
   }
-  const clipped = clipRows(logical, width, PREVIEW_ROWS);
+  const clipped = clipRows(logical, width, expanded ? 180 : PREVIEW_ROWS);
   const rows: RichLine[] = [header, ...clipped.shown];
   if (clipped.hidden > 0) {
     rows.push([span(`… ${clipped.hidden} more preview lines`, "muted")]);

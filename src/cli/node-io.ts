@@ -141,6 +141,7 @@ export const createNodeIO = (options: CreateNodeIOOptions = {}): CliIO => {
     question: (text, signal, qOptions) =>
       getReader().question(text, signal, qOptions),
     readApproval: (text, signal) => getReader().readApproval(text, signal),
+    onRunInput: (callback) => getReader().onRunInput(callback),
     onClose: (callback) => {
       let notified = false;
       const close = (): void => {

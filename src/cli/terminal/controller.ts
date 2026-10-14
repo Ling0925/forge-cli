@@ -3,7 +3,9 @@ import { approvalLines, terminalText } from "../format";
 import { SlashMenu } from "../slash-menu";
 import { createTheme, resolveTheme } from "../theme";
 import type {
+  ComposerContext,
   PickerSpec,
+  RenderUpdate,
   RichLine,
   RunStatus,
   TerminalUI,
@@ -25,8 +27,10 @@ export class Controller implements TerminalUI {
   fresh = false;
   tail: readonly RichLine[] = [];
   status: RunStatus | null = null;
+  inputHint: string | null = null;
+  pendingInput: readonly string[] = [];
+  context: ComposerContext | null = null;
   dismissed = false;
-  navigated = false;
   private savedDraft: Editor | undefined;
   picker: Picker | undefined;
   private setting: UIOptions["theme"] = "system";
@@ -41,12 +45,13 @@ export class Controller implements TerminalUI {
     private readonly output: NodeJS.WritableStream,
     private readonly tty: boolean,
     private readonly start: () => void,
-    readonly submit: (text: string) => void,
+    readonly submit: (text: string, steer?: boolean) => void,
     readonly interrupt: () => void,
     private readonly approval: (
       prompt: string,
       signal: AbortSignal,
     ) => Promise<boolean>,
+    private readonly runInputEnabled: () => boolean = () => false,
   ) {
     this.screen = new Screen(output, () => this, createTheme({ isTTY: false }));
   }
@@ -95,10 +100,15 @@ export class Controller implements TerminalUI {
           typeof this.input.setRawMode === "function"
         )
           this.input.setRawMode(true);
-        this.output.write("\x1b[?2004h\x1b[?25h");
+        this.screen.fixed = true;
+        this.output.write("\x1b[?1049h\x1b[?2004h\x1b[?1002h\x1b[?1006h\x1b[?25h");
+        let lastSecond = Math.floor(Date.now() / 1000);
         this.timer = setInterval(() => {
-          if (this.status) this.draw();
-        }, 1000);
+          const animated = this.tail.some((line) => line.some((span) => span.animation === "spinner"));
+          const second = Math.floor(Date.now() / 1000);
+          if (animated || this.status?.cancellable || (this.status && second !== lastSecond)) this.draw();
+          lastSecond = second;
+        }, 100);
         this.timer.unref();
       }
     }
@@ -134,12 +144,42 @@ export class Controller implements TerminalUI {
     this.busy = busy;
     this.draw();
   }
+  setInputHint(hint: string | null): void {
+    this.inputHint = hint === null ? null : terminalText(hint);
+    this.draw();
+  }
+  setPendingInput(lines: readonly string[]): void {
+    this.pendingInput = lines.slice(0, 2).map(line => terminalText(line).replaceAll("\n", " ↵ "));
+    this.draw();
+  }
+  setContext(context: ComposerContext | null): void {
+    this.context = context === null ? null : { ...context, model: terminalText(context.model) };
+    this.draw();
+  }
+  update(update: RenderUpdate): void {
+    const previous = this.batch;
+    this.batch = true;
+    try {
+      if (update.append.length) this.screen.append(update.append);
+      this.tail = update.tail;
+      if ("status" in update) this.status = update.status ?? null;
+    } finally {
+      this.batch = previous;
+    }
+    this.draw();
+  }
+  runInputActive(): boolean {
+    return this.runInputEnabled();
+  }
   begin(prompt: string, fresh: boolean): void {
     this.prompt = terminalText(prompt);
     this.fresh = fresh;
     this.dismissed = false;
     this.menu.close();
     if (fresh) {
+      // Approval must be visible even if the user was selecting old output.
+      this.screen.clearSelection();
+      this.screen.scroll(-Number.MAX_SAFE_INTEGER);
       this.savedDraft = this.editor;
       this.editor = new Editor();
     }
@@ -163,14 +203,14 @@ export class Controller implements TerminalUI {
   handle(event: InputEvent): void {
     handle(this, event);
   }
-  finish(): void {
+  finish(steer = false): void {
     const text = this.editor.text;
     this.editor.remember();
     this.editor.clear();
     this.menu.close();
     this.dismissed = true;
     if (this.screen.enabled) this.screen.append([plain(this.prompt + text)]);
-    this.submit(text);
+    this.submit(text, steer && this.runInputActive() && !text.startsWith("/"));
   }
   filtered() {
     const picker = this.picker;
@@ -221,7 +261,7 @@ export class Controller implements TerminalUI {
     if (this.probe) clearTimeout(this.probe);
     this.screen.clear();
     if (this.screen.enabled) {
-      this.output.write("\x1b[?2004l\x1b[?25h");
+      this.output.write("\x1b[?1002l\x1b[?1006l\x1b[?2004l\x1b[?2026l\x1b[?1049l\x1b[?25h");
       if (
         "setRawMode" in this.input &&
         typeof this.input.setRawMode === "function"

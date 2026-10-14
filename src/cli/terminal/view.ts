@@ -1,7 +1,9 @@
+import { compactTokens } from "../render/token-count";
 import { wrapRichLines } from "../render/rich";
 import type { SlashMenu } from "../slash-menu";
 import { graphemes, truncate, visibleWidth } from "../theme";
-import type { PickerSpec, RichLine, RunStatus } from "../ui-contract";
+import type { ComposerContext, PickerSpec, RichLine, RunStatus } from "../ui-contract";
+import { contextFooter } from "./context-footer";
 import type { Editor } from "./editor";
 import { type Screen, composerLayout, plain } from "./screen";
 
@@ -21,14 +23,30 @@ export interface View {
   fresh: boolean;
   menu: SlashMenu;
   status: RunStatus | null;
+  inputHint?: string | null;
+  pendingInput?: readonly string[];
+  context?: ComposerContext | null;
   tail: readonly RichLine[];
   filtered(): PickerSpec["items"];
 }
 export function draw(view: View): void {
   if (!view.screen.enabled) return;
-  // Keep unfinished output a compact preview, never a viewport-sized frame.
+  // Bound expanded input/menus; do not fill unused rows in the dock.
   const limit = Math.max(1, Math.min(10, view.rows - 1));
   const picker = view.picker;
+  const pending = !picker && !view.fresh
+    ? (view.pendingInput ?? []).slice(0, Math.min(2, Math.max(0, limit - 2))).map(line =>
+      [{ text: truncate(line, view.columns), tone: "accent" as const }]) : [];
+  const footer = !picker && !view.fresh && view.context
+    ? contextFooter(view.context, view.columns).slice(0, Math.max(0, limit - 2 - pending.length)) : [];
+  // Fixed mode reserves footer and status slots even when they are empty.
+  // Background activity must not change the editor's physical row.
+  const fixedFooter = view.screen.fixed ? Math.min(2, Math.max(0, limit - 2 - pending.length)) : footer.length;
+  const footerLines = view.screen.fixed
+    ? [...footer, ...Array.from({ length: Math.max(0, fixedFooter - footer.length) }, () => plain(""))]
+    : footer;
+  const contentLimit = limit - fixedFooter - pending.length;
+  const statusSlot = view.screen.fixed && contentLimit > 1 ? 1 : 0;
   const editor = picker?.editor ?? view.editor;
   const prefix = picker ? `${picker.spec.title}: ` : view.prompt;
   const layout = composerLayout(
@@ -38,7 +56,7 @@ export function draw(view: View): void {
   );
   const start = Math.max(
     0,
-    layout.row - Math.max(0, Math.floor(limit / 2) - 1),
+    layout.row - Math.max(0, Math.floor(contentLimit / 2) - 1),
   );
   let prefixRemaining = prefix.length;
   const styled = layout.lines.map((line): RichLine => {
@@ -55,15 +73,15 @@ export function draw(view: View): void {
       ...(styled[0] ?? []),
       {
         text: truncate(
-          "Ask anything · / for commands",
+          view.inputHint ?? "Ask anything · / for commands",
           Math.max(0, view.columns - visibleWidth(prefix)),
         ),
         tone: "muted",
       },
     ];
   }
-  const composer = styled.slice(start, start + limit);
-  const room = limit - composer.length;
+  const composer = styled.slice(start, start + (view.screen.fixed ? Math.max(1, contentLimit - statusSlot) : contentLimit));
+  const room = Math.max(0, contentLimit - composer.length - statusSlot);
   let below: RichLine[] = [];
   if (picker) {
     const items = view.filtered();
@@ -195,14 +213,17 @@ export function draw(view: View): void {
       }
     }
   }
-  const available = limit - composer.length - below.length;
+  const frame = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[Math.floor(Date.now() / 100) % 10]!;
+  const tokenLabel = view.status?.tokens === undefined ? "?"
+    : `${view.status.tokensEstimated ? "≈" : ""}${compactTokens(view.status.tokens)}`;
+  const available = contentLimit - composer.length - below.length;
   const status =
     view.status && available
       ? [
           [
             {
               text: truncate(
-                `${view.status.label} · ${Math.max(0, Math.floor((Date.now() - view.status.startedAt) / 1000))}s · ${view.status.toolCount} tools${view.status.cancellable ? " · Ctrl+C cancel" : ""}`,
+                `${view.status.label}${view.status.cancellable ? ` ${frame}` : ""} · ${tokenLabel} tokens · ${Math.max(0, Math.floor((Date.now() - view.status.startedAt) / 1000))}s · ${view.status.toolCount} tools${view.status.cancellable ? " · Ctrl+C cancel" : ""}`,
                 view.columns,
               ),
               tone: "muted" as const,
@@ -211,16 +232,29 @@ export function draw(view: View): void {
         ]
       : [];
   const spacer = available > status.length && view.rows >= 6 ? [plain("")] : [];
+  const animatedTail = view.tail.some((line) => line.some((span) => span.animation === "spinner"))
+    ? view.tail.map((line) => line.map((span) =>
+        span.animation === "spinner" ? { ...span, text: frame } : span,
+      ))
+    : view.tail;
   const tailRoom = Math.max(
     0,
     Math.min(3, available - status.length - spacer.length),
   );
-  const tail = tailRoom
-    ? wrapRichLines(view.tail, view.columns).slice(-tailRoom)
+  const tail = !view.screen.fixed && tailRoom
+    ? wrapRichLines(animatedTail, view.columns).slice(-tailRoom)
     : [];
-  const above = [...spacer, ...tail, ...status];
+  const above = view.screen.fixed ? [] : [...spacer, ...tail, ...status];
+  if (view.screen.fixed) {
+    view.screen.setTranscript(animatedTail);
+    view.screen.paint(
+      [...(statusSlot ? [status[0] ?? plain("")] : []), ...composer, ...below, ...pending, ...footerLines],
+      statusSlot + layout.row - start, layout.column,
+    );
+    return;
+  }
   view.screen.paint(
-    [...above, ...composer, ...below],
+    [...above, ...composer, ...below, ...pending, ...footer],
     above.length + layout.row - start,
     layout.column,
   );

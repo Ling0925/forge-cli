@@ -36,6 +36,7 @@ export class TerminalReader {
   private readonly queue: string[] = [];
   private bytes = 0;
   private waiter: Waiter | undefined;
+  private runInput: ((line: string, steer?: boolean) => void) | undefined;
   private error: ForgeError | undefined;
   private readonly notifyClose: (() => void) | undefined;
   private started = false;
@@ -70,10 +71,11 @@ export class TerminalReader {
       this.output,
       tty,
       () => this.start(),
-      (text) => this.line(text),
+      (text, steer) => this.line(text, steer),
       () =>
         options.onInterrupt ? options.onInterrupt() : process.emit("SIGINT"),
       (prompt, signal) => this.readApproval(prompt, signal),
+      () => this.runInput !== undefined,
     );
     const controller = this.controller;
     this.ui = {
@@ -96,6 +98,18 @@ export class TerminalReader {
       },
       setBusy: (busy) => {
         if (!this.closed) controller.setBusy(busy);
+      },
+      setContext: (context) => {
+        if (!this.closed) controller.setContext(context);
+      },
+      setPendingInput: (lines) => {
+        if (!this.closed) controller.setPendingInput(lines);
+      },
+      setInputHint: (hint) => {
+        if (!this.closed) controller.setInputHint(hint);
+      },
+      update: (update) => {
+        if (!this.closed) controller.update(update);
       },
       choose: (spec, signal) =>
         this.closed ? Promise.resolve(null) : controller.choose(spec, signal),
@@ -144,7 +158,7 @@ export class TerminalReader {
     )
       this.overflow();
   }
-  private line(raw: string): void {
+  private line(raw: string, steer = false): void {
     const line = terminalText(raw);
     if (Buffer.byteLength(line) > this.maxBytes) {
       this.overflow();
@@ -156,7 +170,13 @@ export class TerminalReader {
       waiter.resolve(line);
       return;
     }
-    if (this.controller.busy) return;
+    if (this.runInput) {
+      this.runInput(line, steer);
+      return;
+    }
+    // Retain commands entered during a non-run operation for the next prompt;
+    // ordinary drafts still stay in the editor.
+    if (this.controller.busy && !line.startsWith("/")) return;
     if (
       this.queue.length >= this.maxLines ||
       this.bytes + Buffer.byteLength(line) > this.maxBytes
@@ -166,6 +186,22 @@ export class TerminalReader {
     }
     this.queue.push(line);
     this.bytes += Buffer.byteLength(line);
+  }
+  onRunInput(callback: (line: string, steer?: boolean) => void): () => void {
+    if (this.runInput || this.waiter)
+      throw new ForgeError("invalid_input", "Run input already has an owner.");
+    if (this.closed) return () => undefined;
+    this.runInput = callback;
+    // Transfer previously submitted typeahead before accepting new stream data.
+    while (this.queue.length && this.runInput === callback) {
+      const line = this.queue.shift() ?? "";
+      this.bytes -= Buffer.byteLength(line);
+      callback(line);
+    }
+    this.start();
+    return () => {
+      if (this.runInput === callback) this.runInput = undefined;
+    };
   }
   private overflow(): void {
     this.queue.length = 0;
@@ -246,6 +282,7 @@ export class TerminalReader {
   private close(error: ForgeError, inputClosed = false): void {
     if (this.closed) return;
     this.closed = true;
+    this.runInput = undefined;
     const waiter = this.waiter;
     this.waiter = undefined;
     waiter?.reject(error);
