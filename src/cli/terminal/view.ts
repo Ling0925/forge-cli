@@ -1,3 +1,5 @@
+import type { TaskPlan } from "../../shared/schemas";
+import { terminalText } from "../format";
 import { compactTokens } from "../render/token-count";
 import { wrapRichLines } from "../render/rich";
 import type { SlashMenu } from "../slash-menu";
@@ -21,6 +23,7 @@ export interface View {
   editor: Editor;
   prompt: string;
   fresh: boolean;
+  plan?: TaskPlan | null;
   mode?: "build" | "plan";
   menu: SlashMenu;
   status: RunStatus | null;
@@ -218,6 +221,12 @@ export function draw(view: View): void {
   const tokenLabel = view.status?.tokens === undefined ? "?"
     : `${view.status.tokensEstimated ? "≈" : ""}${compactTokens(view.status.tokens)}`;
   const available = contentLimit - composer.length - below.length;
+  const activeStep = view.plan?.steps.find(step => step.status === "in_progress") ?? view.plan?.steps.find(step => step.status === "pending");
+  const done = view.plan?.steps.filter(step => step.status === "completed").length ?? 0;
+  const pinned: RichLine | undefined = view.screen.fixed && !picker && !view.fresh && view.plan
+    ? [{text: truncate(terminalText(`Plan ${done}/${view.plan.steps.length} · ${activeStep ? `${activeStep.status === "in_progress" ? "● [active]" : "○ [pending]"} ${activeStep.step}` : "✔ [done]"} · /plan`), view.columns), tone: activeStep?.status === "in_progress" ? "warning" : "muted"}] : undefined;
+  const history: RichLine | undefined = view.screen.historyOffset > 0 && !picker && !view.fresh
+    ? [{ text: truncate(`▼ History · ${view.screen.historyOffset} lines from latest · End to bottom`, view.columns), tone: "warning" }] : undefined;
   const status =
     view.status && available
       ? [
@@ -249,7 +258,7 @@ export function draw(view: View): void {
   if (view.screen.fixed) {
     view.screen.setTranscript(animatedTail);
     view.screen.paint(
-      [...(statusSlot ? [status[0] ?? plain("")] : []), ...composer, ...below, ...pending, ...footerLines],
+      [...(statusSlot ? [pinned ?? history ?? status[0] ?? plain("")] : []), ...composer, ...below, ...pending, ...footerLines],
       statusSlot + layout.row - start, layout.column,
     );
     return;

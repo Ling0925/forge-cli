@@ -82,6 +82,7 @@ export class Screen {
   fixed = false;
   private history: RichLine[] = [];
   private scrollOffset = 0;
+  get historyOffset(): number { return this.scrollOffset; }
   private transcript: readonly RichLine[] = [];
   private transcriptLength = 0;
   private wrapColumns = 0;

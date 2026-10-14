@@ -1,4 +1,4 @@
-import type { ApprovalRequest, ContextUsage } from "../shared/schemas";
+import type { ApprovalRequest, ContextUsage, TaskPlan } from "../shared/schemas";
 
 /**
  * Typed contract between the CLI's presentation producers (formatting, command
@@ -103,6 +103,7 @@ export type TerminalUI = Readonly<{
    * may be dispatched from it until the consumer reads that input.
    */
   setBusy(busy: boolean): void;
+  setPlan?(plan: TaskPlan | null): void;
   setMode?(mode: "build" | "plan"): void;
   onModeToggle?(callback: () => void): () => void;
 

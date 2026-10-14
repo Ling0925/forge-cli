@@ -1,4 +1,4 @@
-import type { ApprovalRequest } from "../../shared/schemas";
+import type { ApprovalRequest, TaskPlan } from "../../shared/schemas";
 import { approvalLines, terminalText } from "../format";
 import { SlashMenu } from "../slash-menu";
 import { createTheme, resolveTheme } from "../theme";
@@ -140,6 +140,8 @@ export class Controller implements TerminalUI {
     this.status = status;
     this.draw();
   }
+  plan: TaskPlan | null = null;
+  setPlan(plan: TaskPlan | null): void { this.plan = plan; this.draw(); }
   mode: "build" | "plan" = "build";
   modeToggle: (() => void) | undefined;
   setMode(mode: "build" | "plan"): void { this.mode = mode; this.draw(); }

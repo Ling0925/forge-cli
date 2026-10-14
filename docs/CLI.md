@@ -79,3 +79,7 @@ env -u NO_COLOR TERM=xterm-256color node scripts/qa-cli-terminal.mjs --cli dist/
 - Shift+Tab（CSI Z）在普通输入区切换 build/plan，保留草稿，文字回显模式；plan 箭头使用 warning tone。审批、picker、文字选区和粘贴不触发。终端不发送该键码时使用 `/mode plan|build`。忙时只影响下一次运行，当前运行权限与模式保持不变。
 - 新建且未显式命名的会话在 completed 后后台尝试自动命名一次。先持久化本地首行标题，再用当前模型生成短标题，2 秒超时；失败或退出保留本地标题。不会新增对话消息或消耗运行轮次/工具预算，但可能产生一次模型费用。手动标题、旧版无来源标记标题、fork 和子代理不自动覆盖。CLI 下次 sessions 刷新可见。
 - 审批仍为原有 ask/显式 auto、`[y/N]`；审批新需求中的冲突默认值尚待确认，本轮未放宽权限。
+
+### 固定计划与编辑补充
+
+固定屏输入行上方复用状态槽显示当前会话 `Plan n/m` 和当前步骤；/plan 仍显示全文。计划优先于普通耗时/历史提示，极矮窗口隐藏，不扩大 dock。没有计划时，历史浏览显示距底部行数；End 或空草稿 Esc 回到底部。Ctrl+L 重绘；Alt+Enter 换行；Ctrl+U/K 删除至本行首/尾；Alt+B/F 按词移动。Shift+Enter 仍保留 steer 语义。

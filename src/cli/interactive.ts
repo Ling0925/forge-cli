@@ -73,7 +73,10 @@ export async function interactive(
     if (ui) ui.append(lines);
     else io.stdout(`${lines.map((line) => renderRichLine(line, theme)).join("\n")}\n`);
   };
-  const showHistory = (): void => appendLines(historyLines(requireSession(), ui?.columns ?? 80, tools));
+  const showHistory = (): void => {
+    ui?.setPlan?.(session?.plan ?? null);
+    appendLines(historyLines(requireSession(), ui?.columns ?? 80, tools));
+  };
   const toolCommand = (value: string): void => {
     if (value && !/^[1-9]\d*$/.test(value)) {
       safe.stderr("Expected /tools [N] (positive tool number).\n");
@@ -146,6 +149,7 @@ export async function interactive(
   };
   const resetSessionControls = (): void => {
     contextUsage = null;
+    ui?.setPlan?.(session?.plan ?? null);
     if (queue.length) safe.stdout("Pending input cleared on session change.\n");
     queue.clear();
     approvalMode = "ask";
@@ -419,6 +423,7 @@ export async function interactive(
             case "/plan": {
               const currentPlan =
                 (await service.getSession(requireSession().id)).plan ?? null;
+              ui?.setPlan?.(currentPlan);
               if (ui) ui.append(planLines(currentPlan, ui.columns));
               else styled(`${formatPlan(currentPlan, theme)}\n`);
               break;
@@ -609,6 +614,7 @@ export async function interactive(
               contextUsage = event.usage;
               refreshContext();
             }
+            if (event.type === "plan_updated" && event.sessionId === requireSession().id) ui?.setPlan?.(event.plan);
             live?.event(event);
           },
           async (request, signal) => {

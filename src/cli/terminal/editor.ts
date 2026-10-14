@@ -61,10 +61,25 @@ export class Editor {
       case "delete":
         this.text = before + this.text.slice(this.cursor + right);
         break;
-      case "kill":
-        this.text = this.text.slice(this.cursor);
-        this.cursor = 0;
+      case "kill": {
+        const start = before.lastIndexOf("\n") + 1;
+        this.text = this.text.slice(0, start) + this.text.slice(this.cursor);
+        this.cursor = start;
         break;
+      }
+      case "kill-end": {
+        const end = this.text.indexOf("\n", this.cursor);
+        this.text = before + (end < 0 ? "" : this.text.slice(end));
+        break;
+      }
+      case "word-left":
+        this.cursor = before.replace(/\S+\s*$/, "").length;
+        break;
+      case "word-right": {
+        const next = /^\s*\S+/.exec(this.text.slice(this.cursor));
+        this.cursor += next?.[0].length ?? this.text.length - this.cursor;
+        break;
+      }
       case "word": {
         const keep = before.replace(/\S+\s*$/, "");
         this.text = keep + this.text.slice(this.cursor);

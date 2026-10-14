@@ -19,6 +19,13 @@ export function handle(controller: Controller, event: InputEvent): void {
     if (!event.pasted && !controller.fresh && !controller.picker && !controller.screen.hasSelection) controller.modeToggle?.();
     return;
   }
+  if (event.kind === "key" && !event.pasted && event.key === "redraw") {
+    controller.screen.invalidate(); controller.draw(); return;
+  }
+  if (event.kind === "key" && !event.pasted && event.key === "alt-enter") {
+    if (!controller.fresh && !controller.picker) { controller.editor.insert("\n"); controller.draw(); }
+    return;
+  }
   if (controller.screen.hasSelection) {
     if (event.kind === "key" && !event.pasted && event.key === "interrupt") {
       controller.screen.copySelection();
@@ -33,6 +40,9 @@ export function handle(controller: Controller, event: InputEvent): void {
   if (event.kind === "key" && !event.pasted && (event.key === "page-up" || event.key === "page-down")) {
     controller.screen.scroll((event.key === "page-up" ? 1 : -1) * Math.max(1, controller.rows - 5));
     return;
+  }
+  if (event.kind === "key" && !event.pasted && !controller.fresh && !controller.picker && controller.screen.historyOffset > 0 && (event.key === "end" || (event.key === "escape" && !controller.editor.text))) {
+    controller.screen.scroll(-Number.MAX_SAFE_INTEGER); return;
   }
   const editor = controller.picker?.editor ?? controller.editor;
   const previousText = editor.text;
