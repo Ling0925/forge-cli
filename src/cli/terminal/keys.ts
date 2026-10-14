@@ -1,6 +1,9 @@
 import type { Controller } from "./controller";
 import type { InputEvent } from "./decoder";
 export function handle(controller: Controller, event: InputEvent): void {
+  // Any pasted event taints this approval, including special keys handled early.
+  if (controller.fresh && (event.kind === "text" || event.kind === "key") && event.pasted) controller.editor.tainted = true;
+  if (controller.fresh && event.kind === "key" && ["up", "down"].includes(event.key)) controller.editor.tainted = true;
   if (event.kind === "background") {
     if (controller.probe) {
       clearTimeout(controller.probe);
@@ -61,7 +64,7 @@ export function handle(controller: Controller, event: InputEvent): void {
   } else if (event.key === "interrupt") {
     if (controller.picker) controller.picker.resolve(null);
     else if (controller.fresh) {
-      controller.submit("");
+      controller.submit("no");
       controller.interrupt();
     } else if (controller.busy || !editor.text) controller.interrupt();
     else editor.clear();
@@ -69,7 +72,7 @@ export function handle(controller: Controller, event: InputEvent): void {
     if (controller.picker) controller.picker.resolve(null);
     else if (controller.fresh) {
       editor.clear();
-      controller.submit("");
+      controller.submit("no");
     } else {
       controller.dismissed = true;
       controller.menu.close();
@@ -88,8 +91,8 @@ export function handle(controller: Controller, event: InputEvent): void {
         controller.picker.resolve(
           controller.filtered()[controller.picker.index]?.value ?? null,
         );
-    } else if (controller.fresh && event.key === "enter") {
-      const answer = editor.tainted ? "" : editor.text;
+    } else if (controller.fresh) {
+      const answer = editor.tainted || event.key !== "enter" ? "no" : editor.text;
       editor.clear();
       controller.submit(answer);
     } else if (

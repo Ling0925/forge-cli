@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   type ApprovalMode,
   COMMAND_APPROVAL_WARNING,
-  shouldAutoApprove,
+  shouldAutoApprove, DEFAULT_APPROVAL_MODE, parseApprovalMode, parseApprovalAnswer, approvalAudit,
 } from "../../src/cli/approval-policy";
 import {
   type ApprovalRequest,
@@ -120,4 +120,31 @@ describe("CLI approval policy", () => {
     expect(COMMAND_APPROVAL_WARNING).toContain("this session");
     expect(COMMAND_APPROVAL_WARNING).toContain("automatically");
   });
+});
+
+it("normalizes manual/ask and defaults to full access", () => {
+  expect(DEFAULT_APPROVAL_MODE).toBe("full-access");
+  expect(parseApprovalMode("ask")).toBe("manual");
+  for (const mode of ["full-access", "manual", "auto"]) expect(parseApprovalMode(mode)).toBe(mode);
+  expect(() => parseApprovalMode("yes")).toThrow();
+});
+it("full access covers all eligible tool and child requests but never readonly or abort", () => {
+  for (const toolName of ["run_command", "mcp_call_tool", "browser_open", "write_file"]) {
+    for (const childSessionId of [undefined, baseRequest.sessionId]) {
+      const req = request({toolName, childSessionId, command: undefined});
+      expect(shouldAutoApprove("full-access", "workspace", req, new AbortController().signal)).toBe(true);
+      expect(shouldAutoApprove("full-access", "readonly", req, new AbortController().signal)).toBe(false);
+      expect(shouldAutoApprove("full-access", "workspace", req, AbortSignal.abort())).toBe(false);
+      expect(shouldAutoApprove("manual", "workspace", req, new AbortController().signal)).toBe(false);
+    }
+  }
+});
+it("accepts only an exact empty answer or affirmative text", () => {
+  for (const answer of ["", "y", "Y", "yes", " YES "]) expect(parseApprovalAnswer(answer)).toBe(true);
+  for (const answer of ["n", "no", "maybe", " ", "\t"]) expect(parseApprovalAnswer(answer)).toBe(false);
+});
+it("audit masks common argv secrets without losing tool provenance", () => {
+  const audit = approvalAudit(request({command: ["node", "--token", "private123", "password=hidden456", "Bearer secret789"]}));
+  expect(audit).toContain("run_command"); expect(audit).toContain("node");
+  expect(audit).not.toMatch(/private123|hidden456|secret789/);
 });

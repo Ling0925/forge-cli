@@ -242,7 +242,8 @@ export const approvalLines = (
       span(` ${command.map(quoteArg).join(" ")}`),
     ]);
   }
-  lines.push([span("Approve? [y/N]", "warning")]);
+  lines.push([span("Enter approves; commands are not sandboxed.", "warning")]);
+  lines.push([span("Approve? [Y/n]", "warning")]);
   return wrapRichLines(lines, Math.max(8, width));
 };
 

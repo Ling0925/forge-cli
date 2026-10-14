@@ -90,7 +90,7 @@ describe("live slash composer", () => {
     ctrl.abort();
     await old;
     const fresh = reader.question(
-      "Approve? [y/N] ",
+      "Approve? [Y/n] ",
       new AbortController().signal,
       { fresh: true },
     );

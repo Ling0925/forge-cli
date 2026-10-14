@@ -12,7 +12,7 @@ const snapshot = sessionSnapshotSchema.parse({
 });
 const request = { id, sessionId: id, toolCallId: "call", toolName: "run_command", description: "command", command: ["echo", "test"] };
 const service = (run: HarnessService["run"]): HarnessService => ({
-  ...extendedService(), getSettings: async () => defaultPublicSettings,
+  ...extendedService(), getSettings: async () => ({...defaultPublicSettings, model: "test"}),
   updateSettings: async () => defaultPublicSettings, listModels: async () => [],
   listSessions: async () => [], createSession: async () => snapshot, getSession: async () => snapshot,
   run, compactSession: async () => snapshot, cancelSession: async () => false,
@@ -68,17 +68,17 @@ describe("interactive run controls", () => {
     });
     expect(await runCliWithIO(["chat", "--approval", "auto"], s, h.io)).toBe(0);
     expect(decisions).toEqual([true, false, false, false, false, false, false, false, false]);
-    expect(h.readApproval).toHaveBeenCalledTimes(8);
+    expect(h.readApproval).toHaveBeenCalledTimes(2);
     expect(h.out.join("")).toContain("not sandboxed");
   });
 
-  it("keeps ask default, rejects invalid opt-in, and resets auto on session change", async () => {
-    const h = host(["work", "/approval auto", "auto work", "/new", "new work", "/quit"]);
+  it("defaults to full access, rejects invalid mode and preserves manual on session change", async () => {
+    const h = host(["work", "/approval manual", "manual work", "/new", "new work", "/quit"]);
     const decisions: boolean[] = [];
     expect(await runCliWithIO(["chat"], service(async (_i, _e, approve, signal) => {
       decisions.push(await approve(request, signal)); return snapshot;
     }), h.io)).toBe(0);
-    expect(decisions).toEqual([false, true, false]);
+    expect(decisions).toEqual([true, false, false]);
     const run = vi.fn(async () => snapshot);
     expect(await runCliWithIO(["chat", "--approval", "invalid"], service(run), host([]).io)).toBe(1);
     expect(run).not.toHaveBeenCalled();
@@ -202,4 +202,37 @@ describe("interactive run controls", () => {
     expect(calls).toBe(1);
     expect(h.out.join("")).toContain("Queue limit");
   });
+});
+
+it("default full access audits all requests and live manual switch applies to subsequent calls", async () => {
+  const h = host(["work", "/quit"]); const results: boolean[] = [];
+  await runCliWithIO(["chat"], service(async (_i, _e, approve, signal) => {
+    results.push(await approve(request, signal));
+    results.push(await approve({...request, toolName: "mcp_call_tool", childSessionId:id}, signal));
+    h.send("/approval manual"); results.push(await approve(request, signal));
+    h.send("/approval full-access"); results.push(await approve(request, signal));
+    return snapshot;
+  }), h.io);
+  expect(results).toEqual([true,true,false,true]);
+  expect(h.readApproval).toHaveBeenCalledTimes(1);
+  expect(h.out.join("")).toContain("FULL ACCESS");
+  expect(h.out.join("")).toContain("3 tool request(s) auto-approved this run");
+});
+
+it("manual fallback approves fresh Enter, rejects other input, and ask is an alias", async () => {
+  const h = host(["work", "", "work", "maybe", "work", "no", "/quit"]);
+  const {readApproval: _unused, ...plainIO} = h.io;
+  const decisions: boolean[] = [];
+  await runCliWithIO(["chat", "--approval", "ask"], service(async (_i, _e, approve, signal) => {
+    decisions.push(await approve(request, signal)); return snapshot;
+  }), plainIO);
+  expect(decisions).toEqual([true,false,false]);
+  expect(h.out.join("")).toContain("MANUAL");
+});
+
+it("readonly ceiling rejects full-access without asking or elevating permission", async () => {
+  const h = host(["work", "/quit"]); const decisions: boolean[] = [];
+  const base = service(async (_i, _e, approve, signal) => { decisions.push(await approve(request, signal)); return snapshot; });
+  await runCliWithIO(["chat", "--session", id], {...base, getSession: async () => ({...snapshot, permissionCeiling: "readonly"})}, h.io);
+  expect(decisions).toEqual([false]); expect(h.readApproval).not.toHaveBeenCalled();
 });

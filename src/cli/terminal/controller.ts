@@ -259,7 +259,7 @@ export class Controller implements TerminalUI {
   approve(request: ApprovalRequest, signal: AbortSignal): Promise<boolean> {
     const card = approvalLines(request, this.columns);
     this.append(card.slice(0, -1));
-    return this.approval("Approve? [y/N] ", signal);
+    return this.approval("Approve? [Y/n] ", signal);
   }
   draw(): void {
     if (!this.batch) draw(this);

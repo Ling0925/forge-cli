@@ -147,7 +147,7 @@ describe("interactive CLI", () => {
     ).toBe(1);
   });
   it("denies approvals on EOF", async () => {
-    const host = consoleIO(["test"]);
+    const host = consoleIO(["/approval manual", "test"]);
     let denied = false;
     const code = await runCliWithIO(
       ["chat"],
@@ -265,9 +265,7 @@ describe("interactive CLI", () => {
     );
     expect(code).toBe(0);
     expect(mode).toBe("plan");
-    expect(prompts.join("")).toContain(
-      "child 10000000-0000-4000-8000-000000000002",
-    );
+    expect(prompts.join("")).not.toContain("Approve?");
   });
   it("displays available models when /model is called without args", async () => {
     const host = consoleIO(["/model", "/quit"]);
@@ -561,7 +559,7 @@ it("Shift+Tab callback shares /mode state without changing active-run approval s
       aborted = signal.aborted;
       return snapshot;
     });
-    expect(await runCliWithIO(["chat"], base, io)).toBe(0);
+    expect(await runCliWithIO(["chat", "--approval", "manual"], base, io)).toBe(0);
     expect(decisions).toBe(1);
     expect(aborted).toBe(true);
     expect(host.busy.at(-1)).toBe(false);
@@ -648,7 +646,7 @@ it("Shift+Tab callback shares /mode state without changing active-run approval s
         expect(signal.aborted).toBe(true);
         return snapshot;
       });
-      expect(await runCliWithIO(["chat"], base, io)).toBe(0);
+      expect(await runCliWithIO(["chat", "--approval", "manual"], base, io)).toBe(0);
       expect(runSignal?.aborted).toBe(true);
       expect(approvalSignal?.aborted).toBe(true);
       expect(disposed).toBe(true);

@@ -17,7 +17,7 @@ import {
 } from "../shared/schemas";
 import type { AgentEvent, SessionStatus } from "../shared/schemas";
 
-import { parseApprovalMode } from "./approval-policy";
+import { DEFAULT_APPROVAL_MODE, parseApprovalAnswer, parseApprovalMode } from "./approval-policy";
 import { interactive, terminalText } from "./interactive";
 import { createNodeIO } from "./node-io";
 export { createNodeIO, nodeIO } from "./node-io";
@@ -29,7 +29,7 @@ const promptLimit = 1_000_000;
 const keyLimit = 16_386;
 const help = `Forge — shared-core agent CLI
 
-forge chat [--workspace PATH] [--session UUID] [--approval ask|auto]
+forge chat [--workspace PATH] [--session UUID] [--approval full-access|auto|manual]
 forge config show
 forge config set [--base-url URL] [--model MODEL] [--api-mode chat-completions|responses] [--api-key-stdin]
                  [--reasoning-effort default|none|minimal|low|medium|high|xhigh]
@@ -61,8 +61,9 @@ Run options: --model MODEL --mode plan|build --permission readonly|workspace|unr
              --json --yes
 Use exactly one prompt source. Stdin is never read implicitly.
 --yes approves calls only with explicitly selected --permission unrestricted.
-Chat --approval auto opts into command approvals for this session only. Commands
-are not sandboxed and may access external files/network. /approval ask disables it.
+Chat defaults to full-access: tool approvals are automatic within existing permissions.
+Commands are not sandboxed and may access external files/network. /approval manual
+asks each time (fresh Enter approves); auto approves eligible root commands only.
 During a run: Enter queues a follow-up; /steer <message> or Shift+Enter steers at a safe boundary.
 Slash commands remain available; commands requiring idle execute after the run.
 /queue lists pending input, /queue clear discards it.
@@ -280,7 +281,7 @@ export const runCliWithIO = async (
       noPositionals(args);
       const chatWorkspace = stringOption(args, "workspace");
       const chatSession = stringOption(args, "session");
-      const approval = parseApprovalMode(stringOption(args, "approval") ?? "ask");
+      const approval = parseApprovalMode(stringOption(args, "approval") ?? DEFAULT_APPROVAL_MODE);
       if (chatWorkspace && !(await stat(resolve(chatWorkspace))).isDirectory())
         invalid("Workspace must be an existing directory.");
       if (
@@ -677,12 +678,13 @@ export const runCliWithIO = async (
           return false;
         }
         try {
-          const prompt = `\nApproval: ${request.childSessionId ? `child ${request.childSessionId} ` : ""}${request.toolName}\nWorkspace/cwd context: ${JSON.stringify(session.workspace)}\nDescription: ${JSON.stringify(request.description)}\nFull argv: ${JSON.stringify(request.command ?? [])}\nApprove? [y/N] `;
+          const prompt = `\nApproval: ${request.childSessionId ? `child ${request.childSessionId} ` : ""}${request.toolName}\nWorkspace/cwd context: ${JSON.stringify(session.workspace)}\nDescription: ${JSON.stringify(request.description)}\nFull argv: ${JSON.stringify(request.command ?? [])}\nEnter approves; commands are not sandboxed.\nApprove? [Y/n] `;
           if (io.readApproval) {
-            return await io.readApproval(prompt, signal);
+            const approved = await io.readApproval(prompt, signal);
+                return !signal.aborted && approved;
           }
           const answer = await io.question(prompt, signal, { fresh: true });
-          return !signal.aborted && /^(y|yes)$/i.test(answer.trim());
+          return !signal.aborted && parseApprovalAnswer(answer);
         } catch {
           return false;
         }

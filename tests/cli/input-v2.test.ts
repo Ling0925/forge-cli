@@ -27,7 +27,7 @@ describe("fresh intentional consent", () => {
     expect(await first).toBe(true);
     const second = reader.readApproval("Again? ", signal());
     input.write("\r");
-    expect(await second).toBe(false);
+    expect(await second).toBe(true);
     reader.dispose();
   });
   it("rejects every fragmented paste marker and paste followed by typed Enter", async () => {
@@ -49,7 +49,7 @@ describe("fresh intentional consent", () => {
       await first;
       const approval = reader.question("Approve? ", signal(), { fresh: true });
       input.write(`${"\x1b[200~".slice(split)}y\r\x1b[201~\r`);
-      expect(await approval).toBe("");
+      expect(await approval).toBe("no");
       reader.dispose();
     }
   });
@@ -152,4 +152,27 @@ it("only complete fresh typed y or yes authorizes", async () => {
     expect(await denial).toBe(false);
     pasted.reader.dispose();
   }
+});
+
+it("fresh empty Enter approves, but queued/pasted empty input never does", async () => {
+  for (const prefix of ["\r", "\r\r", "y\r"]) {
+    const {input, reader} = fixture();
+    const first = reader.question("", signal()); input.write("start\r" + prefix); await first;
+    let settled = false; const approval = reader.readApproval("Approve? [Y/n] ", signal());
+    void approval.then(() => {settled = true;}); await Promise.resolve(); expect(settled).toBe(false);
+    input.write("\r"); expect(await approval).toBe(true); reader.dispose();
+  }
+  for (const payload of ["\r", "\n", "\r\n", "\x1b[Z", "\x1b[13;2u"]) {
+    const {input, reader} = fixture(); const approval = reader.readApproval("?", signal());
+    input.write("\x1b[200~" + payload + "\x1b[201~\r");
+    expect(await approval).toBe(false); reader.dispose();
+  }
+});
+
+it("abort racing an Enter and Shift+Enter both deny", async () => {
+  const {input, reader} = fixture(); const abort = new AbortController();
+  const approval = reader.readApproval("?", abort.signal); input.write("\r"); abort.abort();
+  expect(await approval).toBe(false); reader.dispose();
+  const next = fixture(); const answer = next.reader.readApproval("?", signal());
+  next.input.write("\x1b[13;2u"); expect(await answer).toBe(false); next.reader.dispose();
 });

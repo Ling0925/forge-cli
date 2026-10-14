@@ -146,10 +146,10 @@ describe("scrollable transcript and durable selection", () => {
     controller.handle(mouse("drag", 14, 6));
     controller.append([plain("APPROVAL-CARD")]);
     bytes = "";
-    controller.begin("Approve? [y/N] ", true);
+    controller.begin("Approve? [Y/n] ", true);
     expect(controller.screen.hasSelection).toBe(false);
     expect(bytes).toContain("APPROVAL-CARD");
-    expect(bytes).toContain("Approve? [y/N]");
+    expect(bytes).toContain("Approve? [Y/n]");
     controller.end();
     expect(controller.editor.text).toBe("draft");
   });

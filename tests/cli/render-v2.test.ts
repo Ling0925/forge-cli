@@ -391,7 +391,7 @@ describe("approval context", () => {
     expect(body).toContain("/home/workspace");
     expect(body.replaceAll("\n", "")).toContain(description);
     expect(body.replaceAll("\n", "")).toContain(command.join(" "));
-    expect(body).toContain("Approve? [y/N]");
+    expect(body).toContain("Approve? [Y/n]");
     expect(lines.length).toBeGreaterThan(4);
     expect(
       Math.max(
@@ -436,7 +436,7 @@ describe("approval context", () => {
     expect(flat).toContain("qa-审批");
     expect(flat).toContain("中文");
     expect(flat).toContain(`child ${child}`);
-    expect(flat).toContain("Approve? [y/N]");
+    expect(flat).toContain("Approve? [Y/n]");
     expect(
       Math.max(
         ...lines.map((line) =>

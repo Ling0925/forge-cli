@@ -1,4 +1,5 @@
 import { ForgeError } from "../shared/errors";
+import { parseApprovalAnswer } from "./approval-policy";
 import { terminalText } from "./format";
 import { Controller } from "./terminal/controller";
 import { InputDecoder, type InputEvent } from "./terminal/decoder";
@@ -270,11 +271,8 @@ export class TerminalReader {
   }
   async readApproval(prompt: string, signal: AbortSignal): Promise<boolean> {
     try {
-      return ["y", "yes"].includes(
-        (await this.question(prompt, signal, { fresh: true }))
-          .trim()
-          .toLowerCase(),
-      );
+      const answer = await this.question(prompt, signal, { fresh: true });
+      return !signal.aborted && !this.closed && parseApprovalAnswer(answer);
     } catch {
       return false;
     }

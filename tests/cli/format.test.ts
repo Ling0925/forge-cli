@@ -138,7 +138,7 @@ describe("Formatters", () => {
     expect(output).toContain("Execute bash command");
     expect(output).toContain("npm test");
     expect(output).not.toContain('["npm","test"]');
-    expect(output).toContain("Approve? [y/N]");
+    expect(output).toContain("Approve? [Y/n]");
   });
 
   it("renders markdown without box-drawing walls", () => {

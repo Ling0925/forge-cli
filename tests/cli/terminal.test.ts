@@ -284,8 +284,8 @@ describe("createNodeIO wiring", () => {
     await delay();
     const approval = io.readApproval?.("Approve? ", signal);
     await delay();
-    input.write("\n");
-    // Fresh read discards the stray `y`; blank answer is not approval.
+    input.write("n\n");
+    // Fresh read discards the stray `y`; this new n must deny rather than form yn.
     expect(await approval).toBe(false);
     io.dispose?.();
   });

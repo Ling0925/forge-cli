@@ -11,7 +11,7 @@ import {
   settingsFields,
 } from "../shared/schemas";
 import type { AgentEvent, ContextUsage } from "../shared/schemas";
-import { type ApprovalMode, COMMAND_APPROVAL_WARNING, parseApprovalMode, shouldAutoApprove } from "./approval-policy";
+import { type ApprovalMode, DEFAULT_APPROVAL_MODE, approvalAudit, approvalWarning, parseApprovalAnswer, parseApprovalMode, shouldAutoApprove } from "./approval-policy";
 import type { CliIO } from "./cli";
 import { formatHelp } from "./commands";
 import {
@@ -45,7 +45,7 @@ export async function interactive(
   workspace: string,
   sessionId: string | undefined,
   _render: (io: CliIO, event: AgentEvent) => void,
-  initialApproval: ApprovalMode = "ask",
+  initialApproval: ApprovalMode = DEFAULT_APPROVAL_MODE,
 ): Promise<number> {
   const settings = await service.getSettings();
   const ui = io.ui;
@@ -108,7 +108,8 @@ export async function interactive(
   let mode: "build" | "plan" = "build";
   const currentMode = (): "build" | "plan" => mode;
   let permission = settings.defaultPermission;
-  let approvalMode = initialApproval;
+  let approvalMode = parseApprovalMode(initialApproval);
+  let autoApprovedCount = 0;
   const queue = new RunQueue();
   let runInProgress = false;
   const changeMode = (value: "build" | "plan") => {
@@ -152,8 +153,8 @@ export async function interactive(
     ui?.setPlan?.(session?.plan ?? null);
     if (queue.length) safe.stdout("Pending input cleared on session change.\n");
     queue.clear();
-    approvalMode = "ask";
-    safe.stdout("Command approval: ask (session reset).\n");
+    // Preserve an explicit manual choice across /new and /resume in this CLI session.
+    safe.stdout(`Command approval: ${approvalMode} (unchanged; CLI session only).\n`);
     inputHint();
   };
   const queueCommand = (value: string): void => {
@@ -192,7 +193,7 @@ export async function interactive(
           const value = text.slice(9).trim();
           if (value) {
             approvalMode = parseApprovalMode(value);
-            if (approvalMode === "auto") safe.stdout(`${COMMAND_APPROVAL_WARNING}\n`);
+            safe.stdout(`${approvalWarning(approvalMode)}\n`);
           }
           safe.stdout(`Command approval: ${approvalMode} (session only).\n`);
         } else {
@@ -319,7 +320,7 @@ export async function interactive(
       ),
     );
   else styled(`\n${banner}\n`);
-  if (approvalMode === "auto") safe.stdout(`${COMMAND_APPROVAL_WARNING}\n`);
+  safe.stdout(`${approvalWarning(approvalMode)}\n`);
   if (sessionId) showHistory();
 
   try {
@@ -399,7 +400,7 @@ export async function interactive(
             case "/approval":
               if (value) {
                 approvalMode = parseApprovalMode(value);
-                if (approvalMode === "auto") safe.stdout(`${COMMAND_APPROVAL_WARNING}\n`);
+                safe.stdout(`${approvalWarning(approvalMode)}\n`);
               }
               safe.stdout(`Command approval: ${approvalMode} (session only).\n`);
               break;
@@ -620,23 +621,29 @@ export async function interactive(
           async (request, signal) => {
             const ceiling = requireSession().permissionCeiling ?? runPermission;
             const eligiblePermission = runMode === "plan" || ceiling === "readonly" ? "readonly" : runPermission;
+            if (signal.aborted || eligiblePermission === "readonly") return false;
             if (shouldAutoApprove(approvalMode, eligiblePermission, request, signal)) {
-              safe.stdout(`Auto-approved ${request.childSessionId ? `child ${request.childSessionId} ` : ""}${request.toolName}: ${JSON.stringify(request.command)}\n`);
+              autoApprovedCount++;
+              safe.stdout(`${approvalAudit(request)}\n`);
               return true;
             }
             try {
               live?.pause();
-              if (ui) return await ui.approve(request, signal);
+              if (ui) {
+                const approved = await ui.approve(request, signal);
+                return !signal.aborted && approved;
+              }
               const prompt = terminalText(
-                `Approval ${request.childSessionId ? `child ${request.childSessionId} ` : ""}${request.toolName}: ${JSON.stringify(request.description)}\nargv: ${JSON.stringify(request.command ?? [])}\nApprove? [y/N] `,
+                `Approval ${request.childSessionId ? `child ${request.childSessionId} ` : ""}${request.toolName}: ${JSON.stringify(request.description)}\nargv: ${JSON.stringify(request.command ?? [])}\nEnter approves; commands are not sandboxed.\nApprove? [Y/n] `,
               );
               if (io.readApproval) {
-                return await io.readApproval(prompt, signal);
+                const approved = await io.readApproval(prompt, signal);
+                return !signal.aborted && approved;
               }
               const answer = await io.question(prompt, signal, {
                 fresh: true,
               });
-              return !signal.aborted && /^(y|yes)$/i.test(answer.trim());
+              return !signal.aborted && parseApprovalAnswer(answer);
             } catch {
               return false;
             } finally {
@@ -661,6 +668,8 @@ export async function interactive(
         const info = toErrorInfo(error);
         safe.stderr(`${info.code}: ${info.message}\n`);
       } finally {
+        if (runInProgress) safe.stdout(`Approval summary: ${autoApprovedCount} tool request(s) auto-approved this run.\n`);
+        autoApprovedCount = 0;
         offRunInput?.();
         offRunInput = undefined;
         runInProgress = false;

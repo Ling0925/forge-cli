@@ -105,11 +105,13 @@ describe("run input", () => {
     await reader.ui.configure({ theme: "dark" });
     input.write("y\r");
 
-    const queued = reader.readApproval("Approve? [y/N] ", signal());
-    input.write("\r");
+    const queued = reader.readApproval("Approve? [Y/n] ", signal());
+    let settled = false; void queued.then(() => { settled = true; });
+    await tick(); expect(settled).toBe(false);
+    input.write("n\r");
     expect(await queued).toBe(false);
 
-    const pasted = reader.readApproval("Approve? [y/N] ", signal());
+    const pasted = reader.readApproval("Approve? [Y/n] ", signal());
     input.write("\x1b[200~y\r\x1b[201~");
     await tick();
     input.write("\r");
@@ -123,7 +125,7 @@ describe("run input", () => {
     reader.ui.setBusy(true);
     input.write("draft");
 
-    const approval = reader.readApproval("Approve? [y/N] ", signal());
+    const approval = reader.readApproval("Approve? [Y/n] ", signal());
     input.write("no\r");
     expect(await approval).toBe(false);
 

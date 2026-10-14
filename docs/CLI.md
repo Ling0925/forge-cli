@@ -47,7 +47,7 @@ forge config set --reasoning-effort default
 - 鼠标左键拖选会话或输入区文字，Ctrl+C 复制选区，Esc 清除；其他编辑按键会清除选区并按原语义执行。选区存在时暂缓画面更新，后台仍接收输出，清除后显示最新内容。审批和窗口缩放会清除选区，避免隐藏审批或保留失效坐标。
 - 复制使用 OSC 52，需要终端允许该剪贴板协议（部分终端或 tmux 配置会拦截）。Shift+拖选通常可绕过应用鼠标处理使用终端原生选区，但原生选区不保证在流式刷新中保留。
 
-审批默认拒绝。查看完整 argv 和来源后，仅用请求出现之后新输入的 `y` 加 Enter 授权。粘贴、预输入、历史回忆不是授权；拒绝已结束的请求不能靠后来输入 `y` 复活。每次请求都需独立决定。
+交互 `forge` / `forge chat` 默认 **full-access**：自动批准现有权限允许的工具请求（含 MCP、浏览器、子代理），启动时提示非沙箱风险，逐次回显自动批准并在每轮结束汇总数量。`/approval manual` 切到逐次询问，提示 `[Y/n]`：本次新鲜空回车或 `y/yes` + Enter 批准，`n/no`、其他非空输入、Esc、取消、EOF 拒绝。粘贴、预输入、历史回忆不是授权。命令不是 OS 沙箱，可访问工作区外文件与网络。`/approval auto` 仅自动批准符合条件的根会话 run_command，其余仍询问。`/approval ask` 是 manual 的兼容别名。CLI 标志 `--approval full-access|auto|manual` 可覆盖启动默认。选择仅本 CLI 进程有效，/new、/resume 保持当前选择，不会把 manual 偷偷切回 full-access；重启恢复默认。plan、readonly 与子代理权限上限优先，审核模式不提升权限。
 
 主题有 system/light/dark；system 根据终端背景信息解析。`NO_COLOR` 禁止 SGR 但允许必要的光标控制；TERM=dumb 与非 TTY 使用 plain 输出。Markdown、工具输出和外部文本均不应直接注入未受信任的终端控制序列。
 
@@ -78,7 +78,7 @@ env -u NO_COLOR TERM=xterm-256color node scripts/qa-cli-terminal.mjs --cli dist/
 - CLI 启动不再立即落盘会话：首条真实消息才创建，`/new` 仍显式立即创建；空白、帮助、模式/权限/模型选择、EOF、退出不会创建。`/sessions`、`/resume` 无活动会话也可用；依赖会话的命令明确提示先发消息或新建/恢复。存量空会话沿用显式 archive，不自动删除。
 - Shift+Tab（CSI Z）在普通输入区切换 build/plan，保留草稿，文字回显模式；plan 箭头使用 warning tone。审批、picker、文字选区和粘贴不触发。终端不发送该键码时使用 `/mode plan|build`。忙时只影响下一次运行，当前运行权限与模式保持不变。
 - 新建且未显式命名的会话在 completed 后后台尝试自动命名一次。先持久化本地首行标题，再用当前模型生成短标题，2 秒超时；失败或退出保留本地标题。不会新增对话消息或消耗运行轮次/工具预算，但可能产生一次模型费用。手动标题、旧版无来源标记标题、fork 和子代理不自动覆盖。CLI 下次 sessions 刷新可见。
-- 审批仍为原有 ask/显式 auto、`[y/N]`；审批新需求中的冲突默认值尚待确认，本轮未放宽权限。
+- 审批默认值后续已按需求方确认更新为 full-access；manual 为 `[Y/n]`，详见上方审批契约。
 
 ### 固定计划与编辑补充
 
