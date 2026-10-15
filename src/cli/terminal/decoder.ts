@@ -8,6 +8,10 @@ export type InputEvent =
 
 const keys: Readonly<Record<string, string>> = {
   "\x1b\r": "alt-enter",
+  "\x1b\n": "alt-enter",
+  "\x1b[13;3u": "alt-enter",
+  "\x1b[27;3;13~": "alt-enter",
+  "\x1b[13;3~": "alt-enter",
   "\x1bb": "word-left",
   "\x1bf": "word-right",
   "\x1b[Z": "shift-tab",

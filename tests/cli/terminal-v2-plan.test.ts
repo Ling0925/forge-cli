@@ -50,13 +50,13 @@ it("pins bounded authoritative plan without moving composer or growing dock", ()
   c.dispose();
 });
 
-it("supports literal Alt+Enter and line-local editing without submitting", () => {
+it("supports backslash Enter multiline and line-local editing without submitting", () => {
   const submit = vi.fn();
   const c = new Controller(new PassThrough(), new PassThrough(), false, () => {}, submit, () => {}, async () => false);
   const decoder = new InputDecoder(event => c.handle(event));
-  decoder.feed("hello\x1b\rworld"); expect(c.editor.text).toBe("hello\nworld"); expect(submit).not.toHaveBeenCalled();
+  decoder.feed("hello\\\rworld"); expect(c.editor.text).toBe("hello\nworld"); expect(submit).not.toHaveBeenCalled();
   decoder.feed("\x15"); expect(c.editor.text).toBe("hello\n");
-  c.fresh = true; decoder.feed("\x1b\r"); expect(c.editor.text).toBe("hello\n");
+  c.fresh = true; decoder.feed("\x1b\r"); expect(submit).toHaveBeenCalledWith("no");
   const e = new Editor(); e.set("one\ntwo three\nfour"); e.cursor = 7; e.key("kill-end"); expect(e.text).toBe("one\ntwo\nfour");
   e.key("word-left"); expect(e.cursor).toBe(4); e.key("word-right"); expect(e.cursor).toBe(7);
   decoder.dispose(); c.dispose();

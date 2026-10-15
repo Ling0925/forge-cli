@@ -36,6 +36,23 @@ function fixture(onClose?: () => void) {
 }
 
 describe("run input", () => {
+  it.each(["\x1b\r", "\x1b\n", "\x1b[13;3u", "\x1b[27;3;13~", "\x1b[13;3~"])("steers with Alt+Enter %j but never submits pasted shortcuts", async sequence => {
+    const { input, reader } = fixture();
+    try {
+      await reader.ui.configure({ theme: "dark" });
+      const lines: Array<[string, boolean | undefined]> = [];
+      reader.onRunInput((line, steer) => lines.push([line, steer]));
+      reader.ui.setBusy(true);
+      input.write("adjust direction");
+      // Split the protocol sequence at every byte, as real terminal IO may do.
+      for (const byte of sequence) input.write(byte);
+      expect(lines).toEqual([["adjust direction", true]]);
+      input.write(`\x1b[200~pasted${sequence}\x1b[201~`);
+      expect(lines).toHaveLength(1);
+      const approval = reader.readApproval("Approve? [Y/n] ", signal());
+      input.write(sequence); expect(await approval).toBe(false);
+    } finally { reader.dispose(); }
+  });
   it("keeps a busy draft when no run-input listener is subscribed", async () => {
     const { input, reader } = fixture();
     await reader.ui.configure({ theme: "dark" });

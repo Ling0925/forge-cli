@@ -64,7 +64,7 @@ Use exactly one prompt source. Stdin is never read implicitly.
 Chat defaults to full-access: tool approvals are automatic within existing permissions.
 Commands are not sandboxed and may access external files/network. /approval manual
 asks each time (fresh Enter approves); auto approves eligible root commands only.
-During a run: Enter queues a follow-up; /steer <message> or Shift+Enter steers at a safe boundary.
+During a run: Enter queues a follow-up; /steer <message> or Alt+Enter steers at a safe boundary.
 Slash commands remain available; commands requiring idle execute after the run.
 /queue lists pending input, /queue clear discards it.
 JSON runs emit version 1 JSONL event envelopes followed by a result envelope.

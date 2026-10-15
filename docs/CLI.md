@@ -48,7 +48,7 @@ forge config set --reasoning-effort default
 - `/resume` 打开持久化会话 picker；`/resume UUID` 明确选择会话。选中项下方显示状态、本地更新时间和工作区，长路径保留首尾。
 - 列表超出当前窗口时显示可见范围与总数；方向键继续浏览，输入文字过滤。
 - 运行期间 Enter 将消息加入下一轮队列，不并发派发运行；当前运行成功后按 FIFO 发送。取消/失败后暂停，通过 `/queue run` 显式继续，`/queue clear` 清空。
-- 向当前运行插话使用 `/steer 内容` 加普通 Enter，或支持独立键码的终端中的 Shift+Enter。部分终端会把 Shift+Enter 发成普通 Enter，此时必须使用 `/steer`。插话在当前模型请求及整批工具交换结束后的安全边界进入当前运行，不强杀工具、不重放副作用，也不能保证模型一定遵从。
+- 向当前运行插话使用 `/steer 内容` 加普通 Enter，或 **Alt+Enter**（macOS 通常为 Option+Enter，需终端发送 Esc/Meta）。支持 ESC+CR/LF、CSI-u 和 modifyOtherKeys 的 Alt+Enter 键码；Shift+Enter 保留为兼容别名。Command+Enter 未设为默认，因为终端可能截获、不发送键码；快捷键不可用时使用 `/steer`。插话在当前模型请求及整批工具交换结束后的安全边界进入当前运行，不强杀工具、不重放副作用，也不能保证模型一定遵从。
 - 输入区固定显示 Steer/Queue 数量和各自首条内容预览，不随会话输出滚走，输入草稿时也保留；窄/矮窗口会缩略，审批与选择器临时隐藏。`/queue` 查看更多内容。插话交给运行时有明确回执；未消费的插话在运行结束后保留为暂停队列，不悄悄附到后续运行。
 - Ctrl+C 在没有文字选区时取消运行并恢复输入；空闲时清除草稿，再次中断退出。EOF 退出。`/quit` 正常结束。
 - 富终端使用独立会话视口和固定底部输入区；滚轮或 PgUp/PgDn 浏览会话（包含流式输出）。向上浏览时新输出不会拉回底部，向下滚动到底恢复跟随。
@@ -125,4 +125,4 @@ env -u NO_COLOR TERM=xterm-256color node scripts/qa-cli-terminal.mjs --cli dist/
 
 ### 固定计划与编辑补充
 
-固定屏输入行上方复用状态槽显示当前会话 `Plan n/m` 和当前步骤；/plan 仍显示全文。运行时同一槽位优先显示转动指示、thinking/当前工具与耗时，剩余宽度显示计划；计划过长先缩略，不再覆盖执行状态。复制提示也不覆盖运行指示。空闲时显示完整计划摘要；极矮窗口隐藏状态槽，不扩大 dock。没有计划时，历史浏览显示距底部行数；End 或空草稿 Esc 回到底部。Ctrl+L 重绘；Alt+Enter 换行；Ctrl+U/K 删除至本行首/尾；Alt+B/F 按词移动。Shift+Enter 仍保留 steer 语义。
+固定屏输入行上方复用状态槽显示当前会话 `Plan n/m` 和当前步骤；/plan 仍显示全文。运行时同一槽位优先显示转动指示、thinking/当前工具与耗时，剩余宽度显示计划；计划过长先缩略，不再覆盖执行状态。复制提示也不覆盖运行指示。空闲时显示完整计划摘要；极矮窗口隐藏状态槽，不扩大 dock。没有计划时，历史浏览显示距底部行数；End 或空草稿 Esc 回到底部。Ctrl+L 重绘；Alt+Enter steer（不再换行），换行使用行尾 `\` 后 Enter 或多行粘贴；Ctrl+U/K 删除至本行首/尾；Alt+B/F 按词移动。Shift+Enter 仍保留 steer 语义。

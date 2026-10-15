@@ -42,10 +42,6 @@ export function handle(controller: Controller, event: InputEvent): void {
   if (event.kind === "key" && !event.pasted && event.key === "redraw") {
     controller.screen.invalidate(); controller.draw(); return;
   }
-  if (event.kind === "key" && !event.pasted && event.key === "alt-enter") {
-    if (!controller.fresh && !controller.picker) { controller.editor.insert("\n"); controller.draw(); }
-    return;
-  }
   if (controller.screen.hasSelection) {
     if (event.kind === "key" && !event.pasted && event.key === "interrupt") {
       const sent = controller.screen.copySelection();
@@ -105,7 +101,7 @@ export function handle(controller: Controller, event: InputEvent): void {
       editor.set(`${selected.name} `);
       controller.menu.close();
     }
-  } else if (event.key === "enter" || event.key === "shift-enter") {
+  } else if (event.key === "enter" || event.key === "shift-enter" || event.key === "alt-enter") {
     if (controller.picker) {
       if (event.key === "enter")
         controller.picker.resolve(
@@ -117,17 +113,17 @@ export function handle(controller: Controller, event: InputEvent): void {
       controller.submit(answer);
     } else if (
       !controller.busy ||
-      ((event.key === "enter" || event.key === "shift-enter") &&
+      ((event.key === "enter" || event.key === "shift-enter" || event.key === "alt-enter") &&
         (controller.runInputActive() || editor.text.startsWith("/")))
     ) {
       if (controller.menu.isActive)
         editor.set(controller.menu.getSelected()?.name ?? editor.text);
-      if (event.key === "enter" || event.key === "shift-enter") {
+      if (event.key === "enter" || event.key === "shift-enter" || event.key === "alt-enter") {
         if (editor.text.endsWith("\\")) {
           editor.text = editor.text.slice(0, -1);
           editor.cursor = editor.text.length;
           editor.insert("\n");
-        } else controller.finish(event.key === "shift-enter");
+        } else controller.finish(event.key === "shift-enter" || event.key === "alt-enter");
       }
     }
   } else if (

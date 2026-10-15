@@ -140,7 +140,7 @@ export async function interactive(
 
   const inputHint = (): void => {
     ui?.setInputHint?.(runInProgress
-      ? "Enter queues · /steer <message> or Shift+Enter steers"
+      ? "Enter queues · /steer <message> or Alt+Enter steers"
       : queue.length ? `${queue.length} pending${queue.paused ? " · paused · /queue run" : ""} · /queue` : null);
     ui?.setPendingInput?.(queue.preview());
   };
