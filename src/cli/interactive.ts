@@ -205,9 +205,6 @@ export async function interactive(
   const observeResumed = (): void => {
     clearResumedWatch();
     if (!session || !isActiveSession(session.status)) return;
-    safe.stdout(session.status === "awaiting_approval"
-      ? "提示：该会话仍在等待审批，请在原运行窗口处理；本窗口仅观察状态，未接管运行。\n"
-      : "提示：该会话仍在运行，本窗口仅观察状态，未接管运行或实时输出。\n");
     resumedStartedAt = Date.now();
     if (activeStatus === undefined) ui?.setStatus(resumedStatus());
     stopResumedWatch = watchResumedSession(session, service, lifetime.signal, latest => {
@@ -719,10 +716,6 @@ export async function interactive(
         if (lifetime.signal.aborted) break;
         session ??= await service.createSession(createSessionInputSchema.parse({ workspace, model }));
         if (lifetime.signal.aborted) break;
-        if (isActiveSession(session.status)) {
-          safe.stderr("该会话仍在运行或等待审批，请等待原任务结束，或用 /new 创建新会话；未提交新的运行。\n");
-          continue;
-        }
         clearResumedWatch();
         refreshContext();
         ui?.setBusy(true);

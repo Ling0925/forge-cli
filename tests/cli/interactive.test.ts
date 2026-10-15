@@ -354,10 +354,45 @@ describe("rich integration adapters", () => {
     };
     return { ...host, io: { ...host.io, ui }, output, busy, statuses, specs, contexts };
   };
-  it.each(["running", "awaiting_approval"] as const)("warns and animates on resume of a %s session, then clears on completion", async status => {
+  it.each(["running", "awaiting_approval"] as const)("continues a resumed %s session through every interactive entry point", async status => {
     vi.useFakeTimers();
     try {
-      const host = richHost([`/resume ${id}`, "hello", "/quit"], []);
+      for (const [args, commands, choices] of [
+        [["resume", id], ["hello", "/quit"], []],
+        [["chat", "--session", id], ["hello", "/quit"], []],
+        [["chat"], [`/resume ${id}`, "hello", "/quit"], []],
+        [["chat"], ["/resume", "hello", "/quit"], [id]],
+      ] as const) {
+        const host = richHost([...commands], [...choices]);
+        const resumed = { ...snapshot, status, model: "resumed-model" };
+        const getSession = vi.fn(async () => resumed);
+        const createSession = vi.fn(async () => snapshot);
+        const run = vi.fn<HarnessService["run"]>(async () => {
+          await vi.advanceTimersByTimeAsync(2100);
+          expect(getSession).toHaveBeenCalledTimes(1);
+          expect(host.statuses.at(-1)).toBeNull();
+          return snapshot;
+        });
+        const code = await runCliWithIO([...args], {
+          ...service(run), getSession, createSession,
+          listSessions: async () => [resumed],
+        }, host.io);
+        expect(code).toBe(0);
+        expect(run).toHaveBeenCalledTimes(1);
+        await expect(run.mock.results[0]?.value).resolves.toBe(snapshot);
+        expect(run.mock.calls[0]?.[0]).toMatchObject({ sessionId: id, model: "resumed-model", prompt: "hello" });
+        expect(createSession).not.toHaveBeenCalled();
+        expect(host.output.join("\n")).not.toMatch(/本窗口仅观察状态|请在原运行窗口处理|未提交新的运行/);
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(getSession).toHaveBeenCalledTimes(1);
+      }
+    } finally { vi.useRealTimers(); }
+  });
+
+  it.each(["running", "awaiting_approval"] as const)("observes a resumed %s session until completion when no prompt is submitted", async status => {
+    vi.useFakeTimers();
+    try {
+      const host = richHost([`/resume ${id}`, "/quit"], []);
       const originalQuestion = host.io.question;
       let questions = 0;
       const run = vi.fn(async () => snapshot);
@@ -365,7 +400,7 @@ describe("rich integration adapters", () => {
       const code = await runCliWithIO(["chat"], { ...service(run), getSession }, {
         ...host.io,
         question: async (...args) => {
-          if (++questions === 3) await vi.advanceTimersByTimeAsync(1100);
+          if (++questions === 2) await vi.advanceTimersByTimeAsync(1100);
           return originalQuestion(...args);
         },
       });
@@ -373,24 +408,24 @@ describe("rich integration adapters", () => {
       expect(run).not.toHaveBeenCalled();
       expect(host.statuses).toContainEqual(expect.objectContaining({ observing: true, cancellable: false }));
       expect(host.statuses.at(-1)).toBeNull();
-      expect(host.output.join("\n")).toContain("本窗口仅观察状态");
+      expect(host.output.join("\n")).not.toContain("本窗口仅观察状态");
       expect(host.output.join("\n")).toContain("会话运行已结束（completed）");
-      expect(host.output.join("\n")).toContain("未提交新的运行");
       expect(getSession).toHaveBeenCalledTimes(2);
     } finally { vi.useRealTimers(); }
   });
 
-  it("shows a plain-text running warning for chat --session and does not keep polling after exit", async () => {
+  it("continues a running session in plain-text chat without a status warning", async () => {
     vi.useFakeTimers();
     try {
-      const host = consoleIO(["/quit"]);
+      const host = consoleIO(["hello", "/quit"]);
       const getSession = vi.fn(async () => ({ ...snapshot, status: "running" as const }));
       const run = vi.fn(async () => snapshot);
       await runCliWithIO(["chat", "--session", id], { ...service(run), getSession }, host.io);
       await vi.advanceTimersByTimeAsync(5000);
       expect(getSession).toHaveBeenCalledTimes(1);
-      expect(run).not.toHaveBeenCalled();
-      expect(host.out.join("\n")).toContain("该会话仍在运行");
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(host.err).toEqual([]);
+      expect(host.out.join("\n")).not.toContain("该会话仍在运行");
       expect(host.out.join("\n")).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏\x1b]/);
     } finally { vi.useRealTimers(); }
   });
