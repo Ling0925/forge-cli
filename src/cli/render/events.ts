@@ -102,7 +102,7 @@ export const createEventRenderer = (
         case "tool_started": {
           running = true;
           if (!active.has(event.call.id)) toolCount += 1;
-          tools.start(event.call);
+          tools.start(event.call, now());
           active.set(event.call.id, event.call);
           return update(
             flushText(),
@@ -115,7 +115,7 @@ export const createEventRenderer = (
           return update(
             [
               ...flushText(),
-              ...tools.summary(event.toolCallId, event.result, options.width?.() ?? 80),
+              ...tools.summary(event.toolCallId, event.result, options.width?.() ?? 80, now()),
             ],
             [],
             live("thinking"),

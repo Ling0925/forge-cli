@@ -5,6 +5,8 @@ import { envelope, textLines } from "./envelope";
 import { wrapRichLines } from "./rich";
 import { sanitizeText } from "./sanitize";
 import { stringWidth, truncate } from "./width";
+import { toolPresentation } from "./tool-presentation";
+import { durationSuffix } from "./duration";
 
 const PREVIEW_LINES = 12;
 const PREVIEW_ROWS = 18;
@@ -145,21 +147,42 @@ export const toolSummaryLines = (
   result: ToolResult,
   width = DEFAULT_WIDTH,
   index?: number,
+  elapsed?: number,
 ): RichLine[] => {
-  const parsed = envelope(result);
-  const failed = result.isError || (parsed.exitCode !== null && parsed.exitCode !== 0);
+  const parsed = toolPresentation(call?.function.name ?? "", result);
+  const failed = parsed.failed;
   const label = failed ? "failed" : "done";
   const exit = parsed.exitCode === null ? "" : ` · exit ${parsed.exitCode}`;
   const header = compactToolLine(
     call?.function.name ?? "tool",
     call ? toolTarget(call) : "",
-    ` · ${label}${exit}${index === undefined ? "" : ` · #${index}`}`,
+    ` · ${label}${exit}${durationSuffix(call?.function.name, result, elapsed)}${index === undefined ? "" : ` · #${index}`}`,
     failed ? "error" : "success",
     width,
   );
-  const body = textLines(parsed.stderr || parsed.body || parsed.stdout)[0];
-  const detail = [parsed.note, body].filter(Boolean).join(" · ");
-  return detail ? [header, [span(`  ${truncate(detail, Math.max(1, width - 2))}`, failed ? "error" : "muted")]] : [header];
+  const safeWidth = Math.max(1, width);
+  const fit = (value: string, tone: Tone): RichLine => [span(truncate(sanitizeText(value).replace(/\s+/g, " "), safeWidth), tone)];
+  const changes = call?.function.name === "edit_file" ? result.changes ?? [] : [];
+  // Bound physical rows as well as logical diff lines, so long source lines
+  // cannot flood the transcript. Expanded details retain the existing preview.
+  const preview = changes.slice(0, 1).flatMap(change => [...diffLines(change)]);
+  const diffBudget = 18;
+  const selectedDiff = preview.slice(0, diffBudget);
+  if (!selectedDiff.some(row => row[0]?.tone === "success")) {
+    const addition = preview.slice(diffBudget).find(row => row[0]?.tone === "success");
+    if (addition && selectedDiff.length) selectedDiff[selectedDiff.length - 1] = addition;
+  }
+  const shownDiff = selectedDiff.map(row => row.map(part => ({ ...part,
+    text: truncate(sanitizeText(part.text), safeWidth),
+  })));
+  return [
+    // Keep physical rows bounded even when the status suffix exceeds tiny widths.
+    fit(header.map(part => part.text).join(""), failed ? "error" : "accent"),
+    fit(`  │ ${parsed.detail}`, failed ? "error" : "muted"),
+    ...(parsed.warning ? [fit(`  ╰ ${parsed.warning}`, "warning")] : []),
+    ...shownDiff,
+    ...(preview.length > diffBudget || changes.length > 1 ? [fit("… more diff content", "muted")] : []),
+  ];
 };
 
 export const toolFinishLines = (
@@ -167,25 +190,29 @@ export const toolFinishLines = (
   result: ToolResult,
   width = DEFAULT_WIDTH,
   expanded = false,
+  elapsed?: number,
 ): RichLine[] => {
   const name = call?.function.name ?? "tool";
   const target = call ? toolTarget(call) : "";
   const parsed = envelope(result);
-  const failed =
-    result.isError || (parsed.exitCode !== null && parsed.exitCode !== 0);
+  const failed = toolPresentation(name, result).failed
+    || (!call && parsed.exitCode !== null && parsed.exitCode !== 0);
   const status: Tone = failed ? "error" : "success";
   const label = failed ? "failed" : "done";
   const exit = parsed.exitCode === null ? "" : ` · exit ${parsed.exitCode}`;
   const header = compactToolLine(
     name,
     target,
-    ` · ${label}${exit}`,
+    ` · ${label}${exit}${durationSuffix(call?.function.name, result, elapsed)}`,
     status,
     width,
   );
   const logical: RichLine[] = [];
   if (parsed.note) logical.push([span(parsed.note, "muted")]);
-  const stdoutAll = textLines(parsed.body || parsed.stdout);
+  // Explicit expansion may show bounded JSON; default transcript never does.
+  const structured = expanded && name !== "run_command" && name !== "read_file"
+    ? readValue(result.content) : null;
+  const stdoutAll = textLines(structured !== null ? JSON.stringify(structured, null, 2) : parsed.body || parsed.stdout);
   const stdout = stdoutAll.slice(0, expanded ? 80 : PREVIEW_LINES);
   for (const item of stdout)
     logical.push([span(parsed.body ? item : `stdout ${item}`, "muted")]);

@@ -397,7 +397,7 @@ it("Shift+Tab callback shares /mode state without changing active-run approval s
       expect(rendered).toContain("earlier question");
       expect(rendered).toContain("earlier answer");
       expect(rendered).toContain("saved tool result");
-      expect(rendered).toContain("details: /tools 1");
+      expect(rendered).not.toContain("details: /tools 1");
       expect(rendered).toContain("offset: 2");
       expect(rendered.indexOf("End of history")).toBeLessThan(rendered.indexOf("Tool #1"));
       expect(rendered).not.toContain("private-system");

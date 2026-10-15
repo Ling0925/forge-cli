@@ -5,27 +5,33 @@ import { wrapRichLines } from "./rich";
 
 /** In-memory display index, scoped to one session. No tool result is re-executed. */
 export class ToolTranscript {
-  private readonly records: { call: ToolCall; result?: ToolResult }[] = [];
+  private readonly records: { call: ToolCall; result?: ToolResult; startedAt?: number; elapsed?: number }[] = [];
   private readonly positions = new Map<string, number>();
 
-  start(call: ToolCall): number {
+  start(call: ToolCall, startedAt?: number): number {
     const existing = this.positions.get(call.id);
     if (existing !== undefined) return existing;
-    const index = this.records.push({ call });
+    const index = this.records.push({ call, ...(startedAt !== undefined && Number.isFinite(startedAt) ? { startedAt } : {}) });
     this.positions.set(call.id, index);
     return index;
   }
 
-  finish(id: string, result: ToolResult): number | undefined {
+  finish(id: string, result: ToolResult, finishedAt?: number): number | undefined {
     const index = this.positions.get(id);
     const record = index === undefined ? undefined : this.records[index - 1];
-    if (record) record.result = result;
+    if (record) {
+      if (!record.result && record.startedAt !== undefined && finishedAt !== undefined && Number.isFinite(finishedAt)) {
+        record.elapsed = Math.max(0, finishedAt - record.startedAt);
+      }
+      record.result = result;
+    }
     return index;
   }
 
-  summary(id: string, result: ToolResult, width: number): RichLine[] {
-    const index = this.finish(id, result);
-    return toolSummaryLines(index === undefined ? undefined : this.records[index - 1]?.call, result, width, index);
+  summary(id: string, result: ToolResult, width: number, finishedAt?: number): RichLine[] {
+    const index = this.finish(id, result, finishedAt);
+    const record = index === undefined ? undefined : this.records[index - 1];
+    return toolSummaryLines(record?.call, result, width, index, record?.elapsed);
   }
 
   list(width: number): readonly RichLine[] {
@@ -36,7 +42,7 @@ export class ToolTranscript {
     if (first > 1) lines.push([{ text: `Showing last 20 of ${this.records.length} tools. /tools N opens any tool.`, tone: "muted" }]);
     for (const [offset, record] of recent.entries()) {
       lines.push(...(record.result
-        ? toolSummaryLines(record.call, record.result, width, first + offset).slice(0, 1)
+        ? toolSummaryLines(record.call, record.result, width, first + offset, record.elapsed).slice(0, 1)
         : [[...toolStartLine(record.call, width), { text: ` · #${first + offset}`, tone: "muted" as const }]]));
     }
     return wrapRichLines(lines, width);
@@ -49,7 +55,7 @@ export class ToolTranscript {
       [{ text: `Tool #${index}`, tone: "accent" }],
       ...(record.result ? [] : [toolStartLine(record.call, width)]),
       ...toolArgumentLines(record.call, width, true),
-      ...(record.result ? toolFinishLines(record.call, record.result, width, true) : [[{ text: "Result not recorded.", tone: "muted" as const }]]),
+      ...(record.result ? toolFinishLines(record.call, record.result, width, true, record.elapsed) : [[{ text: "Result not recorded.", tone: "muted" as const }]]),
     ], width);
   }
 }
