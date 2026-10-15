@@ -25,7 +25,8 @@ export class LiveRun {
     this.renderer = createEventRenderer({
       width: () => io.ui?.columns ?? 80,
       tools,
-      expandReasoning,
+      // exactOptionalPropertyTypes: omit the key rather than pass `undefined`.
+      ...(expandReasoning === undefined ? {} : { expandReasoning }),
     });
     this.ui = io.ui;
     this.plain =

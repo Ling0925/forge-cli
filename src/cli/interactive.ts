@@ -49,7 +49,7 @@ export async function interactive(
   initialApproval: ApprovalMode = DEFAULT_APPROVAL_MODE,
   initialExpandReasoning = false,
 ): Promise<number> {
-  const settings = await service.getSettings();
+  let settings = await service.getSettings();
   const ui = io.ui;
   let expandReasoning = initialExpandReasoning;
   const theme = createTheme({ isTTY: false });
@@ -272,7 +272,8 @@ export async function interactive(
       .parse(chosen);
     if (signal.aborted) return;
     await service.updateSettings({ settings: { reasoningEffort } });
-    settings.reasoningEffort = reasoningEffort;
+    // Settings are readonly; replace the local copy so the footer reflects the save.
+    settings = { ...settings, reasoningEffort };
     refreshContext();
     safe.stdout(`Reasoning effort: ${reasoningEffort} (saved)\n`);
   };
