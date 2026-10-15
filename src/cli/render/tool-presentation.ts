@@ -41,6 +41,7 @@ function agentOverview(items: readonly unknown[], total?: number): string {
 function builtinDetail(name: string, r: Record<string, unknown>, value: unknown): string | undefined {
   switch (name) {
     case "read_file": {
+      if (r.unchanged === true) return "Unchanged version · content omitted (omit if_version to reread)";
       if (typeof r.content !== "string" || typeof r.offset !== "number" || typeof r.total_lines !== "number") break;
       const count = r.content ? r.content.split("\n").length : 0;
       return `${count ? `lines ${r.offset + 1}–${r.offset + count}` : "0 lines read"} / ${r.total_lines} total${r.cache_hit === true ? " · cached" : ""}`;
@@ -48,15 +49,23 @@ function builtinDetail(name: string, r: Record<string, unknown>, value: unknown)
     case "list_files": return `${array(r.entries).length} entries · ${paths(array(r.entries))}`;
     case "search_files": {
       const matches = array(r.matches);
+      if (r.mode === "files") return `${matches.length} matching files · ${paths(matches)}`;
+      if (r.mode === "count") return `${matches.length} file counts · ${matches.reduce<number>((sum, item) => sum + (typeof object(item)?.count === "number" ? Number(object(item)?.count) : 0), 0)} matching lines on this page`;
       return `${matches.length} matches · ${matches.slice(0, 2).map(item => { const m = object(item); return `${scalar(m?.path)}:${scalar(m?.line)}`; }).join(", ")}`;
     }
     case "write_file": return r.unchanged === true ? "No changes · content already matches" : r.written === true ? "File written" : "Write result unavailable";
     case "edit_file": return r.unchanged === true ? "No changes · replacement already matches" : r.edited === true ? `File edited · ${scalar(r.replacements)} replacements` : "Edit result unavailable";
     case "make_directory": return r.created === true ? "Directory ready" : "Directory result unavailable";
     case "run_command": {
+      if (r.background === true) return `Task ${scalar(r.id)} · ${scalar(r.status)} · command_task to inspect`;
       // Duration is shown once in the card header for every tool.
       return first(r.stderr) || first(r.stdout) || "No output";
     }
+    case "command_task": {
+      if (Array.isArray(r.tasks)) return `${r.tasks.length} tasks · ${array(r.pending_ids).length} pending`;
+      return `Task ${scalar(r.id)} · ${scalar(r.status)}${r.output_available === false ? " · output available after settlement" : ` · ${scalar(r.total_chars)} captured chars`}`;
+    }
+    case "lsp": return `${scalar(r.operation)} · ${scalar(r.path)} · ${array(r.items).length} results`;
     case "git_status": {
       if (typeof r.output !== "string") break;
       const rows = textLines(r.output);
@@ -110,7 +119,7 @@ function builtinDetail(name: string, r: Record<string, unknown>, value: unknown)
 export function toolPresentation(name: string, result: ToolResult): { detail: string; warning: string; failed: boolean; exitCode: number | null } {
   const value = decode(result.content);
   const r = object(value) ?? {};
-  const command = name === "run_command";
+  const command = name === "run_command" || name === "command_task";
   const exitCode = command && typeof r.exit_code === "number" && Number.isFinite(r.exit_code) ? r.exit_code : null;
   const agent = agentTools.has(name);
   const agents = name === "list_agents" && Array.isArray(r.agents) ? r.agents : Array.isArray(value) ? value : [value];
@@ -119,12 +128,14 @@ export function toolPresentation(name: string, result: ToolResult): { detail: st
     return record?.handled !== true && agentHasFailure(record);
   });
   const failed = result.isError || (exitCode !== null && exitCode !== 0) || badAgent
-    || (command && (r.timed_out === true || r.spawn_failed === true || Boolean(r.signal)));
+    || (command && (r.status === "failed" || r.result_is_error === true || r.timed_out === true || r.spawn_failed === true || Boolean(r.signal)));
   const notes: string[] = [];
   if (command && r.timed_out === true) notes.push("timed out");
   if (command && r.spawn_failed === true) notes.push("failed to start");
   if (command && r.signal) notes.push(`signal ${scalar(r.signal)}`);
   if (r.truncated === true || (name === "wait_agents" && agents.some(item => object(item)?.truncated === true))) notes.push("truncated");
+  if (r.scan_truncated === true) notes.push("scan incomplete");
+  if (r.output_truncated === true) notes.push("captured output incomplete");
   if (r.partial_line === true) notes.push("partial line");
   const next = r.next_offset ?? r.nextOffset;
   if (typeof next === "number") notes.push(`next offset ${next}`);

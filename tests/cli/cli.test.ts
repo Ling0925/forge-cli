@@ -175,6 +175,22 @@ const fixture = (
 };
 
 describe("Forge CLI", () => {
+  it("configures explicit local LSP servers without starting or installing them", async () => {
+    const f = fixture("/unused");
+    const servers = [{ id: "typescript", command: "typescript-language-server", args: ["--stdio"], extensions: [".ts", ".tsx"] }];
+    expect(await runCliWithIO(["config", "set", "--lsp-servers", JSON.stringify(servers)], f.service, f.io)).toBe(0);
+    expect(f.updates.at(-1)?.settings?.lspServers).toEqual(servers);
+    expect(await runCliWithIO(["config", "set", "--lsp-servers", "[]"], f.service, f.io)).toBe(0);
+    expect(f.updates.at(-1)?.settings?.lspServers).toEqual([]);
+    const count = f.updates.length;
+    for (const value of ["not-json", "{}", JSON.stringify([...servers, ...servers]), JSON.stringify([{ ...servers[0], extensions: ["ts"] }])]) {
+      expect(await runCliWithIO(["config", "set", "--lsp-servers", value], f.service, f.io)).toBe(1);
+    }
+    expect(f.updates).toHaveLength(count);
+    expect(f.runs).toHaveLength(0);
+    expect(f.reads()).toBe(0);
+  });
+
   it("help does not touch the service or stdin", async () => {
     const f = fixture("/unused");
     expect(await runCliWithIO(["--help"], f.service, f.io)).toBe(0);

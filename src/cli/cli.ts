@@ -37,6 +37,7 @@ forge config set [--base-url URL] [--model MODEL] [--api-mode chat-completions|r
                  [--timeout-ms NUMBER] [--max-turns NUMBER] [--max-tools NUMBER] [--context-chars NUMBER] [--context-budget-tokens NUMBER|auto]
                   [--context-tokens NUMBER|auto] (window for --model or current model)
                  [--browser-origins ORIGIN[,ORIGIN...]] [--browser-executable PATH]
+                 [--lsp-servers JSON] (array of {id,command,args,extensions}; [] disables)
 --browser-origins accepts exact canonical HTTP(S) origins only (scheme, host,
 optional port; no credentials, path, query, fragment or wildcard; at most 32).
 An empty value clears the list; no origins disables browser tools (default).
@@ -353,6 +354,7 @@ export const runCliWithIO = async (
           "context-budget-tokens",
           "browser-origins",
           "browser-executable",
+          "lsp-servers",
         ],
         ["api-key-stdin"],
       );
@@ -373,6 +375,13 @@ export const runCliWithIO = async (
         if (list.some((value) => value === "") || list.length > 32)
           invalid("--browser-origins expects up to 32 exact HTTP(S) origins.");
       }
+      const lspText = stringOption(args, "lsp-servers");
+      let lspServers: unknown;
+      if (lspText !== undefined) {
+        if (lspText.length > 24000) invalid("LSP configuration exceeds 24000 characters.");
+        try { lspServers = JSON.parse(lspText); }
+        catch { invalid("--lsp-servers expects a JSON array of {id,command,args,extensions}; use [] to disable. No secrets in arguments."); }
+      }
       const tokenBudget = stringOption(args, "context-budget-tokens");
       if (tokenBudget !== undefined && tokenBudget !== "auto" && !/^[1-9]\d*$/.test(tokenBudget)) invalid("--context-budget-tokens expects a positive integer or auto.");
       const tokenWindow = stringOption(args, "context-tokens");
@@ -382,6 +391,7 @@ export const runCliWithIO = async (
       if (tokenWindow !== undefined && tokenWindow !== "auto" && !/^[1-9]\d*$/.test(tokenWindow)) invalid("--context-tokens expects a positive integer or auto.");
       const settings = configureInputSchema.parse({
         settings: {
+          ...(lspText === undefined ? {} : { lspServers }),
           ...(stringOption(args, "base-url") !== undefined
             ? { baseUrl: stringOption(args, "base-url") }
             : {}),

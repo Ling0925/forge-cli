@@ -15,6 +15,30 @@ forge run --session UUID 'Continue the task'
 
 使用 `--prompt-stdin` 明确从 stdin 读取提示词。run 的 `--json` 输出 version 1 JSONL event/result envelope，不是交互界面。具体选项以 `forge --help` 为准。
 
+## 文件搜索、条件读取与后台命令
+
+工具名不重复扩张：文件名 glob 合并到 `list_files`，内容搜索增强现有 `search_files`，条件读取仍为 `read_file`；不另加 Grep/Glob/Read 别名。
+
+- `list_files(path?, recursive?, glob?, offset?, limit?)`：glob 相对查询根目录，支持 `*`、`**`、`?`，按文件名匹配；跨目录查找需 `recursive:true`。分页只覆盖本次有界扫描，不承诺扫描完整大仓库。
+- `search_files(query, path?, glob?, mode?, case_sensitive?, regex?, context_lines?, offset?, limit?)`：默认字面、区分大小写、逐行搜索。`content` 返回命中内容，`files` 只返回命中文件，`count` 返回每个文件的匹配行数（不是出现次数）。regex 是显式、有资源/时间上限的单行正则子集，不支持任意 PCRE 或跨行搜索。`scan_truncated` 与分页 `truncated/next_offset` 分开；二进制、敏感/超大文件仍跳过，搜索不建立写入授权。
+- `read_file` 可传 `if_version`：当前 SHA-256 相同则返回 `unchanged:true`、省略正文；省略结果不建立新的读取授权。默认不传就照常返回正文，尤其模型上下文已压缩、需要真正重读时不要传旧版本。返回读取范围/版本，空文件与未变化明确区分。未新增图片、PDF、Notebook 解码能力。
+- `run_command` 增加 `background:true`，先完成原审批并确认进程启动，再返回 task ID。前台参数与语义不变，命令仍受既有 120 秒与 64 KiB 输出上限约束；后台不是持久服务器，也不是沙箱。
+- 唯一新增后台控制工具 `command_task(action,id?,offset?,limit?,timeout_ms?)`，action 为 list/read/wait/stop；只控制本轮注册表、当前会话拥有的任务。最多 4 个活跃、32 个累计；读取偏移为 UTF-16 字符单位。运行中只返回状态，完成后才发布全量脱敏过的有界输出并分页读取，避免秘密跨输出片段泄露。不是实时日志流。停止会等待进程退出；等待超时不取消。
+- 主代理准备结束时会等待未交付后台结果，追加内部结果供其检查；退出/取消会清理本进程任务。不跨进程恢复后台命令，不自动重试失败任务。想常驻开发服务器需另行明确生命周期需求。
+
+## 只读 LSP 查询
+
+只有用户明确配置服务器时，模型才看到一个 `lsp` 工具；没有各操作的重复工具描述，也不自动安装或下载语言服务器。例如已自行安装 TypeScript language server 后：
+
+```sh
+forge config set --lsp-servers '[{"id":"typescript","command":"typescript-language-server","args":["--stdio"],"extensions":[".ts",".tsx"]}]'
+forge config show
+# 关闭
+forge config set --lsp-servers '[]'
+```
+
+配置存为公共设置，参数不要放密钥。服务器 ID 与文件扩展不允许重叠。`lsp(operation,path,line?,character?,offset?,limit?)` 支持 symbols、definition、references、hover，路径相对工作区，位置为 1-based UTF-16。只请求语义读取，不接受服务器发起的改文件/执行命令；结果有界、过滤工作区外/敏感位置并脱敏。服务器是外部进程，**语义只读不等于 OS 沙箱**：readonly/plan 拒绝，workspace 每次调用经审批，unrestricted 允许。服务器可以自行访问网络或用户配置，审批应考虑风险。每次调用独立启动并清理，不自动重连或回退；会有初始化开销。
+
 ## 思考强度
 
 ```sh
