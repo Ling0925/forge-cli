@@ -112,7 +112,7 @@ const base = (
   run: HarnessService["run"] = async () => snapshot,
 ): HarnessService => ({
   ...extendedService(),
-  getSettings: async () => defaultPublicSettings,
+  getSettings: async () => ({ ...defaultPublicSettings, model: "test" }),
   updateSettings: async () => defaultPublicSettings,
   listModels: async () => ["test"],
   listSessions: async () => [],
@@ -347,7 +347,7 @@ describe("discovery loading status", () => {
     const ui = host.io.ui;
     if (!ui) throw Error("missing ui");
     const running = runCliWithIO(
-      ["chat"],
+      ["chat", "--session", id],
       {
         ...base(async (_input, sink) => {
           sink({
@@ -379,8 +379,8 @@ describe("discovery loading status", () => {
         },
       },
     );
-    compacting.reject(Error("should lose the race"));
     expect(await running).toBe(0);
+    compacting.reject(Error("should lose the race"));
     expect(host.statuses).toContain(null);
     const thinking = seenThinking.at(-1);
     if (!thinking) throw Error("missing thinking status");

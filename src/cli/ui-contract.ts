@@ -55,6 +55,8 @@ export type RunStatus = Readonly<{
   readonly startedAt: number;
   readonly toolCount: number;
   readonly cancellable: boolean;
+  /** Observing an existing run, without owning its stream or cancellation. */
+  readonly observing?: boolean;
   /** Generated output in this user turn, across model requests; excludes input/history. */
   readonly tokens?: number;
   readonly tokensEstimated?: boolean;
@@ -64,6 +66,8 @@ export type PickerItem = Readonly<{
   readonly value: string;
   readonly label: string;
   readonly detail?: string;
+  /** Animate an activity marker without changing the item's identity or label. */
+  readonly active?: boolean;
 }>;
 
 export type PickerSpec = Readonly<{

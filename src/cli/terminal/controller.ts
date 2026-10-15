@@ -135,7 +135,8 @@ export class Controller implements TerminalUI {
         this.timer = setInterval(() => {
           const animated = this.tail.some((line) => line.some((span) => span.animation === "spinner"));
           const second = Math.floor(Date.now() / 1000);
-          if (animated || this.status?.cancellable || (this.status && second !== lastSecond)) this.draw();
+          const activePicker = this.picker && this.filtered().some(item => item.active);
+          if (animated || activePicker || this.status?.cancellable || this.status?.observing || (this.status && second !== lastSecond)) this.draw();
           lastSecond = second;
         }, 22);
         this.timer.unref();

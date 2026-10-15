@@ -68,6 +68,22 @@ const sessions = Array.from({ length: 15 }, (_, index) => ({
 }));
 
 describe("selected picker details", () => {
+  it("animates only active picker items without changing labels or selection", () => {
+    const now = vi.spyOn(Date, "now");
+    try {
+      const items = [{ value: "active", label: "Running task", active: true }, { value: "done", label: "Finished task" }];
+      now.mockReturnValue(0);
+      const first = frame(40, 30, items);
+      now.mockReturnValue(80);
+      const next = frame(40, 30, items);
+      expect(first.text.join("\n")).toContain("❯ ⠋ Running task");
+      expect(next.text.join("\n")).toContain("❯ ⠙ Running task");
+      expect(next.text.join("\n")).toContain("  Finished task");
+      for (const width of [1, 10, 40]) for (const row of frame(width, 30, items).text) {
+        expect(visibleWidth(row)).toBeLessThanOrEqual(width);
+      }
+    } finally { now.mockRestore(); }
+  });
   it("formats local time and human status without modifying identity", () => {
     expect(detail).toContain("Completed · 2026-01-02 14:35");
     expect(detail.split("\n")[1]).toMatch(/^~\//);

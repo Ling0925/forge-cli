@@ -24,7 +24,9 @@ import {
   terminalText,
 } from "./format";
 import { abortable } from "./interactive/abortable";
+import { watchResumedSession } from "./interactive/resumed-session";
 import {
+  isActiveSession,
   pickModel,
   pickReasoningEffort,
   pickSession,
@@ -164,6 +166,39 @@ export async function interactive(
   let live: LiveRun | undefined;
   let statusGeneration = 0;
   let activeStatus: number | undefined;
+  let stopResumedWatch: (() => void) | undefined;
+  let resumedStartedAt = 0;
+  const resumedStatus = (): RunStatus => ({
+    label: session?.status === "awaiting_approval" ? "会话等待审批" : "会话仍在运行",
+    startedAt: resumedStartedAt, toolCount: 0, cancellable: false, observing: true,
+  });
+  const clearResumedWatch = (): void => {
+    if (!stopResumedWatch) return;
+    stopResumedWatch();
+    stopResumedWatch = undefined;
+    if (activeStatus === undefined && !runInProgress) ui?.setStatus(null);
+  };
+  const observeResumed = (): void => {
+    clearResumedWatch();
+    if (!session || !isActiveSession(session.status)) return;
+    safe.stdout(session.status === "awaiting_approval"
+      ? "提示：该会话仍在等待审批，请在原运行窗口处理；本窗口仅观察状态，未接管运行。\n"
+      : "提示：该会话仍在运行，本窗口仅观察状态，未接管运行或实时输出。\n");
+    resumedStartedAt = Date.now();
+    if (activeStatus === undefined) ui?.setStatus(resumedStatus());
+    stopResumedWatch = watchResumedSession(session, service, lifetime.signal, latest => {
+      session = latest;
+      refreshContext();
+      ui?.setPlan?.(latest.plan ?? null);
+      if (!isActiveSession(latest.status)) {
+        clearResumedWatch();
+        safe.stdout(`会话运行已结束（${latest.status}）。\n`);
+      } else if (activeStatus === undefined && !runInProgress) ui?.setStatus(resumedStatus());
+    }, () => {
+      clearResumedWatch();
+      safe.stderr("会话状态刷新失败，已停止动画；可用 /resume 重新检查。\n");
+    });
+  };
 
   const inputHint = (): void => {
     ui?.setInputHint?.(runInProgress
@@ -177,6 +212,7 @@ export async function interactive(
     safe.stdout("Steer accepted for this run; waiting for the current model/tool exchange to finish.\n");
   };
   const resetSessionControls = (): void => {
+    clearResumedWatch();
     contextUsage = null;
     ui?.setPlan?.(session?.plan ?? null);
     if (queue.length) safe.stdout("Pending input cleared on session change.\n");
@@ -265,7 +301,7 @@ export async function interactive(
     return () => {
       if (activeStatus !== generation) return;
       activeStatus = undefined;
-      ui.setStatus(null);
+      ui.setStatus(stopResumedWatch ? resumedStatus() : null);
     };
   };
 
@@ -356,7 +392,7 @@ export async function interactive(
     );
   else styled(`\n${banner}\n`);
   safe.stdout(`${approvalWarning(approvalMode)}\n`);
-  if (sessionId) showHistory();
+  if (sessionId) { showHistory(); observeResumed(); }
 
   try {
     while (!lifetime.signal.aborted) {
@@ -519,6 +555,7 @@ export async function interactive(
                 model = session.model;
                 safe.stdout("已恢复会话。\n");
                 showHistory();
+                observeResumed();
               } finally {
                 clearStatus();
               }
@@ -653,6 +690,11 @@ export async function interactive(
         if (lifetime.signal.aborted) break;
         session ??= await service.createSession(createSessionInputSchema.parse({ workspace, model }));
         if (lifetime.signal.aborted) break;
+        if (isActiveSession(session.status)) {
+          safe.stderr("该会话仍在运行或等待审批，请等待原任务结束，或用 /new 创建新会话；未提交新的运行。\n");
+          continue;
+        }
+        clearResumedWatch();
         refreshContext();
         ui?.setBusy(true);
         active = new AbortController();
@@ -745,6 +787,7 @@ export async function interactive(
     }
     return 0;
   } finally {
+    clearResumedWatch();
     titleRefreshClosed = true;
     if (titleRefresh) clearTimeout(titleRefresh);
     offRunInput?.();

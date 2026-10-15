@@ -74,6 +74,9 @@ export function pickReasoningEffort(
   );
 }
 
+export const isActiveSession = (status: string): boolean =>
+  status === "running" || status === "awaiting_approval";
+
 export function sessionDetail(
   status: string,
   workspace: string,
@@ -120,6 +123,7 @@ export async function pickSession(
       items: sessions.map((session) => ({
         value: session.id,
         label: session.title,
+        ...(isActiveSession(session.status) ? { active: true } : {}),
         detail: sessionDetail(
           session.status,
           session.workspace,

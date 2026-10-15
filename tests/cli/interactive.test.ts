@@ -354,6 +354,65 @@ describe("rich integration adapters", () => {
     };
     return { ...host, io: { ...host.io, ui }, output, busy, statuses, specs, contexts };
   };
+  it.each(["running", "awaiting_approval"] as const)("warns and animates on resume of a %s session, then clears on completion", async status => {
+    vi.useFakeTimers();
+    try {
+      const host = richHost([`/resume ${id}`, "hello", "/quit"], []);
+      const originalQuestion = host.io.question;
+      let questions = 0;
+      const run = vi.fn(async () => snapshot);
+      const getSession = vi.fn().mockResolvedValueOnce({ ...snapshot, status }).mockResolvedValue(snapshot);
+      const code = await runCliWithIO(["chat"], { ...service(run), getSession }, {
+        ...host.io,
+        question: async (...args) => {
+          if (++questions === 3) await vi.advanceTimersByTimeAsync(1100);
+          return originalQuestion(...args);
+        },
+      });
+      expect(code).toBe(0);
+      expect(run).not.toHaveBeenCalled();
+      expect(host.statuses).toContainEqual(expect.objectContaining({ observing: true, cancellable: false }));
+      expect(host.statuses.at(-1)).toBeNull();
+      expect(host.output.join("\n")).toContain("本窗口仅观察状态");
+      expect(host.output.join("\n")).toContain("会话运行已结束（completed）");
+      expect(host.output.join("\n")).toContain("未提交新的运行");
+      expect(getSession).toHaveBeenCalledTimes(2);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("shows a plain-text running warning for chat --session and does not keep polling after exit", async () => {
+    vi.useFakeTimers();
+    try {
+      const host = consoleIO(["/quit"]);
+      const getSession = vi.fn(async () => ({ ...snapshot, status: "running" as const }));
+      const run = vi.fn(async () => snapshot);
+      await runCliWithIO(["chat", "--session", id], { ...service(run), getSession }, host.io);
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(getSession).toHaveBeenCalledTimes(1);
+      expect(run).not.toHaveBeenCalled();
+      expect(host.out.join("\n")).toContain("该会话仍在运行");
+      expect(host.out.join("\n")).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏\x1b]/);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("stops observing a running session when switching to /new", async () => {
+    vi.useFakeTimers();
+    try {
+      const host = richHost([`/resume ${id}`, "/new", "/quit"], []);
+      const originalQuestion = host.io.question;
+      let questions = 0;
+      const getSession = vi.fn(async () => ({ ...snapshot, status: "running" as const }));
+      await runCliWithIO(["chat"], { ...service(async () => snapshot), getSession }, {
+        ...host.io, question: async (...args) => {
+          if (++questions === 3) await vi.advanceTimersByTimeAsync(2100);
+          return originalQuestion(...args);
+        },
+      });
+      expect(getSession).toHaveBeenCalledTimes(1);
+      expect(host.statuses.at(-1)).toBeNull();
+    } finally { vi.useRealTimers(); }
+  });
+
   it.each([false, true])("refreshes an asynchronous auto-title without overwriting a switched session (switch=%s)", async switched => {
     vi.useFakeTimers();
     try {

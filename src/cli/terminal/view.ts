@@ -41,6 +41,7 @@ export function draw(view: View): void {
   const compactFooter = view.rows <= 20;
   const itemLimit = view.rows >= 36 ? 12 : 8;
   const picker = view.picker;
+  const frame = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[Math.floor(Date.now() / 80) % 10]!;
   const pending = !picker && !view.fresh
     ? (view.pendingInput ?? []).slice(0, Math.min(2, Math.max(0, limit - 2))).map(line =>
       [{ text: truncate(line, view.columns), tone: "accent" as const }]) : [];
@@ -111,7 +112,7 @@ export function draw(view: View): void {
     below = items.slice(first, first + count).map((item, index) => [
       {
         text: truncate(
-          `${first + index === picker.index ? "❯" : " "} ${item.label}`,
+          `${first + index === picker.index ? "❯" : " "} ${item.active ? `${frame} ` : ""}${item.label}`,
           view.columns,
         ),
         inverse: first + index === picker.index,
@@ -223,7 +224,6 @@ export function draw(view: View): void {
       }
     }
   }
-  const frame = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[Math.floor(Date.now() / 80) % 10]!;
   const tokenLabel = view.status?.tokens === undefined ? "?"
     : `${view.status.tokensEstimated ? "≈" : ""}${compactTokens(view.status.tokens)}`;
   const available = contentLimit - composer.length - below.length;
@@ -239,7 +239,8 @@ export function draw(view: View): void {
           [
             {
               text: truncate(
-                `${view.status.label}${view.status.cancellable ? ` ${frame}` : ""} · ${tokenLabel} tokens · ${Math.max(0, Math.floor((Date.now() - view.status.startedAt) / 1000))}s · ${view.status.toolCount} tools${view.status.cancellable ? " · Ctrl+C cancel" : ""}`,
+                view.status.observing ? `${frame} ${view.status.label} · 仅观察`
+                  : `${view.status.label}${view.status.cancellable ? ` ${frame}` : ""} · ${tokenLabel} tokens · ${Math.max(0, Math.floor((Date.now() - view.status.startedAt) / 1000))}s · ${view.status.toolCount} tools${view.status.cancellable ? " · Ctrl+C cancel" : ""}`,
                 view.columns,
               ),
               tone: "muted" as const,
@@ -252,11 +253,12 @@ export function draw(view: View): void {
   let liveStatus: RichLine | undefined;
   if (view.status && view.screen.fixed && !picker && !view.fresh) {
     const elapsed = Math.max(0, Math.floor((Date.now() - view.status.startedAt) / 1000));
-    const suffix = ` · ${elapsed}s`;
-    const marker = view.status.cancellable ? `${frame} ` : "";
+    const suffix = view.status.observing ? "" : ` · ${elapsed}s`;
+    const marker = view.status.cancellable || view.status.observing ? `${frame} ` : "";
     const labelWidth = Math.max(0, Math.min(24, Math.floor(view.columns / 2), view.columns - visibleWidth(marker + suffix)));
     const activity = truncate(`${marker}${truncate(terminalText(view.status.label), labelWidth)}${suffix}`, view.columns);
-    const metrics = plain(`${tokenLabel} tokens · ${view.status.toolCount} tools${view.status.cancellable ? " · Ctrl+C cancel" : ""}`);
+    const metrics = plain(view.status.observing ? "仅观察 · 未接管运行"
+      : `${tokenLabel} tokens · ${view.status.toolCount} tools${view.status.cancellable ? " · Ctrl+C cancel" : ""}`);
     const detail = auxiliarySlot ? metrics : view.notice ? plain(terminalText(view.notice)) : pinned ?? history ?? metrics;
     const remaining = view.columns - visibleWidth(activity) - 3;
     liveStatus = [
