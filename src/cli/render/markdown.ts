@@ -4,6 +4,10 @@ import { highlight, supportsLanguage } from "cli-highlight";
 import type { RichLine, Span } from "../ui-contract";
 import { ControlFilter, sanitizeText } from "./sanitize";
 import { plainLines, wrapRichLines } from "./rich";
+import { visibleWidth } from "../theme";
+import { MarkdownCache } from "./markdown-cache";
+
+const completedCache = new MarkdownCache();
 
 const PARSE_LIMIT = 100_000;
 const identity = (text: string): string => text;
@@ -48,10 +52,13 @@ function terminalLines(rendered: string): RichLine[] {
 }
 
 /** Markdown syntax and terminal layout are provided by marked/marked-terminal. */
-export function markdownLines(source: string, columns = 80): RichLine[] {
+export function markdownLines(source: string, columns = 80, cache = true): RichLine[] {
   const clean = sanitizeText(source);
-  const width = Math.max(8, Math.min(500, Math.floor(columns) || 80));
+  const width = Math.max(1, Math.min(500, Math.floor(columns) || 80));
   if (clean.length > PARSE_LIMIT) return [...plainLines(clean)];
+  const key = `${width}:${clean}`;
+  const hit = cache ? completedCache.get(key) : undefined;
+  if (hit) return hit;
   // @types/marked-terminal describes the older renderer class return type;
   // v7 returns a MarkedExtension. The runtime API is tested below/in fixtures.
   const tableOptions: { style: { head: string[]; border: string[] }; wordWrap: boolean; colWidths?: number[]; colAligns?: ("left" | "center" | "right")[] } = { style: { head: [], border: [] }, wordWrap: true };
@@ -69,8 +76,18 @@ export function markdownLines(source: string, columns = 80): RichLine[] {
   parser.use({ renderer: {
     table(token) {
       const count = token.header.length;
-      if (count > 12 || width < count * 5 + 1) return `${sanitizeText(token.raw)}\n`;
-      tableOptions.colWidths = Array.from({ length: count }, () => Math.floor((width - 1) / count));
+      if (!count || count > 12) return `${sanitizeText(token.raw)}\n`;
+      const cellWidth = Math.max(1, Math.floor((width - 5) / count) - 3);
+      const headers = token.header.map(cell => this.parser.parseInline(cell.tokens));
+      const rows = token.rows.map(row => row.map(cell => this.parser.parseInline(cell.tokens)));
+      const tooTall = [...headers, ...rows.flat()].some(cell =>
+        sanitizeText(cell).split("\n").reduce((n, line) => n + Math.max(1, Math.ceil(visibleWidth(line) / cellWidth)), 0) > 4);
+      if (width < count * 8 + 5 || tooTall) {
+        if (!rows.length) return `${headers.join("\n")}\n`;
+        return rows.map((row, index) => `Row ${index + 1}\n${headers.map((header, column) =>
+          `  ${header || `Column ${column + 1}`}: ${row[column] ?? ""}`).join("\n")}`).join("\n\n") + "\n\n";
+      }
+      tableOptions.colWidths = Array.from({ length: count }, () => Math.floor((width - 5) / count));
       tableOptions.colAligns = token.align.map(align => align ?? "left");
       return tableRenderer ? tableRenderer.call(this, token) : false;
     },
@@ -99,7 +116,9 @@ export function markdownLines(source: string, columns = 80): RichLine[] {
   } });
   try {
     const rendered = parser.parse(clean, { async: false });
-    return [...wrapRichLines(terminalLines(rendered), width)];
+    const lines = [...wrapRichLines(terminalLines(rendered), width)];
+    if (cache) completedCache.set(key, lines);
+    return lines;
   } catch {
     // Malformed/deep input or dependency failure must not lose the source.
     return [...plainLines(clean)];
@@ -123,7 +142,8 @@ export class MarkdownStream {
     this.source += this.filter.push(chunk);
     // Core already coalesces text deltas (80ms / 8192 chars). Always render the
     // latest delivered delta; a second timerless throttle could hide its suffix.
-    this.rendered = markdownLines(this.source, this.width());
+    // Streaming prefixes never enter the completed-message LRU.
+    this.rendered = markdownLines(this.source, this.width(), false);
     return { append: [], tail: this.rendered };
   }
 

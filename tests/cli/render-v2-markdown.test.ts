@@ -17,7 +17,7 @@ it("renders aligned multiline CJK tables with library borders and bounded widths
   const source = '| 名称 | Value |\n| :--- | ---: |\n| 中文 | long value with spaces |\n| a\\|b | `code` |\n';
   for (const width of [20,40,80]) {
     const lines = markdownLines(source,width); const body = text(lines);
-    expect(body).toContain("┌"); expect(body).toContain("中文"); expect(body).toContain("a|b");
+    expect(body).toContain(width < 30 ? "Row 1" : "┌"); expect(body).toContain("中文"); expect(body).toContain("a|b");
     for (const line of lines) expect(visibleWidth(text([line]))).toBeLessThanOrEqual(width);
   }
 });

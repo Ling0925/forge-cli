@@ -52,7 +52,10 @@ export function draw(view: View): void {
   const footerLines = view.screen.fixed
     ? [...footer, ...Array.from({ length: Math.max(0, fixedFooter - footer.length) }, () => plain(""))]
     : footer;
-  const contentLimit = limit - fixedFooter - pending.length;
+  // Reserve the auxiliary row by geometry, never by activity/plan presence.
+  // This keeps the editor stationary when background state changes.
+  const auxiliarySlot = view.screen.fixed && view.rows >= 30 && !picker && !view.menu.isActive && !view.fresh ? 1 : 0;
+  const contentLimit = limit - fixedFooter - pending.length - auxiliarySlot;
   const statusSlot = view.screen.fixed && contentLimit > 1 ? 1 : 0;
   const editor = picker?.editor ?? view.editor;
   const prefix = picker ? `${picker.spec.title}: ` : view.prompt;
@@ -253,7 +256,8 @@ export function draw(view: View): void {
     const marker = view.status.cancellable ? `${frame} ` : "";
     const labelWidth = Math.max(0, Math.min(24, Math.floor(view.columns / 2), view.columns - visibleWidth(marker + suffix)));
     const activity = truncate(`${marker}${truncate(terminalText(view.status.label), labelWidth)}${suffix}`, view.columns);
-    const detail = view.notice ? plain(terminalText(view.notice)) : pinned ?? history ?? plain(`${tokenLabel} tokens · ${view.status.toolCount} tools${view.status.cancellable ? " · Ctrl+C cancel" : ""}`);
+    const metrics = plain(`${tokenLabel} tokens · ${view.status.toolCount} tools${view.status.cancellable ? " · Ctrl+C cancel" : ""}`);
+    const detail = auxiliarySlot ? metrics : view.notice ? plain(terminalText(view.notice)) : pinned ?? history ?? metrics;
     const remaining = view.columns - visibleWidth(activity) - 3;
     liveStatus = [
       { text: activity, tone: view.status.cancellable ? "accent" : "warning" },
@@ -276,9 +280,13 @@ export function draw(view: View): void {
   const above = view.screen.fixed ? [] : [...spacer, ...tail, ...status];
   if (view.screen.fixed) {
     view.screen.setTranscript(animatedTail);
+    const auxiliary = !picker && !view.fresh && view.notice
+      ? plain(truncate(terminalText(view.notice), view.columns)) : pinned ?? history ?? plain("");
     view.screen.paint(
-      [...(statusSlot ? [liveStatus ?? (!picker && !view.fresh && view.notice ? plain(truncate(view.notice, view.columns)) : pinned ?? history ?? status[0] ?? plain(""))] : []), ...composer, ...below, ...pending, ...footerLines],
-      statusSlot + layout.row - start, layout.column,
+      [...(auxiliarySlot ? [auxiliary] : []),
+        ...(statusSlot ? [liveStatus ?? (auxiliarySlot ? plain("") : auxiliary)] : []),
+        ...composer, ...below, ...pending, ...footerLines],
+      auxiliarySlot + statusSlot + layout.row - start, layout.column,
     );
     return;
   }
