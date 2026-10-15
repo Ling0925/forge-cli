@@ -220,19 +220,18 @@ export const toolSummaryLines = (
   const failed = parsed.failed;
   const label = failed ? "failed" : "done";
   const exit = parsed.exitCode === null ? "" : ` · exit ${parsed.exitCode}`;
-  const changes = call?.function.name === "edit_file" ? result.changes ?? [] : [];
+  const changes = call && ["edit_file", "write_file"].includes(call.function.name) ? result.changes ?? [] : [];
   let statBadge = "";
   if (changes.length > 0) {
     let totalAdded = 0;
     let totalRemoved = 0;
-    let valid = false;
+    let valid = true;
     for (const ch of changes) {
       const stats = diffStats(ch);
       if (stats) {
-        valid = true;
         totalAdded += stats.added;
         totalRemoved += stats.removed;
-      }
+      } else valid = false;
     }
     if (valid) statBadge = ` [+${totalAdded} -${totalRemoved}]`;
   }
@@ -246,18 +245,8 @@ export const toolSummaryLines = (
   const fit = (value: string, tone: Tone, prefix = ""): RichLine => [
     span(truncate(`${prefix}${sanitizeText(value).replace(/\s+/g, " ").trim()}`, safeWidth), tone),
   ];
-  // Bound physical rows as well as logical diff lines, so long source lines
-  // cannot flood the transcript. Expanded details retain the existing preview.
-  const preview = changes.slice(0, 1).flatMap(change => [...diffLines(change)]);
-  const diffBudget = 18;
-  const selectedDiff = preview.slice(0, diffBudget);
-  if (!selectedDiff.some(row => row[0]?.tone === "success")) {
-    const addition = preview.slice(diffBudget).find(row => row[0]?.tone === "success");
-    if (addition && selectedDiff.length) selectedDiff[selectedDiff.length - 1] = addition;
-  }
-  const shownDiff = selectedDiff.map(row => row.map(part => ({ ...part,
-    text: truncate(sanitizeText(part.text), safeWidth),
-  })));
+  // diffLines owns physical wrapping and preserves source order and whitespace.
+  const shownDiff = changes.slice(0, 1).flatMap(change => [...diffLines(change, { width: safeWidth, maxRows: 20 })]);
   // Branch rows share one prefix convention: intermediate rows use │, the final
   // row closes with ╰. Command rows (run_command) precede the detail/warning.
   const branchItems: { value: string; tone: Tone }[] = [
@@ -273,7 +262,9 @@ export const toolSummaryLines = (
     fit(header.map(part => part.text).join(""), failed ? "error" : "accent"),
     ...branchRows,
     ...shownDiff,
-    ...(preview.length > diffBudget || changes.length > 1 ? [fit("… more diff content", "muted")] : []),
+    ...(changes.length > 1 ? [fit("… more file changes", "muted")] : []),
+    ...(index !== undefined && shownDiff.some(row => row.some(part => part.text.includes("omitted")))
+      ? [fit(`/tools ${index} · more diff details`, "muted")] : []),
   ];
 };
 
@@ -325,7 +316,15 @@ export const toolFinishLines = (
     rows.push([span(`… ${clipped.hidden} more preview lines`, "muted")]);
   }
   const changes = result.changes ?? [];
-  for (const change of changes.slice(0, 3)) rows.push(...diffLines(change));
-  if (changes.length > 3) rows.push([span("… more file changes", "muted")]);
+  let remaining = expanded ? 200 : 24;
+  let displayed = 0;
+  for (const change of changes) {
+    if (remaining < 3) break;
+    const preview = diffLines(change, { width, maxRows: remaining });
+    rows.push(...preview);
+    remaining -= preview.length;
+    displayed += 1;
+  }
+  if (changes.length > displayed) rows.push([span(truncate("… more file changes", Math.max(1, width)), "muted")]);
   return rows;
 };

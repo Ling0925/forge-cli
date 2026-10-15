@@ -5,7 +5,8 @@ import type { FileChange } from "../../src/shared/schemas";
 const change = (before: string, after: string): FileChange => ({
   path: "a.ts", kind: "modified", before, after, truncated: false,
 });
-const text = (value: FileChange) => diffLines(value).map(line => line.map(span => span.text).join("")).join("\n");
+// Ignore the presentation gutter here; structured-diff covers its exact numbering.
+const text = (value: FileChange) => diffLines(value).map(line => line.map(span => span.text).join("").replace(/^\s*\d+ ([ +\-]) /, "$1")).join("\n");
 
 it("keeps unchanged lines neutral in long files with one edit", () => {
   const before = Array.from({ length: 600 }, (_, i) => `line ${i}`);

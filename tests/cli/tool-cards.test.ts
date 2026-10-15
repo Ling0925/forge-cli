@@ -47,17 +47,17 @@ it("shows real edit diffs inline with bounded rows and preserves detail access",
   const tools = new ToolTranscript(); const c = call("edit_file"); tools.start(c);
   const rows = tools.summary(c.id, edited, 80);
   expect(text(rows)).toContain("[+1 -1]");
-  expect(text(rows)).toContain("-const old = 1;"); expect(text(rows)).toContain("+const next = 2;");
-  expect(rows.flat().some(s => s.tone === "success" && s.text.startsWith("+const"))).toBe(true);
+  expect(text(rows)).toContain("1 - const old = 1;"); expect(text(rows)).toContain("1 + const next = 2;");
+  expect(rows.flat().some(s => s.tone === "diffAdded")).toBe(true);
   expect(text(rows)).not.toContain("details:");
-  expect(text(tools.detail(1, 80))).toContain("+const next = 2;");
+  expect(text(tools.detail(1, 80))).toContain("1 + const next = 2;");
   const large = { ...edited, changes: [{ ...edited.changes[0]!, before: "old\n".repeat(200), after: ("长".repeat(100) + "\n").repeat(200), truncated: true }] };
   const bounded = tools.summary(c.id, large, 40);
   expect(bounded.length).toBeLessThanOrEqual(22); expect(text(bounded)).toContain("partial preview");
   expect(text(bounded)).not.toContain("-old");
   expect(text(tools.detail(1, 120))).toContain("exact diff unavailable");
   for (const row of bounded) expect(visibleWidth(text([row]))).toBeLessThanOrEqual(40);
-  expect(text(toolSummaryLines(call("write_file"), edited, 80))).not.toContain("+const");
+  expect(text(toolSummaryLines(call("write_file"), edited, 80))).toContain("1 + const next = 2;");
   expect(text(toolSummaryLines(c, { ...edited, changes: [{ ...edited.changes[0]!, before: null }] }, 80))).toContain("unavailable");
 });
 it("keeps errors, timeout, truncation and pagination visible", () => {

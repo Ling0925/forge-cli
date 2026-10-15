@@ -125,9 +125,22 @@ const build = (
       : extendedColor && variant === "dark"
         ? ["38;5;75", "38;5;177", "38;5;115", "38;5;215"]
         : ["34", "35", "32", "33"];
-    const painted = index === undefined
-      ? colors[role as keyof Paint](text)
-      : enabled ? paint(`\u001b[${inks[index]}m`)(text) : text;
+    const diffRoles: Partial<Record<Tone, number>> = {
+      diffAdded: 0, diffRemoved: 1, diffAddedWord: 2, diffRemovedWord: 3,
+    };
+    const diffIndex = diffRoles[role];
+    // Independent foreground/background palettes: line context is quiet, changed
+    // word spans are stronger. Unknown terminals use standard ANSI, NO_COLOR none.
+    const diffInks = extendedColor && variant === "light"
+      ? ["38;5;22;48;5;194", "38;5;52;48;5;224", "38;5;22;48;5;157;1", "38;5;52;48;5;217;1"]
+      : extendedColor && variant === "dark"
+        ? ["38;5;194;48;5;22", "38;5;224;48;5;52", "38;5;231;48;5;28;1", "38;5;231;48;5;88;1"]
+        : ["32", "31", "32;1;7", "31;1;7"];
+    const painted = diffIndex !== undefined
+      ? enabled ? paint(`\u001b[${diffInks[diffIndex]}m`)(text) : text
+      : index === undefined
+        ? colors[role as keyof Paint](text)
+        : enabled ? paint(`\u001b[${inks[index]}m`)(text) : text;
     const marked = options?.bold ? bold(painted) : painted;
     return options?.inverse && enabled && marked
       ? wrap(marked, "\u001b[7m", "\u001b[27m")

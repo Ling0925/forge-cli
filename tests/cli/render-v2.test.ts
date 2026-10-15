@@ -252,8 +252,10 @@ describe("tools and diffs", () => {
     };
     const lines = diffLines(change);
     expect(lines.length).toBeLessThanOrEqual(25);
-    expect(textOf(lines)).toContain("-old 0");
-    expect(textOf(lines)).toContain("+new 0");
+    expect(textOf(lines)).toContain("1 - old 0");
+    expect(textOf(lines)).toContain("omitted");
+    expect(textOf(lines)).not.toContain("+ new 0"); // Never reorder later additions.
+    expect(textOf(diffLines(change, { maxRows: 100 }))).toContain("1 + new 0");
     const missing = diffLines({ ...change, before: null, kind: "modified" });
     expect(textOf(missing)).toContain("unavailable");
     expect(textOf(missing)).not.toContain("-old");
@@ -268,9 +270,10 @@ describe("tools and diffs", () => {
       truncated: false,
     });
     const createdText = textOf(created);
-    expect(createdText).toContain("+export const ready = true;");
+    expect(createdText).toContain("1   export const ready = true;");
     expect(createdText).not.toContain("unavailable");
-    expect(createdText).toContain("@@ -0,0 +1,1 @@");
+    expect(createdText).toContain("new file · 1 lines");
+    expect(createdText).not.toContain("@@");
 
     const deleted = diffLines({
       path: "src/old.ts",
@@ -279,7 +282,7 @@ describe("tools and diffs", () => {
       after: null,
       truncated: false,
     });
-    expect(textOf(deleted)).toContain("-export const gone = true;");
+    expect(textOf(deleted)).toContain("1 - export const gone = true;");
     expect(textOf(deleted)).toContain("@@ -1,1 +0,0 @@");
   });
 
@@ -298,7 +301,7 @@ describe("tools and diffs", () => {
       truncated: false,
     });
     const body = textOf(lines);
-    expect(body).toContain("+inserted change");
+    expect(body).toContain("101 + inserted change");
     expect(body).toContain(" line 99");
     expect(body).toContain(" line 100");
     expect(body).not.toContain(" line 0");
