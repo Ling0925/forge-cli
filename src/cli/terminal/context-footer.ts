@@ -17,15 +17,21 @@ export function contextFooter(context: ComposerContext, columns: number, compact
   const ratio = usage?.windowTokens ? usage.usedTokens / usage.windowTokens : 0;
   const percentage = usage?.windowTokens ? `${usage.estimated ? "≈" : ""}${(ratio * 100).toFixed(1)}%` : "?%";
   const count = usage?.windowTokens ? compactTokens(usage.windowTokens) : "?";
+  const cached = usage?.cachedPromptTokens;
+  const input = usage?.promptTokens;
+  const cacheRate = usage?.basis !== "projected" && input !== undefined && input > 0
+    && cached !== undefined && Number.isFinite(cached) && cached >= 0 && cached <= input
+    ? `${Number((cached / input * 100).toFixed(1))}%` : "—";
+  const summaryText = `${percentage} · R${cacheRate} · ${count}`;
   if (compact) {
     const miniWidth = width >= 40 ? 6 : 0;
     const filled = Math.round(Math.min(1, Math.max(0, ratio)) * miniWidth);
     const mini = miniWidth ? ` [${"━".repeat(filled)}${"·".repeat(miniWidth - filled)}]` : "";
-    const summary = truncate(`${percentage} · ${count}${mini}`, width);
+    const summary = truncate(`${summaryText}${mini}`, width);
     const model = truncate(sanitizeText(context.model).replace(/[\n\t]/g, " "), Math.max(0, width - visibleWidth(summary) - 1));
     return [[{ text: model, tone: "accent" }, { text: " ".repeat(Math.max(0, width - visibleWidth(model) - visibleWidth(summary))) }, { text: summary, tone: ratio >= 0.8 ? "warning" : "muted" }]];
   }
-  const right = truncate(`${percentage} · ${count}`, width);
+  const right = truncate(summaryText, width);
   // Only token budgets with a known window define a meaningful reserved fraction.
   const reserveStart = usage?.windowTokens && usage.budgetTokens !== undefined
     ? Math.round(Math.min(1, Math.max(0, usage.budgetTokens / usage.windowTokens)) * width)

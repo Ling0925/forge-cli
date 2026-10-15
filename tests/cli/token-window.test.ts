@@ -28,9 +28,15 @@ describe("token window accounting", () => {
     expect(reported.basis).toBe("request-with-output");
     const line = contextFooter({ model: "test", usage: reported }, 100)[0]!.map(span => span.text).join("");
     expect(line).toContain("4.1%");
-    expect(line).toContain("≈4.1% · 128k");
+    expect(line).toContain("≈4.1% · R90% · 128k");
     const next = reportedContext(projection, { promptTokens: 6000, completionTokens: 100, totalTokens: 6100 }, { role: "assistant", content: "next" });
     expect(next.usedTokens).toBe(6100);
+    expect(reported.cachedPromptTokens).toBe(4500);
+    expect(next.cachedPromptTokens).toBeUndefined();
+    const noCache = reportedContext(reported, { promptTokens: 6000, completionTokens: 0, totalTokens: 6000 }, { role: "assistant", content: "next" });
+    expect(noCache.cachedPromptTokens).toBeUndefined();
+    const event = agentEventSchema.parse({ type: "context_usage", sessionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", timestamp: "2026-01-01T00:00:00Z", usage: reported });
+    expect(event.type === "context_usage" && event.usage.cachedPromptTokens).toBe(4500);
   });
   it("reads legacy char usage without interpreting characters as tokens", () => {
     const event = agentEventSchema.parse({ type: "context_usage", sessionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", timestamp: "2026-01-01T00:00:00Z", usage: { budgetChars: 100000, usedChars: 10000, parts: { instructions: 1000, memory: 0, conversation: 9000, tools: 0 } } });
@@ -38,6 +44,6 @@ describe("token window accounting", () => {
     if (event.type !== "context_usage") throw Error("wrong event");
     expect(event.usage.windowTokens).toBeNull();
     expect(event.usage.usedTokens).toBe(0);
-    expect(contextFooter({ model: "unknown", usage: event.usage }, 80)[0]!.map(span => span.text).join("")).toContain("?% · ?");
+    expect(contextFooter({ model: "unknown", usage: event.usage }, 80)[0]!.map(span => span.text).join("")).toContain("?% · R— · ?");
   });
 });

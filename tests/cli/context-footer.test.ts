@@ -17,6 +17,19 @@ const context: ComposerContext = {
 };
 
 describe("composer context footer", () => {
+  it("shows request input cache rate after occupancy, with unknown distinct from zero", () => {
+    for (const compact of [false, true]) {
+      for (const [cached, input, expected] of [[450, 500, "90%"], [99, 100, "99%"], [991, 1000, "99.1%"], [0, 500, "0%"], [undefined, 500, "—"], [0, 0, "—"], [501, 500, "—"]] as const) {
+        const usage = { ...context.usage!, basis: "request-with-output" as const, promptTokens: input, cachedPromptTokens: cached };
+        const line = text(contextFooter({ ...context, usage }, 80, compact)[0]!);
+        expect(line).toContain(`50.0% · R${expected}`);
+        for (const width of [1, 8, 20, 40, 80]) {
+          for (const row of contextFooter({ ...context, usage }, width, compact)) expect(visibleWidth(text(row))).toBeLessThanOrEqual(width);
+        }
+      }
+    }
+    expect(text(contextFooter({ ...context, usage: { ...context.usage!, promptTokens: 500, cachedPromptTokens: 400 } }, 80)[0]!)).toContain("R—");
+  });
   it("lays out model and percentage with a full-width thin segmented track", () => {
     const lines = contextFooter(context, 80);
     expect(text(lines[0]!)).toContain("provider/model");
@@ -36,19 +49,19 @@ describe("composer context footer", () => {
 
   it("shows only percentage and compact total, with compression headroom in red on the right", () => {
     const known = contextFooter({ ...context, usage: { ...context.usage!, budgetTokens: 800 } }, 100);
-    expect(text(known[0]!)).toMatch(/≈50\.0% · 1k$/);
+    expect(text(known[0]!)).toMatch(/≈50\.0% · R— · 1k$/);
     expect(text(known[0]!)).not.toMatch(/上下文|压缩|tokens|500|800/);
     expect(known).toHaveLength(2);
     expect(known[1]!.at(-1)).toEqual({ text: "─".repeat(20), tone: "error" });
     expect(known[1]!.filter((span) => span.tone === "muted")).toEqual([{ text: "─".repeat(30), tone: "muted" }]);
     const unknown = contextFooter({ ...context, usage: { ...context.usage!, windowTokens: null, budgetChars: 100000 } }, 100);
-    expect(text(unknown[0]!)).toMatch(/\?% · \?$/);
+    expect(text(unknown[0]!)).toMatch(/\?% · R— · \?$/);
     expect(unknown[1]!.some((span) => span.tone === "error")).toBe(false);
   });
 
   it.each([[128000, "128k"], [200000, "200k"], [1000000, "1m"], [1047576, "1.05m"], [2000000, "2m"]])("abbreviates a %s-token window as %s", (windowTokens, expected) => {
     const lines = contextFooter({ ...context, usage: { ...context.usage!, windowTokens, usedTokens: windowTokens / 2 } }, 80);
-    expect(text(lines[0]!).endsWith(`≈50.0% · ${expected}`)).toBe(true);
+    expect(text(lines[0]!).endsWith(`≈50.0% · R— · ${expected}`)).toBe(true);
   });
 
   it("keeps the reserved region fixed through usage overflow, custom thresholds and resize", () => {
@@ -80,7 +93,7 @@ describe("composer context footer", () => {
       }
     }
     expect(text(contextFooter({ ...context, estimated: true }, 80)[0]!)).toContain("≈50.0%");
-    expect(text(contextFooter({ model: "test", usage: null }, 80)[0]!)).toContain("?% · ?");
+    expect(text(contextFooter({ model: "test", usage: null }, 80)[0]!)).toContain("?% · R— · ?");
   });
 
   it("uses distinct category colors even with unknown background and respects NO_COLOR", () => {
