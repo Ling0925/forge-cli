@@ -53,9 +53,12 @@ forge mcp list [--json] | register <id> <label> <command> [args...] [--disabled]
 forge mcp enable|disable|remove|health <id> [--json]
 forge export <session-id> --output PATH (explicit destination; no implicit path)
 forge rename <id> <title> | archive <id> [--unarchive]
-forge run [prompt...] --workspace PATH [--session UUID] [run options]
-forge resume <id> [prompt...] [run options]
+forge run [prompt...] --workspace PATH [run options]
+forge run [prompt...] --session UUID [run options]
+forge resume UUID [--approval full-access|auto|manual] [--thinking|--expand-thinking]
 
+resume opens interactive chat for an existing session; no prompt is required or accepted.
+For a single request or JSON output, use forge run --session UUID with a prompt source.
 Run options: --model MODEL --mode plan|build --permission readonly|workspace|unrestricted
              --prompt-file PATH | --prompt-stdin
              --json --yes
@@ -272,19 +275,27 @@ export const runCliWithIO = async (
     const command = argv[0];
     if (
       !argv.includes("--help") &&
-      (command === "chat" || (command === undefined && io.isTTY))
+      (command === "chat" || command === "resume" || (command === undefined && io.isTTY))
     ) {
+      const resuming = command === "resume";
       if (!io.isTTY)
-        invalid(
-          "chat requires an interactive terminal; use run with an explicit prompt source.",
-        );
+        invalid(resuming
+          ? "resume requires an interactive terminal. For a single request, use forge run --session UUID with an explicit prompt source."
+          : "chat requires an interactive terminal; use run with an explicit prompt source.");
       if (argv.includes("--json"))
-        invalid("Interactive chat does not support --json.");
-      const argOffset = command === "chat" ? 1 : 0;
-      const args = parseArgs(argv.slice(argOffset), ["workspace", "session", "approval"], ["thinking", "expand-thinking"]);
-      noPositionals(args);
+        invalid("Interactive chat/resume does not support --json; use forge run --session UUID for JSON output.");
+      const argOffset = command === undefined ? 0 : 1;
+      const args = parseArgs(argv.slice(argOffset), resuming ? ["approval"] : ["workspace", "session", "approval"], ["thinking", "expand-thinking"]);
+      let chatSession: string | undefined;
+      if (resuming) {
+        if (args.positional.length !== 1)
+          invalid("Expected forge resume UUID (interactive, no prompt). For a single request, use forge run --session UUID with a prompt.");
+        chatSession = parseSessionId(args.positional[0]);
+      } else {
+        noPositionals(args);
+        chatSession = stringOption(args, "session");
+      }
       const chatWorkspace = stringOption(args, "workspace");
-      const chatSession = stringOption(args, "session");
       const approval = parseApprovalMode(stringOption(args, "approval") ?? DEFAULT_APPROVAL_MODE);
       const expandReasoning = flag(args, "thinking") || flag(args, "expand-thinking");
       if (chatWorkspace && !(await stat(resolve(chatWorkspace))).isDirectory())
@@ -301,8 +312,8 @@ export const runCliWithIO = async (
       return await interactive(
         service,
         io,
-        resolve(stringOption(args, "workspace") ?? "."),
-        stringOption(args, "session"),
+        resolve(chatWorkspace ?? "."),
+        chatSession,
         renderEvent,
         approval,
         expandReasoning,
@@ -587,29 +598,16 @@ export const runCliWithIO = async (
       }
       return controller.signal.aborted ? 130 : 0;
     }
-    if (command !== "run" && command !== "resume")
+    if (command !== "run")
       invalid("Unknown command. Use --help for usage.");
     const args = parseArgs(
       argv.slice(1),
       ["workspace", "session", "model", "mode", "permission", "prompt-file"],
       ["json", "yes", "prompt-stdin"],
     );
-    if (
-      command === "resume" &&
-      (stringOption(args, "workspace") !== undefined ||
-        stringOption(args, "session") !== undefined)
-    ) {
-      invalid(
-        "resume uses its session workspace and does not accept --session.",
-      );
-    }
-    const idText =
-      command === "resume" ? args.positional[0] : stringOption(args, "session");
-    if (command === "resume" && idText === undefined)
-      invalid("resume requires a session UUID.");
+    const idText = stringOption(args, "session");
     const id = idText === undefined ? undefined : parseSessionId(idText);
-    const words =
-      command === "resume" ? args.positional.slice(1) : args.positional;
+    const words = args.positional;
     const file = stringOption(args, "prompt-file");
     const stdinPrompt = flag(args, "prompt-stdin");
     const sources =

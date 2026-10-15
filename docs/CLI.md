@@ -6,8 +6,12 @@
 
 ```sh
 forge run --workspace '/path with spaces' -- 'Summarize this workspace'
-forge resume UUID 'Continue the task'
+forge resume UUID
+# 需要单次续跑或脚本调用时：
+forge run --session UUID 'Continue the task'
 ```
+
+`forge resume UUID` 直接恢复为交互会话，等同于 `forge chat --session UUID`：显示历史、沿用会话模型和工作区，等待输入，不自动重放上次操作。需要交互终端；支持 chat 的 `--approval`、`--thinking` / `--expand-thinking`，不接受额外提示词、`--workspace`、`--session` 或 run 专用选项。旧的单次 `resume UUID 'prompt'` 用法改为 `forge run --session UUID 'prompt'`；`/resume` 会话选择器不变。
 
 使用 `--prompt-stdin` 明确从 stdin 读取提示词。run 的 `--json` 输出 version 1 JSONL event/result envelope，不是交互界面。具体选项以 `forge --help` 为准。
 

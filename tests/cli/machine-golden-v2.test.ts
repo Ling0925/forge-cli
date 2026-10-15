@@ -144,24 +144,24 @@ function fixture(status: Outcome) {
 }
 
 describe("machine JSONL independent byte goldens", () => {
-  for (const command of ["run", "resume"] as const) {
+  for (const source of ["stdin", "words"] as const) {
     for (const [status, code] of [
       ["completed", 0],
       ["failed", 1],
       ["cancelled", 130],
     ] as const) {
-      it(`${command} --json preserves ${status} event/result bytes and exit status`, async () => {
+      it(`run --session --json (${source}) preserves ${status} event/result bytes and exit status`, async () => {
         const f = fixture(status);
         const args =
-          command === "run"
+          source === "stdin"
             ? ["run", "--session", id, "--prompt-stdin", "--json"]
-            : ["resume", id, "fixed", "prompt", "--json"];
+            : ["run", "--session", id, "fixed", "prompt", "--json"];
         expect(await runCliWithIO(args, f.service, f.io)).toBe(code);
         expect(f.output()).toBe(golden(status));
         expect(f.output()).not.toContain("\u001b");
         expect(f.output()).not.toContain("\u009b");
         expect(f.stderr()).toBe("");
-        expect(f.reads()).toBe(command === "run" ? 1 : 0);
+        expect(f.reads()).toBe(source === "stdin" ? 1 : 0);
         expect(f.cleaned()).toBe(true);
       });
     }

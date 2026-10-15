@@ -182,6 +182,90 @@ describe("Forge CLI", () => {
     expect(f.reads()).toBe(0);
   });
 
+  it.each([
+    ["resume", id],
+    ["chat", "--session", id],
+  ])("%j opens saved history and continues multiple turns without creating a session", async (...argv) => {
+    const f = fixture(await directory());
+    const snapshot = { ...f.snapshot, messages: [{ role: "assistant" as const, content: "Saved history marker" }] };
+    f.service.getSession = async requested => {
+      expect(requested).toBe(id);
+      return snapshot;
+    };
+    const lines = ["first follow-up", "second follow-up", "/quit"];
+    let questions = 0;
+    const code = await runCliWithIO(argv, f.service, {
+      ...f.io, isTTY: true,
+      question: async () => {
+        if (questions++ === 0) {
+          expect(f.output.join("")).toContain("Saved history marker");
+          expect(f.output.join("")).toContain(snapshot.workspace);
+          expect(f.runs).toHaveLength(0);
+        }
+        return lines.shift() ?? "/quit";
+      },
+    });
+    expect(code).toBe(0);
+    expect(f.creates()).toBe(0);
+    expect(f.reads()).toBe(0);
+    expect(f.runs.map(run => [run.sessionId, run.model, run.prompt])).toEqual([
+      [id, snapshot.model, "first follow-up"], [id, snapshot.model, "second follow-up"],
+    ]);
+    expect(f.diagnostics).toEqual([]);
+  });
+
+  it("resume accepts chat approval/thinking flags and opening alone never executes", async () => {
+    const f = fixture(await directory());
+    expect(await runCliWithIO(["resume", id, "--approval", "manual", "--thinking"], f.service, {
+      ...f.io, isTTY: true, question: async () => "/quit",
+    })).toBe(0);
+    expect(f.output.join("")).toContain("MANUAL:");
+    expect(f.runs).toHaveLength(0);
+    expect(f.creates()).toBe(0);
+    expect(f.reads()).toBe(0);
+  });
+
+  it.each([
+    ["resume"], ["resume", "not-a-uuid"], ["resume", id, "old one-shot prompt"],
+    ["resume", id, "--json"], ["resume", id, "--prompt-stdin"],
+    ["resume", id, "--prompt-file", "task.txt"], ["resume", id, "--session", id],
+    ["resume", id, "--workspace", "/tmp"], ["resume", id, "--permission", "unrestricted", "--yes"],
+  ])("rejects invalid/old resume syntax %j without executing or reading stdin", async (...argv) => {
+    const f = fixture("/unused");
+    expect(await runCliWithIO(argv, f.service, { ...f.io, isTTY: true })).toBe(1);
+    expect(f.calls()).toBe(0);
+    expect(f.creates()).toBe(0);
+    expect(f.runs).toHaveLength(0);
+    expect(f.reads()).toBe(0);
+  });
+
+  it("rejects non-TTY resume with migration guidance and no implicit stdin", async () => {
+    const f = fixture("/unused");
+    expect(await runCliWithIO(["resume", id], f.service, f.io)).toBe(1);
+    expect(f.diagnostics.join("")).toContain("forge run --session UUID");
+    expect(f.calls()).toBe(0);
+    expect(f.reads()).toBe(0);
+    expect(f.runs).toHaveLength(0);
+  });
+
+  it("reports a missing session instead of silently creating one", async () => {
+    const f = fixture("/unused");
+    f.service.getSession = async () => { throw new ForgeError("not_found", "Session not found."); };
+    expect(await runCliWithIO(["resume", id], f.service, { ...f.io, isTTY: true })).toBe(1);
+    expect(f.diagnostics.join("")).toContain("not_found");
+    expect(f.creates()).toBe(0);
+    expect(f.runs).toHaveLength(0);
+  });
+
+  it("resume help describes interactive recovery without touching the service", async () => {
+    const f = fixture("/unused");
+    expect(await runCliWithIO(["resume", "--help"], f.service, f.io)).toBe(0);
+    expect(f.output.join("")).toContain("forge resume UUID [--approval");
+    expect(f.output.join("")).not.toContain("forge resume <id> [prompt...]");
+    expect(f.calls()).toBe(0);
+    expect(f.reads()).toBe(0);
+  });
+
   it("configures token windows per model, preserves others and supports auto", async () => {
     const f = fixture("/unused");
     f.service.getSettings = async () => ({ ...defaultPublicSettings, model: "current", modelContextWindows: { other: 32000 } });
@@ -486,7 +570,7 @@ describe("Forge CLI", () => {
     ).toEqual(["run_started", "text_delta", "run_finished", "result"]);
   });
 
-  it("resumes with a prompt file and explicit unrestricted approval", async () => {
+  it("runs an existing session with a prompt file and explicit unrestricted approval", async () => {
     const workspace = await directory();
     const path = join(workspace, "prompt.txt");
     await writeFile(path, "Implement the owned task.\n");
@@ -494,7 +578,8 @@ describe("Forge CLI", () => {
     expect(
       await runCliWithIO(
         [
-          "resume",
+          "run",
+          "--session",
           id,
           "--prompt-file",
           path,
@@ -534,7 +619,7 @@ describe("Forge CLI", () => {
   ] as const)("maps %s to exit %i", async (status, code) => {
     const f = fixture(await directory(), status);
     expect(
-      await runCliWithIO(["resume", id, "continue"], f.service, f.io),
+      await runCliWithIO(["run", "--session", id, "continue"], f.service, f.io),
     ).toBe(code);
   });
 
@@ -557,7 +642,7 @@ describe("Forge CLI", () => {
         return { ...f.snapshot, status: "cancelled" };
       },
     };
-    expect(await runCliWithIO(["resume", id, "continue"], service, f.io)).toBe(
+    expect(await runCliWithIO(["run", "--session", id, "continue"], service, f.io)).toBe(
       130,
     );
     expect(settled).toBe(true);
