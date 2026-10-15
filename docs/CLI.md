@@ -94,7 +94,7 @@ env -u NO_COLOR TERM=xterm-256color node scripts/qa-cli-terminal.mjs --cli dist/
 
 默认 harness 为原生文件编辑配置 checkpoint store，可通过 checkpoint 恢复；自定义工具注册器未配置 store 时不能承诺恢复。有限的 before/after 预览不等于备份。命令副作用不纳入 checkpoint。这是工具选择指引，不是 shell 写入的运行时检测器，更不是 OS 沙箱；不能声称已强制识别/拦截任意脚本写文件。
 
-`run_command` 运维契约未变：显式 argv（允许显式 shell），cwd 经路径守卫；最小环境不继承凭据、私有配置或代理，HOME 为工作区，PATH 包含系统工具、宿主 Node 目录及已有的绝对调用方 PATH 目录。超时默认 30 秒、最大 120 秒；stdout/stderr 合计上限 64 KiB，溢出终止进程组并不返回部分输出。编码结果上限 128 KiB，截断有明确标记；UTF-8 尾部不完整序列替换解码。超时/取消等待进程实际关闭。不因压缩面向模型的工具描述而放宽上述行为。
+`run_command` 运维契约：显式 argv（允许显式 shell），cwd 经路径守卫；最小环境不继承凭据或代理环境变量，但 HOME 使用宿主用户目录（`os.homedir()`，优先尊重宿主 HOME），不再重定向到工作区。因此命令可使用本机用户配置和认证，也可能改动用户目录；命令审批仍须考虑这些副作用。TMPDIR/TMP/TEMP 仍指向工作区，PATH 包含系统工具、宿主 Node 目录及已有的绝对调用方 PATH 目录。超时默认 30 秒、最大 120 秒；stdout/stderr 合计上限 64 KiB，溢出终止进程组并不返回部分输出。编码结果上限 128 KiB，截断有明确标记；UTF-8 尾部不完整序列替换解码。超时/取消等待进程实际关闭。不因压缩面向模型的工具描述而放宽上述行为。
 
 ### 上下文缓存率
 
