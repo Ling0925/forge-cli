@@ -18,14 +18,16 @@ const style = (open: number, close: number) => (text: string): string =>
 
 function terminalLines(rendered: string): RichLine[] {
   const lines: Span[][] = [[]];
-  let bold = false;
-  let tone: Span["tone"];
+  let boldDepth = 0;
+  const toneStack: Span["tone"][] = [];
   let cursor = 0;
   const append = (value: string): void => {
     const chunks = sanitizeText(value).split("\n");
     chunks.forEach((text, index) => {
       if (index) lines.push([]);
       const line = lines.at(-1);
+      const tone = toneStack.at(-1);
+      const bold = boldDepth > 0;
       if (text && line) line.push({ text, ...(bold ? { bold } : {}), ...(tone ? { tone } : {}) });
     });
   };
@@ -34,15 +36,15 @@ function terminalLines(rendered: string): RichLine[] {
   for (const match of rendered.matchAll(/\u001b\[([\d;]*)m/g)) {
     append(rendered.slice(cursor, match.index));
     for (const code of (match[1] || "0").split(";").map(Number)) {
-      if (code === 0) { bold = false; tone = undefined; }
-      else if (code === 1) bold = true;
-      else if (code === 22) bold = false;
-      else if (code === 39) tone = undefined;
-      else if (code === 31 || code === 91) tone = "error";
-      else if (code === 32 || code === 92) tone = "success";
-      else if (code === 33 || code === 93) tone = "warning";
-      else if ([34, 35, 36, 94, 95, 96].includes(code)) tone = "accent";
-      else if (code === 2 || code === 90) tone = "muted";
+      if (code === 0) { boldDepth = 0; toneStack.length = 0; }
+      else if (code === 1) boldDepth++;
+      else if (code === 22) boldDepth = Math.max(0, boldDepth - 1);
+      else if (code === 39) toneStack.pop();
+      else if (code === 31 || code === 91) toneStack.push("error");
+      else if (code === 32 || code === 92) toneStack.push("success");
+      else if (code === 33 || code === 93) toneStack.push("warning");
+      else if ([34, 35, 36, 94, 95, 96].includes(code)) toneStack.push("accent");
+      else if (code === 2 || code === 90) toneStack.push("muted");
     }
     cursor = match.index + match[0].length;
   }
@@ -109,6 +111,12 @@ export function markdownLines(source: string, columns = 80, cache = true): RichL
     link(token) {
       const label = this.parser.parseInline(token.tokens);
       return label === token.href ? label : `${label} (${sanitizeText(token.href)})`;
+    },
+    text(token) {
+      if (typeof token === "object" && token && "tokens" in token && token.tokens) {
+        return this.parser.parseInline(token.tokens);
+      }
+      return typeof token === "object" && token && "text" in token ? token.text : String(token ?? "");
     },
     image(token) { return `[image: ${sanitizeText(token.text)}]`; },
     html(token) { return sanitizeText(token.text); },

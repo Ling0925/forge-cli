@@ -51,3 +51,58 @@ it("preserves full source above parse limit without pretending it is rendered", 
   const source = '# title\n' + 'text '.repeat(21000) + 'END';
   expect(text(markdownLines(source))).toBe(source);
 });
+
+it("correctly parses nested formats inside lists, blockquotes, and headings", () => {
+  const source = `
+- **bold parent** and \`code parent\`
+  - *italic child* and [link](https://example.com)
+  - ~~strike child~~ and **\`bold code\`**
+1. **Step 1**: run \`test\`
+2. **Step 2**: verify
+- [x] **done item** with \`inline code\`
+- [ ] *pending item*
+> quote with **bold** and \`code\` and trailing quote
+# Heading with **bold** and trailing text
+`;
+  const lines = markdownLines(source);
+  const body = text(lines);
+
+  // Raw markers must not remain in the text
+  expect(body).not.toContain("**bold parent**");
+  expect(body).not.toContain("`code parent`");
+  expect(body).not.toContain("*italic child*");
+  expect(body).not.toContain("~~strike child~~");
+  expect(body).not.toContain("**`bold code`**");
+  expect(body).not.toContain("**Step 1**");
+  expect(body).not.toContain("**done item**");
+
+  // Content is parsed and present
+  expect(body).toContain("bold parent");
+  expect(body).toContain("code parent");
+  expect(body).toContain("italic child");
+  expect(body).toContain("link (https://example.com)");
+  expect(body).toContain("strike child");
+  expect(body).toContain("bold code");
+  expect(body).toContain("Step 1");
+  expect(body).toContain("done item");
+
+  // Verify bold and tones in spans
+  const flat = lines.flat();
+  expect(flat.some((span) => span.bold && span.text.includes("bold parent"))).toBe(true);
+  expect(flat.some((span) => span.tone === "warning" && span.text.includes("code parent"))).toBe(true);
+  expect(flat.some((span) => span.tone === "accent" && span.text.includes("italic child"))).toBe(true);
+  expect(flat.some((span) => span.tone === "muted" && span.text.includes("strike child"))).toBe(true);
+  expect(flat.some((span) => span.bold && span.tone === "warning" && span.text.includes("bold code"))).toBe(true);
+
+  // Blockquote preserves muted tone after nested codespan
+  const quoteLine = lines.find((l) => l.some((s) => s.text.includes("trailing quote")));
+  expect(quoteLine).toBeDefined();
+  const trailingSpan = quoteLine?.find((s) => s.text.includes("trailing quote"));
+  expect(trailingSpan?.tone).toBe("muted");
+
+  // Heading preserves bold after nested bold
+  const headingLine = lines.find((l) => l.some((s) => s.text.includes("trailing text")));
+  expect(headingLine).toBeDefined();
+  const headingTrailing = headingLine?.find((s) => s.text.includes("trailing text"));
+  expect(headingTrailing?.bold).toBe(true);
+});
