@@ -4,6 +4,7 @@ import { estimateTokens } from "../../shared/context-usage";
 import { MarkdownStream } from "./markdown";
 import { wrapRichLines } from "./rich";
 import { sanitizeText } from "./sanitize";
+import { REASONING_KEEP, reasoningLine as buildReasoningLine } from "./reasoning";
 import { truncate } from "./width";
 import { approvalAuditArguments } from "../approval-policy";
 import { ToolTranscript } from "./tool-transcript";
@@ -51,27 +52,11 @@ export const createEventRenderer = (
   // Latest single line of streamed reasoning; replaces in place (scrolling preview).
   let reasoningLine: RichLine | undefined;
   let reasoningAccumulator = "";
-  const REASONING_KEEP = 8 * 1024;
-  const isBreak = (char: string): boolean => char === "\n" || char === "\r";
   const updateReasoning = (text: string): void => {
     const merged = reasoningAccumulator + text;
     reasoningAccumulator =
       merged.length > REASONING_KEEP ? merged.slice(-REASONING_KEEP) : merged;
-    let last = reasoningAccumulator.length;
-    while (last > 0 && isBreak(reasoningAccumulator[last - 1] as string)) last -= 1;
-    let start = last;
-    while (start > 0 && !isBreak(reasoningAccumulator[start - 1] as string))
-      start -= 1;
-    const current = sanitizeText(reasoningAccumulator.slice(start, last))
-      .replace(/\s+/g, " ")
-      .trim();
-    const width = options.width?.() ?? 80;
-    reasoningLine = current
-      ? [
-          { text: "✻ ", tone: "muted" },
-          { text: truncate(current, Math.max(0, width - 2)), tone: "muted" },
-        ]
-      : undefined;
+    reasoningLine = buildReasoningLine(reasoningAccumulator, options.width?.() ?? 80);
   };
   const children = new Map<string, { model: string; status: string; activity: string }>();
   const settled = new Set<string>();

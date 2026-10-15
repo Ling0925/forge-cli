@@ -103,7 +103,8 @@ env -u NO_COLOR TERM=xterm-256color node scripts/qa-cli-terminal.mjs --cli dist/
 ### 思考内容单行预览
 
 - 当网关下发推理内容（Chat Completions 的 `reasoning_content`，或 Responses 的 `reasoning_summary_text.delta`）时，富终端在可替换的 tail 区显示**单行**思考预览：前缀 `✻`，只保留**最新一行**，随流式滚动原位替换；到达答案正文、工具调用、错误或运行结束时立即清除。
-- 思考是**展示专用、非持久化**数据：不写入会话消息、不进入事件日志、不发送给模型，也不是 `providerState`。加密推理仍只作续跑用，不回显。预览有界（运行时长上限约 128 KiB，界面仅保留末约 8 KiB 的当前行）；plain 模式与机器 JSONL 输出不显示该预览。这不是“思考强度”开关；思考强度见上。
+- 思考内容**随会话持久化**：有界（上限 128 KiB）保存在该轮助手消息的可选 `reasoning` 字段上，因此 `/resume`、`--session` 恢复会话后会重建为同样的单行 `✻` 预览（每条助手消息取最新一行）。它是展示专用元数据：**不**进入助手正文字段、**不**发送给模型、**不**进入事件日志，也不是 `providerState`；加密推理仍只作续跑用，不回显。
+- plain 模式与机器 JSONL 输出不显示该预览（`reasoning` 仍在持久化 JSON 中，`--json` 导出为事件流，不额外发事件）。这不是“思考强度”开关；思考强度见上。
 
 ### 工具结果紧凑卡片
 

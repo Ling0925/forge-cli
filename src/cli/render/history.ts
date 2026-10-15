@@ -1,6 +1,7 @@
 import type { SessionSnapshot } from "../../shared/schemas";
 import type { RichLine } from "../ui-contract";
 import { markdownLines } from "./markdown";
+import { reasoningLine } from "./reasoning";
 import { wrapRichLines } from "./rich";
 import { sanitizeText } from "./sanitize";
 import { ToolTranscript } from "./tool-transcript";
@@ -29,6 +30,12 @@ export const historyLines = (session: SessionSnapshot, width: number, tools = ne
       if (message.origin === "agent_reconciliation") lines.push([{ text: "  Child results retained in session; details omitted from main history.", tone: "muted" }]);
       else lines.push(...markdownLines(message.content, width));
     } else if (message.role === "assistant") {
+      // Persisted display-only reasoning is shown again after a resume, collapsed
+      // to its latest line so history stays compact.
+      if (message.reasoning) {
+        const line = reasoningLine(message.reasoning, width);
+        if (line) lines.push(line);
+      }
       if (message.content) {
         lines.push([{ text: "Forge", tone: "accent" }]);
         lines.push(...markdownLines(message.content, width));
