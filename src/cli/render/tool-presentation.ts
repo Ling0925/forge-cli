@@ -21,13 +21,19 @@ export function savedToolResult(content: string): ToolResult {
   return parsed.success ? parsed.data : { content, isError: false };
 }
 
-function agentOverview(items: readonly unknown[]): string {
+const agentTools = new Set(["spawn_agent", "list_agents", "wait_agents", "get_agent_result", "send_agent_message", "resolve_agent", "cancel_agent"]);
+const agentHasFailure = (record: Record<string, unknown> | undefined): boolean =>
+  record?.status === "failed" || Boolean(record?.error) || array(record?.errors).length > 0;
+
+function agentOverview(items: readonly unknown[], total?: number): string {
   const states = new Map<string, number>();
   for (const item of items) {
-    const status = scalar(object(item)?.status) || (object(item)?.error ? "failed" : "unknown");
-    states.set(status, (states.get(status) ?? 0) + 1);
+    const record = object(item);
+    const status = scalar(record?.status) || (agentHasFailure(record) ? "failed" : "unknown");
+    const state = record?.handled === true && agentHasFailure(record) ? `${status} (handled)` : status;
+    states.set(state, (states.get(state) ?? 0) + 1);
   }
-  return `${items.length} agents · ${[...states].slice(0, 5).map(([s, n]) => `${n} ${s}`).join(" · ")}`;
+  return `${items.length} agents${total === undefined ? "" : ` / ${total} total`}${states.size ? ` · ${[...states].slice(0, 5).map(([s, n]) => `${n} ${s}`).join(" · ")}` : ""}`;
 }
 
 /** Explicit adapters for Forge tools. Unrecognized/external payloads are kept
@@ -81,8 +87,21 @@ function builtinDetail(name: string, r: Record<string, unknown>, value: unknown)
       return `Plan ${steps.filter(step => object(step)?.status === "completed").length}/${steps.length}${active ? ` · ${scalar(object(active)?.step)}` : ""}`;
     }
     case "spawn_agent": return `Agent ${scalar(r.childSessionId)} · ${scalar(r.model)}`;
-    case "list_agents":
+    case "list_agents": return agentOverview(Array.isArray(value) ? value : array(r.agents), typeof r.total === "number" ? r.total : undefined);
     case "wait_agents": return agentOverview(array(value));
+    case "get_agent_result": {
+      if (typeof r.id !== "string" || typeof r.content !== "string" || typeof r.offset !== "number" || typeof r.totalChars !== "number") break;
+      const page = r.content.length ? `chars ${r.offset + 1}–${r.offset + r.content.length}` : "0 chars read";
+      return `Agent ${scalar(r.id)} · ${scalar(r.status)}${r.handled === true ? " (handled)" : ""} · ${page} / ${r.totalChars} total`;
+    }
+    case "send_agent_message": {
+      if (typeof r.id !== "string") break;
+      return `Agent ${scalar(r.id)} · ${r.queued === true ? `message queued · ${scalar(r.pendingMessages)} pending` : "Message result unavailable"}`;
+    }
+    case "resolve_agent": {
+      if (typeof r.id !== "string") break;
+      return `Agent ${scalar(r.id)} · ${scalar(r.status)}${r.handled === true ? " · handled" : ""}`;
+    }
     case "cancel_agent": return `Agent ${scalar(r.id)} · ${scalar(r.status)}`;
   }
   return undefined;
@@ -93,11 +112,11 @@ export function toolPresentation(name: string, result: ToolResult): { detail: st
   const r = object(value) ?? {};
   const command = name === "run_command";
   const exitCode = command && typeof r.exit_code === "number" && Number.isFinite(r.exit_code) ? r.exit_code : null;
-  const agent = ["wait_agents", "list_agents", "cancel_agent"].includes(name);
-  const agents = Array.isArray(value) ? value : [value];
+  const agent = agentTools.has(name);
+  const agents = name === "list_agents" && Array.isArray(r.agents) ? r.agents : Array.isArray(value) ? value : [value];
   const badAgent = agent && agents.some(item => {
     const record = object(item);
-    return record?.status === "failed" || Boolean(record?.error) || array(record?.errors).length > 0;
+    return record?.handled !== true && agentHasFailure(record);
   });
   const failed = result.isError || (exitCode !== null && exitCode !== 0) || badAgent
     || (command && (r.timed_out === true || r.spawn_failed === true || Boolean(r.signal)));
@@ -105,16 +124,18 @@ export function toolPresentation(name: string, result: ToolResult): { detail: st
   if (command && r.timed_out === true) notes.push("timed out");
   if (command && r.spawn_failed === true) notes.push("failed to start");
   if (command && r.signal) notes.push(`signal ${scalar(r.signal)}`);
-  if (r.truncated === true) notes.push("truncated");
+  if (r.truncated === true || (name === "wait_agents" && agents.some(item => object(item)?.truncated === true))) notes.push("truncated");
   if (r.partial_line === true) notes.push("partial line");
   const next = r.next_offset ?? r.nextOffset;
   if (typeof next === "number") notes.push(`next offset ${next}`);
   if (typeof r.omitted === "number" && r.omitted > 0) notes.push(`${r.omitted} omitted`);
   if (command && r.stderr) notes.push("stderr");
   if (badAgent) notes.push("agent failure · inspect details");
-  const error = result.isError ? scalar(r.message) || scalar(r.error) || scalar(object(r.error)?.message)
+  // Agent messages/results can include task text, instructions and resolution
+  // reasons. Even transport errors must not echo them into the default card.
+  const error = result.isError ? agent ? "Agent tool failed · inspect details" : scalar(r.message) || scalar(r.error) || scalar(object(r.error)?.message)
     || (value === undefined ? first(result.content) : "") : "";
   const detail = error || builtinDetail(name, r, value)
-    || (value !== undefined ? "Structured result · details available" : first(result.content) || "No output");
+    || (agent ? "Agent result · details available" : value !== undefined ? "Structured result · details available" : first(result.content) || "No output");
   return { detail, warning: notes.join(" · "), failed, exitCode };
 }
