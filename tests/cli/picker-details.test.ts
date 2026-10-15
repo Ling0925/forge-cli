@@ -100,7 +100,7 @@ describe("selected picker details", () => {
         result.lines.filter((line) =>
           line.some((span) => span.tone === "muted"),
         ),
-      ).toHaveLength(3);
+      ).toHaveLength(5); // filter placeholder, range, two details and action footer
       expect(result.lines.length).toBeLessThanOrEqual(13);
       for (const line of result.text)
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);
@@ -127,7 +127,7 @@ describe("selected picker details", () => {
       label: item.label,
     }));
     const result = frame(40, 30, items, 9);
-    expect(result.text.filter((line) => /^(❯| ) /.test(line))).toHaveLength(8);
+    expect(result.text.filter((line, index) => index !== result.cursor && /^(❯| ) /.test(line))).toHaveLength(8);
     expect(result.text.join("\n")).not.toContain("Completed");
   });
 });
@@ -139,7 +139,7 @@ describe("menu continuation", () => {
   }));
   it("reports the actual model window, updates on scroll and filtered totals", () => {
     expect(frame(40, 30, models).text.join("\n")).toContain(
-      "1–8/20 · ↑↓ move · type to filter",
+      "1–8/20 matches",
     );
     expect(frame(40, 30, models, 19).text.join("\n")).toContain("13–20/20");
     expect(frame(40, 30, models, 10, "model-1").text.join("\n")).toContain(
@@ -153,7 +153,7 @@ describe("menu continuation", () => {
   });
   it("reports the reduced session window without losing details", () => {
     const result = frame(40, 30, sessions, 9);
-    expect(result.text.join("\n")).toContain("6–13/15");
+    expect(result.text.join("\n")).toContain("7–13/15");
     expect(result.text.join("\n")).toContain("Completed · 2026-01-02 14:35");
     expect(result.lines).toHaveLength(13);
   });
@@ -191,7 +191,7 @@ describe("menu continuation", () => {
         expect(result.cursor).toBeGreaterThanOrEqual(0);
         expect(result.cursor).toBeLessThan(result.lines.length);
         const options = result.text.filter(
-          (line) => /^(❯| ) /.test(line) && line !== "❯ /",
+          (line, index) => index !== result.cursor && /^(❯| ) /.test(line),
         );
         expect(options.length).toBeLessThanOrEqual(8);
         if (rows >= 3) expect(options.length).toBeGreaterThanOrEqual(1);

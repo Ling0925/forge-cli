@@ -293,11 +293,25 @@ export class Screen {
     const target = Math.min(rows - 1, top + shown.length + Math.min(safeIndex(row), composer.length - 1));
     this.writeFixed(this.viewport, target, safeColumn(column, columns));
   }
+  // RichLine snapshots are immutable. Reuse styled bytes for static transcript
+  // rows across spinner ticks; reset on theme changes so colors never go stale.
+  private styledRows = new WeakMap<RichLine, string>();
+  private styledTheme: Theme | undefined;
   private writeFixed(lines: readonly RichLine[], target: number, column: number): void {
     const { columns: rawColumns, rows: rawRows } = this.dimensions();
     const columns = positiveDimension(rawColumns);
     const rows = positiveDimension(rawRows);
-    const desired = lines.map((line) => renderRichLine(line, this.theme));
+    if (this.styledTheme !== this.theme) {
+      this.styledRows = new WeakMap();
+      this.styledTheme = this.theme;
+    }
+    const desired = lines.map(line => {
+      const cached = this.styledRows.get(line);
+      if (cached !== undefined) return cached;
+      const styled = renderRichLine(line, this.theme);
+      this.styledRows.set(line, styled);
+      return styled;
+    });
     const resized = this.fixedColumns !== columns || this.fixedRows !== rows;
     const changed = Array.from({ length: rows }, (_, i) => i)
       .filter((i) => resized || desired[i] !== this.fixedRendered[i]);

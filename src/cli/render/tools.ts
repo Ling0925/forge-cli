@@ -258,8 +258,10 @@ export const toolSummaryLines = (
     fit(item.value, item.tone, position === branchItems.length - 1 ? "  ╰ " : "  │ "),
   );
   return [
-    // Keep physical rows bounded even when the status suffix exceeds tiny widths.
-    fit(header.map(part => part.text).join(""), failed ? "error" : "accent"),
+    // Preserve semantic hierarchy: accent tool name, neutral target, success/error
+    // outcome. Only flatten when even the status suffix exceeds a tiny viewport.
+    stringWidth(header.map(part => part.text).join("")) <= safeWidth
+      ? header : fit(header.map(part => part.text).join(""), failed ? "error" : "accent"),
     ...branchRows,
     ...shownDiff,
     ...(changes.length > 1 ? [fit("… more file changes", "muted")] : []),

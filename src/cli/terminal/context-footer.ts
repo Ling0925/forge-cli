@@ -30,15 +30,15 @@ function formatModelSpans(
       { text: effortText, tone: "muted" },
     ];
   }
-  if (maxRoom <= modelWidth) {
-    const text = truncate(modelText, maxRoom);
-    return text ? [{ text, tone: "accent" }] : [];
+  // Preserve the selected effort before spending scarce cells on the full model
+  // identifier. Never show a misleading half-parenthesized effort label.
+  if (maxRoom >= effortWidth + 4) {
+    return [
+      { text: truncate(modelText, maxRoom - effortWidth), tone: "accent" },
+      { text: effortText, tone: "muted" },
+    ];
   }
-  const remaining = maxRoom - modelWidth;
-  return [
-    { text: modelText, tone: "accent" },
-    { text: truncate(effortText, remaining), tone: "muted" },
-  ];
+  return [{ text: truncate(modelText, maxRoom), tone: "accent" }];
 }
 
 function formatIdentitySpans(context: ComposerContext, room: number): Span[] {
@@ -67,7 +67,8 @@ export function contextFooter(context: ComposerContext, columns: number, compact
     ? `${Number((cached / input * 100).toFixed(1))}%` : "—";
   const summaryText = `${percentage} · R${cacheRate} · ${count}`;
   if (compact) {
-    const miniWidth = width >= 40 ? 6 : 0;
+    // Decorative meter yields to model/effort on narrow terminals.
+    const miniWidth = width >= 72 ? 6 : 0;
     const filled = Math.round(Math.min(1, Math.max(0, ratio)) * miniWidth);
     const mini = miniWidth ? ` [${"━".repeat(filled)}${"·".repeat(miniWidth - filled)}]` : "";
     const summary = truncate(`${summaryText}${mini}`, width);

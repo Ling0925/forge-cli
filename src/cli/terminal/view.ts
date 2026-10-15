@@ -3,7 +3,8 @@ import { terminalText } from "../format";
 import { compactTokens } from "../render/token-count";
 import { wrapRichLines } from "../render/rich";
 import type { SlashMenu } from "../slash-menu";
-import { graphemes, truncate, visibleWidth } from "../theme";
+import { truncate, visibleWidth } from "../theme";
+import { pickerLayout } from "./picker-layout";
 import type { ComposerContext, PickerSpec, RichLine, RunStatus } from "../ui-contract";
 import { contextFooter } from "./context-footer";
 import type { Editor } from "./editor";
@@ -34,14 +35,36 @@ export interface View {
   tail: readonly RichLine[];
   filtered(): PickerSpec["items"];
 }
+const animatedTails = new WeakMap<readonly RichLine[], { frame: string; lines: readonly RichLine[]; animated: boolean }>();
+function animateTail(tail: readonly RichLine[], frame: string): readonly RichLine[] {
+  const cached = animatedTails.get(tail);
+  if (cached && (!cached.animated || cached.frame === frame)) return cached.lines;
+  const animated = cached?.animated ?? tail.some(line => line.some(span => span.animation === "spinner"));
+  const lines = animated ? tail.map(line => line.some(span => span.animation === "spinner")
+    ? line.map(span => span.animation === "spinner" ? { ...span, text: frame } : span)
+    : line) : tail;
+  animatedTails.set(tail, { frame, lines, animated });
+  return lines;
+}
+
 export function draw(view: View): void {
   if (!view.screen.enabled) return;
   // Bound expanded input/menus; do not fill unused rows in the dock.
   const limit = Math.max(1, Math.min(20, Math.max(4, Math.floor(view.rows * 0.45)), view.rows - 1));
   const compactFooter = view.rows <= 20;
   const itemLimit = view.rows >= 36 ? 12 : 8;
-  const picker = view.picker;
+  const picker = view.fresh ? undefined : view.picker;
   const frame = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[Math.floor(Date.now() / 80) % 10]!;
+  if (picker) {
+    const layout = pickerLayout({
+      spec: picker.spec, items: view.filtered(), index: picker.index,
+      text: picker.editor.text, cursor: picker.editor.cursor,
+      columns: view.columns, limit, itemLimit, frame,
+    });
+    if (view.screen.fixed) view.screen.setTranscript(view.tail);
+    view.screen.paint(layout.lines, layout.row, layout.column);
+    return;
+  }
   const pending = !picker && !view.fresh
     ? (view.pendingInput ?? []).slice(0, Math.min(2, Math.max(0, limit - 2))).map(line =>
       [{ text: truncate(line, view.columns), tone: "accent" as const }]) : [];
@@ -58,8 +81,8 @@ export function draw(view: View): void {
   const auxiliarySlot = view.screen.fixed && view.rows >= 30 && !picker && !view.menu.isActive && !view.fresh ? 1 : 0;
   const contentLimit = limit - fixedFooter - pending.length - auxiliarySlot;
   const statusSlot = view.screen.fixed && contentLimit > 1 ? 1 : 0;
-  const editor = picker?.editor ?? view.editor;
-  const prefix = picker ? `${picker.spec.title}: ` : view.prompt;
+  const editor = view.editor;
+  const prefix = view.prompt;
   const layout = composerLayout(
     prefix + editor.text,
     prefix.length + editor.cursor,
@@ -94,79 +117,7 @@ export function draw(view: View): void {
   const composer = styled.slice(start, start + (view.screen.fixed ? Math.max(1, contentLimit - statusSlot) : contentLimit));
   const room = Math.max(0, contentLimit - composer.length - statusSlot);
   let below: RichLine[] = [];
-  if (picker) {
-    const items = view.filtered();
-    // Only the selected item expands. Reserve one item before allocating details.
-    const details = (items[picker.index]?.detail ?? "")
-      .split("\n")
-      .filter(Boolean);
-    const detailCount = Math.min(details.length, 2, Math.max(0, room - 1));
-    const optionRoom = Math.max(0, room - detailCount);
-    const hidden = items.length > Math.min(itemLimit, optionRoom);
-    const cueRow = hidden && optionRoom > 1 ? 1 : 0;
-    const count = Math.min(itemLimit, optionRoom - cueRow, items.length);
-    const first = Math.max(
-      0,
-      Math.min(picker.index - Math.floor(count / 2), items.length - count),
-    );
-    below = items.slice(first, first + count).map((item, index) => [
-      {
-        text: truncate(
-          `${first + index === picker.index ? "❯" : " "} ${item.active ? `${frame} ` : ""}${item.label}`,
-          view.columns,
-        ),
-        inverse: first + index === picker.index,
-      },
-    ]);
-    if (hidden && count) {
-      const range = `${first + 1}–${first + count}/${items.length}`;
-      if (cueRow) {
-        below.push([
-          {
-            text: truncate(`${range} · ↑↓ move · type to filter`, view.columns),
-            tone: "muted",
-          },
-        ]);
-      } else {
-        // No spare row: retain the option and cursor, compact the range inline.
-        const line = below[0];
-        if (line) {
-          const suffix = truncate(` ${range}`, view.columns);
-          below[0] = [
-            {
-              text: truncate(
-                line[0]?.text ?? "",
-                Math.max(0, view.columns - visibleWidth(suffix)),
-              ),
-              inverse: true,
-            },
-            { text: suffix, tone: "muted" },
-          ];
-        }
-      }
-    }
-    for (const detail of details.slice(0, detailCount)) {
-      // Preserve both ends of long paths/details, using actual grapheme widths.
-      const width = Math.max(1, view.columns);
-      let text = detail;
-      if (visibleWidth(text) > width) {
-        const left = Math.max(1, Math.floor((width - 1) / 2));
-        let suffix = text;
-        while (suffix && visibleWidth(suffix) > width - left - 1) {
-          suffix = graphemes(suffix).slice(1).join("");
-        }
-        let head = "";
-        for (const glyph of graphemes(text)) {
-          if (visibleWidth(head + glyph) > left) break;
-          head += glyph;
-        }
-        text = `${head}…${suffix}`;
-      }
-      below.push([{ text: truncate(text, width), tone: "muted" }]);
-    }
-    if (!items.length && room)
-      below = [plain(picker.spec.emptyLabel ?? "No matches")];
-  } else if (view.menu.isActive && room) {
+  if (view.menu.isActive && room) {
     const state = view.menu.state;
     const hidden = state.items.length > Math.min(itemLimit, room);
     const cueRow = hidden && room > 1 ? 1 : 0;
@@ -267,11 +218,7 @@ export function draw(view: View): void {
     ];
   }
   const spacer = available > status.length && view.rows >= 6 ? [plain("")] : [];
-  const animatedTail = view.tail.some((line) => line.some((span) => span.animation === "spinner"))
-    ? view.tail.map((line) => line.map((span) =>
-        span.animation === "spinner" ? { ...span, text: frame } : span,
-      ))
-    : view.tail;
+  const animatedTail = animateTail(view.tail, frame);
   const tailRoom = Math.max(
     0,
     Math.min(3, available - status.length - spacer.length),
