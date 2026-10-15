@@ -59,5 +59,6 @@ it("supports backslash Enter multiline and line-local editing without submitting
   c.fresh = true; decoder.feed("\x1b\r"); expect(submit).toHaveBeenCalledWith("no");
   const e = new Editor(); e.set("one\ntwo three\nfour"); e.cursor = 7; e.key("kill-end"); expect(e.text).toBe("one\ntwo\nfour");
   e.key("word-left"); expect(e.cursor).toBe(4); e.key("word-right"); expect(e.cursor).toBe(7);
+  decoder.feed("\x1b[1;5D"); expect(c.editor.cursor).toBe(0);
   decoder.dispose(); c.dispose();
 });

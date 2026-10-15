@@ -160,6 +160,17 @@ const bounded = (lines: readonly RichLine[]): RichLine[] => {
   ];
 };
 
+export const diffStats = (change: FileChange): { added: number; removed: number } | null => {
+  const before = side(change.before, change.kind, "before");
+  const after = side(change.after, change.kind, "after");
+  if (!before.known || !after.known || !before.lines || !after.lines) return null;
+  const hunks = hunksOf(before.lines, after.lines);
+  const changedRows = hunks.flatMap(hunk => hunk.rows);
+  const added = changedRows.filter(line => line[0]?.tone === "success").length;
+  const removed = changedRows.filter(line => line[0]?.tone === "error").length;
+  return { added, removed };
+};
+
 /** Unified diff from real before/after text. Missing text is not invented. */
 export const diffLines = (change: FileChange): readonly RichLine[] => {
   const before = side(change.before, change.kind, "before");

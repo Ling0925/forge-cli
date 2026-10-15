@@ -1,6 +1,6 @@
 import type { ToolCall, ToolResult } from "../../shared/schemas";
 import type { RichLine, Span, Tone } from "../ui-contract";
-import { diffLines } from "./diff";
+import { diffLines, diffStats } from "./diff";
 import { envelope, textLines } from "./envelope";
 import { wrapRichLines } from "./rich";
 import { sanitizeText } from "./sanitize";
@@ -153,9 +153,25 @@ export const toolSummaryLines = (
   const failed = parsed.failed;
   const label = failed ? "failed" : "done";
   const exit = parsed.exitCode === null ? "" : ` · exit ${parsed.exitCode}`;
+  const changes = call?.function.name === "edit_file" ? result.changes ?? [] : [];
+  let statBadge = "";
+  if (changes.length > 0) {
+    let totalAdded = 0;
+    let totalRemoved = 0;
+    let valid = false;
+    for (const ch of changes) {
+      const stats = diffStats(ch);
+      if (stats) {
+        valid = true;
+        totalAdded += stats.added;
+        totalRemoved += stats.removed;
+      }
+    }
+    if (valid) statBadge = ` [+${totalAdded} -${totalRemoved}]`;
+  }
   const header = compactToolLine(
     call?.function.name ?? "tool",
-    call ? toolTarget(call) : "",
+    call ? `${toolTarget(call)}${statBadge}` : "",
     ` · ${label}${exit}${durationSuffix(call?.function.name, result, elapsed)}${index === undefined ? "" : ` · #${index}`}`,
     failed ? "error" : "success",
     width,
@@ -164,7 +180,6 @@ export const toolSummaryLines = (
   const fit = (value: string, tone: Tone, prefix = ""): RichLine => [
     span(truncate(`${prefix}${sanitizeText(value).replace(/\s+/g, " ").trim()}`, safeWidth), tone),
   ];
-  const changes = call?.function.name === "edit_file" ? result.changes ?? [] : [];
   // Bound physical rows as well as logical diff lines, so long source lines
   // cannot flood the transcript. Expanded details retain the existing preview.
   const preview = changes.slice(0, 1).flatMap(change => [...diffLines(change)]);

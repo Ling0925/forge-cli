@@ -44,6 +44,7 @@ it("shows real edit diffs inline with bounded rows and preserves detail access",
   const edited = { ...result({ edited: true, replacements: 1 }), changes: [{ path: "a.ts", kind: "modified" as const, before: "const old = 1;", after: "const next = 2;", truncated: false }] };
   const tools = new ToolTranscript(); const c = call("edit_file"); tools.start(c);
   const rows = tools.summary(c.id, edited, 80);
+  expect(text(rows)).toContain("[+1 -1]");
   expect(text(rows)).toContain("-const old = 1;"); expect(text(rows)).toContain("+const next = 2;");
   expect(rows.flat().some(s => s.tone === "success" && s.text.startsWith("+const"))).toBe(true);
   expect(text(rows)).not.toContain("details:");
