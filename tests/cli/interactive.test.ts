@@ -354,6 +354,51 @@ describe("rich integration adapters", () => {
     };
     return { ...host, io: { ...host.io, ui }, output, busy, statuses, specs, contexts };
   };
+  it.each([false, true])("refreshes an asynchronous auto-title without overwriting a switched session (switch=%s)", async switched => {
+    vi.useFakeTimers();
+    try {
+      const host = richHost(switched ? ["hello", "/new", "/quit"] : ["hello", "/quit"], []);
+      const originalQuestion = host.io.question;
+      let questions = 0;
+      const getSession = vi.fn(async () => ({ ...snapshot, title: "Automatic task title", titleSource: "auto" as const }));
+      const createSession = vi.fn().mockResolvedValueOnce(snapshot).mockResolvedValue({ ...snapshot, title: "Another session" });
+      const base = service(async () => ({ ...snapshot, titleSource: "default" as const }));
+      const code = await runCliWithIO(["chat"], { ...base, createSession, getSession }, {
+        ...host.io,
+        question: async (...args) => {
+          questions += 1;
+          if (questions === (switched ? 3 : 2)) await vi.advanceTimersByTimeAsync(2300);
+          return originalQuestion(...args);
+        },
+      });
+      expect(code).toBe(0);
+      expect(host.err).toEqual([]);
+      expect(host.contexts.at(-1)?.sessionTitle).toBe(switched ? "Another session" : "Automatic task title");
+      expect(getSession).toHaveBeenCalledTimes(switched ? 0 : 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("updates the footer title after creation, rename, resume, fork and run completion", async () => {
+    const host = richHost(["/new", "/rename Renamed", `/resume ${id}`, "/fork", "hello", "/quit"], []);
+    const base = service(async () => ({ ...snapshot, title: "Completed task" }));
+    const code = await runCliWithIO(["chat"], {
+      ...base,
+      createSession: async () => ({ ...snapshot, title: "Created task" }),
+      renameSession: async (_id, title) => ({ ...snapshot, title }),
+      getSession: async () => ({ ...snapshot, title: "Resumed task" }),
+      forkSession: async () => ({ ...snapshot, title: "Forked task" }),
+    }, host.io);
+    expect(code).toBe(0);
+    expect(host.err).toEqual([]);
+    expect(host.contexts[0]?.sessionTitle).toBe("新会话");
+    for (const sessionTitle of ["Created task", "Renamed", "Resumed task", "Forked task", "Completed task"]) {
+      expect(host.contexts.some(value => value?.sessionTitle === sessionTitle)).toBe(true);
+    }
+    expect(host.contexts.at(-1)?.sessionTitle).toBe("Completed task");
+  });
+
   it("refreshes context footer for runtime projection, model changes, session resets and compaction", async () => {
     const host = richHost(["hello", "/model changed", "/compact", "/new", "/quit"], []);
     const usage = { windowTokens: 1000, usedTokens: 200, estimated: true, basis: "projected" as const, parts: { instructions: 50, memory: 0, conversation: 100, tools: 50 } };
@@ -369,7 +414,7 @@ describe("rich integration adapters", () => {
     expect(await runCliWithIO(["chat"], { ...base, compactSession: async () => compacted }, host.io)).toBe(0);
     expect(host.err).toEqual([]);
     expect(host.contexts[0]).toMatchObject({ model: "test", estimated: true });
-    expect(host.contexts).toContainEqual({ model: "test", reasoningEffort: "default", usage: { ...usage, budgetTokens: 800 }, estimated: true });
+    expect(host.contexts).toContainEqual({ model: "test", reasoningEffort: "default", sessionTitle: "chat", usage: { ...usage, budgetTokens: 800 }, estimated: true });
     expect(host.contexts.some((value) => value?.model === "changed" && value.estimated)).toBe(true);
     expect(host.contexts.some((value) => (value?.usage?.parts.memory ?? 0) > 0)).toBe(true);
     expect(host.contexts.at(-1)).toMatchObject({ model: "changed", estimated: true, usage: { usedTokens: 0, windowTokens: null } });

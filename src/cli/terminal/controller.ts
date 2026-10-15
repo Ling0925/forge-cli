@@ -195,6 +195,7 @@ export class Controller implements TerminalUI {
       ...context,
       model: terminalText(context.model),
       ...(context.reasoningEffort ? { reasoningEffort: terminalText(context.reasoningEffort) } : {}),
+      ...(context.sessionTitle ? { sessionTitle: terminalText(context.sessionTitle) } : {}),
     };
     this.draw();
   }

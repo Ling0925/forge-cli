@@ -45,6 +45,7 @@ export interface BannerContext {
   readonly mode: string;
   readonly id?: string;
   readonly reasoningEffort?: string;
+  readonly sessionTitle?: string;
 }
 
 const permissionLabel = (permission: string): string =>
@@ -62,7 +63,8 @@ export const bannerLines = (
   const effort = context.reasoningEffort
     ? ` (${sanitizeText(context.reasoningEffort)})`
     : "";
-  const model = `${modelName}${effort}`;
+  const title = sanitizeText(context.sessionTitle ?? "").replace(/[\n\t]/g, " ").trim();
+  const model = `${modelName}${effort}${title ? ` · ${title}` : ""}`;
   const version = context.version ? ` v${sanitizeText(context.version)}` : "";
   const id = context.id ? ` · ${sanitizeText(context.id).slice(0, 8)}` : "";
   const mode = context.mode === "plan" ? "计划" : "执行";

@@ -115,6 +115,24 @@ describe("composer context footer", () => {
     }
   });
 
+  it("appends the session title after model/effort in full and compact footers", () => {
+    for (const compact of [false, true]) {
+      const value = { ...context, model: "test/model", reasoningEffort: "high", sessionTitle: "优化会话👩‍💻" };
+      expect(text(contextFooter(value, 100, compact)[0]!)).toContain("test/model (high) · 优化会话👩‍💻");
+      expect(text(contextFooter({ ...value, reasoningEffort: undefined }, 100, compact)[0]!)).toContain("test/model · 优化会话👩‍💻");
+      for (const width of [1, 2, 10, 20, 40, 60, 80]) {
+        const row = contextFooter({ ...value, sessionTitle: "超长标题😀".repeat(30) + "\n\t\x1b[2J" }, width, compact)[0]!;
+        expect(visibleWidth(text(row))).toBeLessThanOrEqual(width);
+        expect(text(row)).not.toMatch(/[\n\t\x1b]/);
+      }
+      expect(text(contextFooter({ ...value, sessionTitle: "" }, 100, compact)[0]!)).not.toContain("high) ·");
+      const long = text(contextFooter({ ...value, sessionTitle: "标题".repeat(100) }, 80, compact)[0]!);
+      expect(long).toContain("test/model (high) ·");
+      expect(long).toContain("…");
+      expect(long).toContain("50.0%");
+    }
+  });
+
   it("uses distinct category colors even with unknown background and respects NO_COLOR", () => {
     const roles: Tone[] = ["contextInstructions", "contextMemory", "contextConversation", "contextTools"];
     for (const setting of ["system", "light", "dark"] as const) {
@@ -142,8 +160,9 @@ describe("composer context footer", () => {
       expect(chunks.join("")).toContain("50.0%");
       expect(chunks.join("")).toContain("─".repeat(40));
       chunks.length = 0;
-      reader.ui.setContext!({ ...context, model: "next/model", estimated: true });
+      reader.ui.setContext!({ ...context, model: "next/model", sessionTitle: "Current task", estimated: true });
       expect(chunks.join("")).toContain("next/model");
+      expect(chunks.join("")).toContain(" · Current task");
       expect(chunks.join("")).toContain("≈50.0%");
     } finally {
       reader.dispose();

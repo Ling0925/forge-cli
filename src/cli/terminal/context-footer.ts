@@ -41,6 +41,18 @@ function formatModelSpans(
   ];
 }
 
+function formatIdentitySpans(context: ComposerContext, room: number): Span[] {
+  const spans = formatModelSpans(context.model, context.reasoningEffort, room);
+  const used = spans.reduce((sum, span) => sum + visibleWidth(span.text), 0);
+  const title = sanitizeText(context.sessionTitle ?? "").replace(/[\n\t]/g, " ").trim();
+  const remaining = room - used;
+  // Model/effort and the right-hand usage summary retain priority on narrow screens.
+  if (title && remaining > 3) {
+    spans.push({ text: ` · ${truncate(title, remaining - 3)}`, tone: "muted" });
+  }
+  return spans;
+}
+
 /** Full-width track; the red right-hand segment marks compression headroom. */
 export function contextFooter(context: ComposerContext, columns: number, compact = false): readonly RichLine[] {
   const width = Math.max(1, Math.floor(columns));
@@ -60,7 +72,7 @@ export function contextFooter(context: ComposerContext, columns: number, compact
     const mini = miniWidth ? ` [${"━".repeat(filled)}${"·".repeat(miniWidth - filled)}]` : "";
     const summary = truncate(`${summaryText}${mini}`, width);
     const room = Math.max(0, width - visibleWidth(summary) - 1);
-    const modelSpans = formatModelSpans(context.model, context.reasoningEffort, room);
+    const modelSpans = formatIdentitySpans(context, room);
     const modelWidth = modelSpans.reduce((sum, s) => sum + visibleWidth(s.text), 0);
     return [[
       ...modelSpans,
@@ -74,7 +86,7 @@ export function contextFooter(context: ComposerContext, columns: number, compact
     ? Math.round(Math.min(1, Math.max(0, usage.budgetTokens / usage.windowTokens)) * width)
     : width;
   const room = Math.max(0, width - visibleWidth(right) - 2);
-  const modelSpans = formatModelSpans(context.model, context.reasoningEffort, room);
+  const modelSpans = formatIdentitySpans(context, room);
   const modelWidth = modelSpans.reduce((sum, s) => sum + visibleWidth(s.text), 0);
   const info: Span[] = [
     ...modelSpans,

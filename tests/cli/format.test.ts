@@ -56,6 +56,8 @@ describe("Formatters", () => {
       {
         workspace: "/home/user/project",
         model: "gpt-4o",
+        reasoningEffort: "high",
+        sessionTitle: "优化 CLI",
         permission: "workspace",
         mode: "build",
         version: "0.1.0",
@@ -65,7 +67,7 @@ describe("Formatters", () => {
     expect(banner).toContain("Forge");
     expect(banner).toContain("v0.1.0");
     expect(banner).toContain("工作区审批");
-    expect(banner).toContain("gpt-4o");
+    expect(banner).toContain("gpt-4o (high) · 优化 CLI");
     expect(banner).not.toContain("┌");
   });
 

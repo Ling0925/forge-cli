@@ -38,6 +38,7 @@ export type RichLine = readonly Span[];
 export type ComposerContext = Readonly<{
   model: string;
   reasoningEffort?: string;
+  sessionTitle?: string;
   usage: ContextUsage | null;
   /** Session estimate until a projected runtime request is available. */
   estimated?: boolean;

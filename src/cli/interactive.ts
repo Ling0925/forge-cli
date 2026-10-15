@@ -90,6 +90,8 @@ export async function interactive(
   let model = session?.model ?? settings.model;
   let contextUsage: ContextUsage | null = null;
   let usageModel = model;
+  let titleRefresh: ReturnType<typeof setTimeout> | undefined;
+  let titleRefreshClosed = false;
   const windows = new Map<string, number | null>();
   const loadingWindows = new Set<string>();
   const refreshContext = (): void => {
@@ -101,6 +103,7 @@ export async function interactive(
     ui?.setContext?.({
       model,
       reasoningEffort: settings.reasoningEffort ?? "default",
+      sessionTitle: session?.title ?? "新会话",
       usage: { ...currentUsage, ...budgetUsage(resolveContextBudget(resolvedWindow, settings)) },
       estimated: true,
     });
@@ -112,6 +115,23 @@ export async function interactive(
         if (!lifetime.signal.aborted && model === requestedModel) refreshContext();
       }).catch(() => windows.set(requestedModel, null)).finally(() => loadingWindows.delete(requestedModel));
     }
+  };
+  const refreshAutoTitle = (): void => {
+    if (titleRefresh) clearTimeout(titleRefresh);
+    const completed = session;
+    if (!ui || completed?.status !== "completed" || completed.titleSource !== "default") return;
+    // Automatic naming is persisted asynchronously after run() returns (2s deadline).
+    // Refresh metadata once without delaying input or replacing a newer snapshot.
+    titleRefresh = setTimeout(() => {
+      if (titleRefreshClosed || lifetime.signal.aborted || session !== completed || runInProgress) return;
+      void service.getSession(completed.id).then(latest => {
+        if (titleRefreshClosed || lifetime.signal.aborted || session !== completed || runInProgress) return;
+        session = { ...completed, title: latest.title, titleSource: latest.titleSource,
+          autoTitleAttempted: latest.autoTitleAttempted };
+        refreshContext();
+      }).catch(() => { /* Optional title metadata must not interrupt input. */ });
+    }, 2200);
+    titleRefresh.unref();
   };
   let mode: "build" | "plan" = "build";
   const currentMode = (): "build" | "plan" => mode;
@@ -311,6 +331,7 @@ export async function interactive(
       workspace: session?.workspace ?? workspace,
       model,
       reasoningEffort: settings.reasoningEffort ?? "default",
+      sessionTitle: session?.title ?? "新会话",
       permission,
       mode,
       version: "0.1.0",
@@ -325,6 +346,7 @@ export async function interactive(
           workspace: session?.workspace ?? workspace,
           model,
           reasoningEffort: settings.reasoningEffort ?? "default",
+          sessionTitle: session?.title ?? "新会话",
           permission,
           mode,
           version: "0.1.0",
@@ -631,6 +653,7 @@ export async function interactive(
         if (lifetime.signal.aborted) break;
         session ??= await service.createSession(createSessionInputSchema.parse({ workspace, model }));
         if (lifetime.signal.aborted) break;
+        refreshContext();
         ui?.setBusy(true);
         active = new AbortController();
         live = new LiveRun(safe, theme, tools, () => expandReasoning);
@@ -696,6 +719,7 @@ export async function interactive(
             return messages;
           } },
         );
+        refreshAutoTitle();
         queue.finish(session.status === "completed" && !active.signal.aborted);
         if (queue.length && queue.paused) safe.stdout("Pending input paused; /queue to inspect, /queue run to continue, /queue clear to discard.\n");
       } catch (error) {
@@ -721,6 +745,8 @@ export async function interactive(
     }
     return 0;
   } finally {
+    titleRefreshClosed = true;
+    if (titleRefresh) clearTimeout(titleRefresh);
     offRunInput?.();
     offMode?.();
     offClose?.();
