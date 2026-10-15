@@ -29,7 +29,7 @@ const promptLimit = 1_000_000;
 const keyLimit = 16_386;
 const help = `Forge — shared-core agent CLI
 
-forge chat [--workspace PATH] [--session UUID] [--approval full-access|auto|manual]
+forge chat [--workspace PATH] [--session UUID] [--approval full-access|auto|manual] [--thinking|--expand-thinking]
 forge config show
 forge config set [--base-url URL] [--model MODEL] [--api-mode chat-completions|responses] [--api-key-stdin]
                  [--reasoning-effort default|none|minimal|low|medium|high|xhigh]
@@ -280,11 +280,13 @@ export const runCliWithIO = async (
         );
       if (argv.includes("--json"))
         invalid("Interactive chat does not support --json.");
-      const args = parseArgs(argv.slice(1), ["workspace", "session", "approval"], []);
+      const argOffset = command === "chat" ? 1 : 0;
+      const args = parseArgs(argv.slice(argOffset), ["workspace", "session", "approval"], ["thinking", "expand-thinking"]);
       noPositionals(args);
       const chatWorkspace = stringOption(args, "workspace");
       const chatSession = stringOption(args, "session");
       const approval = parseApprovalMode(stringOption(args, "approval") ?? DEFAULT_APPROVAL_MODE);
+      const expandReasoning = flag(args, "thinking") || flag(args, "expand-thinking");
       if (chatWorkspace && !(await stat(resolve(chatWorkspace))).isDirectory())
         invalid("Workspace must be an existing directory.");
       if (
@@ -303,6 +305,7 @@ export const runCliWithIO = async (
         stringOption(args, "session"),
         renderEvent,
         approval,
+        expandReasoning,
       );
     }
     if (

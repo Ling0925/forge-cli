@@ -129,6 +129,26 @@ describe("interactive CLI", () => {
     expect(host.out.join("")).toContain("Reasoning Effort");
     expect(host.err.join("")).not.toBe("");
   });
+
+  it("toggles and validates expanded reasoning display with /thinking", async () => {
+    const host = consoleIO([
+      "/thinking on",
+      "/thinking off",
+      "/thinking invalid",
+      "/thinking",
+      "/quit",
+    ]);
+    expect(
+      await runCliWithIO(
+        ["chat"],
+        service(async () => snapshot),
+        host.io,
+      ),
+    ).toBe(0);
+    expect(host.out.join("")).toContain("Thinking display: expanded");
+    expect(host.out.join("")).toContain("Thinking display: compact");
+    expect(host.err.join("")).toContain("Expected /thinking [on|off]");
+  });
   it("does not open stdin on nonTTY and rejects explicit chat", async () => {
     const host = consoleIO([], false);
     expect(

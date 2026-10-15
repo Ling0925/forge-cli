@@ -29,6 +29,13 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     onboarding: true,
   },
   {
+    name: "/thinking",
+    args: "[on|off]",
+    description: "切换是否展开完整思考内容流式输出",
+    category: "config",
+    onboarding: true,
+  },
+  {
     name: "/permission",
     args: "[readonly|workspace|unrestricted]",
     description: "查看或更改权限",

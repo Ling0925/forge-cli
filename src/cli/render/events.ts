@@ -14,6 +14,7 @@ export interface EventRendererOptions {
   readonly width?: () => number;
   readonly now?: () => number;
   readonly tools?: ToolTranscript;
+  readonly expandReasoning?: boolean | (() => boolean);
 }
 
 export interface EventRenderer {
@@ -52,11 +53,30 @@ export const createEventRenderer = (
   // Latest single line of streamed reasoning; replaces in place (scrolling preview).
   let reasoningLine: RichLine | undefined;
   let reasoningAccumulator = "";
-  const updateReasoning = (text: string): void => {
+  let reasoningStreamed = "";
+  const isExpandReasoning = (): boolean =>
+    typeof options.expandReasoning === "function"
+      ? options.expandReasoning()
+      : options.expandReasoning === true;
+  const updateReasoning = (text: string): RichLine[] => {
+    if (isExpandReasoning()) {
+      reasoningStreamed += text;
+      // In expanded mode, format each newline-delimited chunk directly with muted tone
+      const parts = sanitizeText(text).split("\n");
+      const appends: RichLine[] = [];
+      parts.forEach((part, index) => {
+        if (index > 0) appends.push([]);
+        if (part) {
+          appends.push([{ text: `✻ ${part}`, tone: "muted" }]);
+        }
+      });
+      return appends;
+    }
     const merged = reasoningAccumulator + text;
     reasoningAccumulator =
       merged.length > REASONING_KEEP ? merged.slice(-REASONING_KEEP) : merged;
     reasoningLine = buildReasoningLine(reasoningAccumulator, options.width?.() ?? 80, true);
+    return [];
   };
   const children = new Map<string, { model: string; status: string; activity: string }>();
   const settled = new Set<string>();
@@ -125,18 +145,20 @@ export const createEventRenderer = (
           streamedText = "";
           reasoningLine = undefined;
           reasoningAccumulator = "";
+          reasoningStreamed = "";
           running = true;
           return update(flushText(), [], live("thinking"));
         case "reasoning_delta": {
           running = true;
-          updateReasoning(event.text);
-          return update([], messageTail, live("thinking"));
+          const appended = updateReasoning(event.text);
+          return update(appended, messageTail, live("thinking"));
         }
         case "text_delta": {
           running = true;
           // The answer has begun; the transient reasoning preview is done.
           reasoningLine = undefined;
           reasoningAccumulator = "";
+          reasoningStreamed = "";
           streamedText += event.text;
           const chunk = markdown.push(event.text);
           return update(chunk.append, chunk.tail, live("responding"));
@@ -146,6 +168,7 @@ export const createEventRenderer = (
           // A tool call ends the reasoning phase for this request.
           reasoningLine = undefined;
           reasoningAccumulator = "";
+          reasoningStreamed = "";
           if (!active.has(event.call.id)) toolCount += 1;
           tools.start(event.call, now());
           active.set(event.call.id, event.call);
@@ -176,6 +199,7 @@ export const createEventRenderer = (
           running = false;
           reasoningLine = undefined;
           reasoningAccumulator = "";
+          reasoningStreamed = "";
           return update(
             [
               ...flushText(),
@@ -189,6 +213,7 @@ export const createEventRenderer = (
           running = false;
           reasoningLine = undefined;
           reasoningAccumulator = "";
+          reasoningStreamed = "";
           const tone =
             event.status === "completed"
               ? "success"

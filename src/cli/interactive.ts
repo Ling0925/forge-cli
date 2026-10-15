@@ -47,9 +47,11 @@ export async function interactive(
   sessionId: string | undefined,
   _render: (io: CliIO, event: AgentEvent) => void,
   initialApproval: ApprovalMode = DEFAULT_APPROVAL_MODE,
+  initialExpandReasoning = false,
 ): Promise<number> {
   const settings = await service.getSettings();
   const ui = io.ui;
+  let expandReasoning = initialExpandReasoning;
   const theme = createTheme({ isTTY: false });
   const styled = (text: string) =>
     ui ? ui.append(plainLines(text)) : io.stdout(text);
@@ -415,6 +417,20 @@ export async function interactive(
             case "/reasoning":
               await changeReasoning(value);
               break;
+            case "/thinking": {
+              const arg = value.toLowerCase().trim();
+              if (arg === "on" || arg === "expand" || arg === "expanded" || arg === "true") {
+                expandReasoning = true;
+              } else if (arg === "off" || arg === "compact" || arg === "false") {
+                expandReasoning = false;
+              } else if (!arg) {
+                expandReasoning = !expandReasoning;
+              } else {
+                throw new ForgeError("invalid_input", "Expected /thinking [on|off].");
+              }
+              safe.stdout(`Thinking display: ${expandReasoning ? "expanded (stream full thoughts)" : "compact (single-line preview)"} (session only).\n`);
+              break;
+            }
             case "/approval":
               if (value) {
                 approvalMode = parseApprovalMode(value);
@@ -616,7 +632,7 @@ export async function interactive(
         if (lifetime.signal.aborted) break;
         ui?.setBusy(true);
         active = new AbortController();
-        live = new LiveRun(safe, theme, tools);
+        live = new LiveRun(safe, theme, tools, () => expandReasoning);
         runInProgress = true;
         inputHint();
         offRunInput = io.onRunInput?.(receiveInput);

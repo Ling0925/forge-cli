@@ -20,8 +20,13 @@ export class LiveRun {
     private readonly io: RichIO,
     private readonly theme: Theme,
     tools: ToolTranscript = new ToolTranscript(),
+    expandReasoning?: boolean | (() => boolean),
   ) {
-    this.renderer = createEventRenderer({ width: () => io.ui?.columns ?? 80, tools });
+    this.renderer = createEventRenderer({
+      width: () => io.ui?.columns ?? 80,
+      tools,
+      expandReasoning,
+    });
     this.ui = io.ui;
     this.plain =
       !io.isTTY ||

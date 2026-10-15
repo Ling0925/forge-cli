@@ -44,3 +44,14 @@ it("bounds the displayed reasoning to the current line and sanitizes controls", 
   expect(shown).not.toContain("line1");
   expect(shown).toContain("line2");
 });
+
+it("streams full expanded thoughts to append lines when expandReasoning is enabled", () => {
+  const renderer = createEventRenderer({ width: () => 80, expandReasoning: true });
+  renderer.push(event({ type: "run_started" }));
+  const step1 = renderer.push(event({ type: "reasoning_delta", text: "Thought 1\nThought 2" }));
+  // When expanded, reasoning streams to append lines rather than remaining trapped in a single tail row
+  expect(step1.append.length).toBeGreaterThan(0);
+  expect(text(step1.append)).toContain("✻ Thought 1");
+  expect(text(step1.append)).toContain("✻ Thought 2");
+  expect(step1.tail).toEqual([]);
+});
