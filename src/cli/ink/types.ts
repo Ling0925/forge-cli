@@ -15,6 +15,7 @@ export interface InkViewState {
   readonly mode: "build" | "plan";
   readonly theme: UIOptions["theme"];
   readonly noColor: boolean;
+  readonly colorDepth?: number;
   readonly pendingInput: readonly string[];
   readonly inputHint: string | null;
   readonly now: number;

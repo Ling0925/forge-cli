@@ -80,7 +80,7 @@ describe("resolveTheme", () => {
     }
   });
 
-  it("keeps unknown system backgrounds structural", () => {
+  it("keeps unknown system backgrounds on terminal-native semantic colors", () => {
     const theme = resolveTheme({
       setting: "system",
       background: "unknown",
@@ -89,10 +89,10 @@ describe("resolveTheme", () => {
       dumb: false,
     });
     expect(theme.variant).toBe("structural");
-    expect(theme.dim("context")).toBe("context");
+    expect(theme.dim("context")).toContain("\u001b[90m");
     expect(theme.bold("Forge")).toContain("\u001b[1m");
-    expect(theme.cyan("accent")).not.toContain("\u001b[3");
-    expect(theme.red("error")).not.toContain("\u001b[3");
+    expect(theme.cyan("accent")).toContain("\u001b[32m");
+    expect(theme.red("error")).toContain("\u001b[31m");
   });
 
   it("uses one sage accent and semantic colors with contrast >= 4.5", () => {

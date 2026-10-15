@@ -19,11 +19,12 @@ it("keeps the built non-interactive CLI free of Ink output", async () => {
   } finally { await rm(home, { recursive: true, force: true }); }
 });
 
-it("starts the built Ink chat in a real PTY and exits with terminal modes restored", async () => {
+it.each(["none", "light", "dark"] as const)("starts the built Ink chat with %s colors in a real PTY and restores terminal modes", async color => {
   const home = await mkdtemp(join(tmpdir(), "forge-ink-pty-"));
   const quote = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
   const child = spawn("script", ["-q", "-e", "-c", `stty rows 24 cols 80; exec ${quote(process.execPath)} ${quote(resolve("dist/cli.mjs"))} chat`, "/dev/null"], {
-    env: { PATH: "/usr/bin:/bin", HOME: home, FORGE_HOME: home, TERM: "xterm-256color", NO_COLOR: "1" },
+    env: { PATH: "/usr/bin:/bin", HOME: home, FORGE_HOME: home, TERM: "xterm-256color",
+      ...(color === "none" ? { NO_COLOR: "1" } : { COLORTERM: "truecolor", COLORFGBG: color === "light" ? "0;15" : "15;0" }) },
     stdio: ["pipe", "pipe", "pipe"],
   });
   let output = "";
@@ -51,6 +52,8 @@ it("starts the built Ink chat in a real PTY and exits with terminal modes restor
     expect(output).toContain("\x1b[?25h");
     expect(output).not.toMatch(/\x1b\[\?(?:1049|1002|1006)h/);
     expect(output).not.toContain("\x1b[3J");
+    if (color === "none") expect(output).not.toMatch(/\x1b\[[\d;]*m/);
+    else expect(output).toContain(color === "light" ? "\x1b[38;2;85;104;77m" : "\x1b[38;2;143;173;130m");
   } finally {
     clearTimeout(timer);
     await rm(home, { recursive: true, force: true });

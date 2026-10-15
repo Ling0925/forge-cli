@@ -107,7 +107,7 @@ forge config set --reasoning-effort default
 
 交互 `forge` / `forge chat` 默认 **full-access**：自动批准现有权限允许的工具请求（含 MCP、浏览器、子代理），启动时提示非沙箱风险，逐次回显自动批准并在每轮结束汇总数量。`/approval manual` 切到逐次询问，提示 `[Y/n]`：本次新鲜空回车或 `y/yes` + Enter 批准，`n/no`、其他非空输入、Esc、取消、EOF 拒绝。粘贴、预输入、历史回忆不是授权。命令不是 OS 沙箱，可访问工作区外文件与网络。`/approval auto` 仅自动批准符合条件的根会话 run_command，其余仍询问。`/approval ask` 是 manual 的兼容别名。CLI 标志 `--approval full-access|auto|manual` 可覆盖启动默认。选择仅本 CLI 进程有效，/new、/resume 保持当前选择，不会把 manual 偷偷切回 full-access；重启恢复默认。plan、readonly 与子代理权限上限优先，审核模式不提升权限。
 
-主题有 system/light/dark；system 根据终端背景信息解析。`NO_COLOR` 禁止 SGR 但允许必要的光标控制；TERM=dumb 与非 TTY 使用 plain 输出。Markdown、工具输出和外部文本均不应直接注入未受信任的终端控制序列。
+主题有 system/light/dark；system 根据终端背景信息解析。实时界面、历史、选择器和审批共用同一配色源：亮色鼠尾草 `#55684d`、暗色 `#8fad82`，配合灰阶元数据、绿/黄/红状态色及原有 diff 增删底色。按实际 UI 输出流能力降级为 256/16 色；背景未识别时保留终端原生语义色，不把界面退成黑白，也不猜测背景或改写终端画布。`NO_COLOR` 禁止 SGR 但允许必要的光标控制；TERM=dumb 与非 TTY 使用 plain 输出。Markdown、工具输出和外部文本先清洗，只有受信任的主题 token 能生成颜色控制序列。
 
 ## 命令与边界
 

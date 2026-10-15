@@ -34,7 +34,8 @@ function planLine(state: InkViewState): RichLine | null {
 export function InkView({ state, input }: { state: InkViewState; input: InputState }): ReactElement {
   const width = Math.max(1, Math.floor(state.columns) - 1);
   const limit = Math.max(0, Math.floor(state.rows) - 1);
-  const appearance: Appearance = { theme: state.theme, noColor: state.noColor, now: state.screenReader ? 0 : state.now };
+  const appearance: Appearance = { theme: state.theme, noColor: state.noColor || (state.colorDepth ?? 8) < 4,
+    colorDepth: state.colorDepth ?? 8, now: state.screenReader ? 0 : state.now };
   const picking = input.focus.kind === "picker";
   const fresh = input.focus.kind === "approval";
   const editor = focusedEditor(input);
@@ -42,11 +43,11 @@ export function InkView({ state, input }: { state: InkViewState; input: InputSta
   const editorProps = {
     editor, prefix: input.prompt,
     hint: fresh ? null : state.inputHint ?? "Ask anything · / commands · PgUp read",
-    tone: state.mode === "plan" ? "warning" as const : "accent" as const,
+    tone: fresh || state.mode === "plan" ? "warning" as const : "accent" as const,
     width, maxLines: limit ? editorRoom : 0, appearance,
   };
   const preparedEditor = useMemo(() => editorRows(editorProps),
-    [editor, input.prompt, editorProps.hint, editorProps.tone, width, editorProps.maxLines, state.noColor]);
+    [editor, input.prompt, editorProps.hint, editorProps.tone, width, editorProps.maxLines, appearance.noColor]);
   const wrappedTail = useMemo(() => wrapRichLines(state.tail, width), [state.tail, width]);
   const extras: RichLine[] = [];
   const status = statusLine(state);

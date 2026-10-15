@@ -3,6 +3,7 @@ import type { Instance } from "ink";
 import type { ApprovalRequest, TaskPlan } from "../../shared/schemas";
 import { approvalLines, terminalText } from "../format";
 import { plainLines } from "../render/rich";
+import { terminalColorDepth } from "../palette";
 import type { TerminalController, TerminalControllerOptions } from "../terminal-controller";
 import type { InputEvent } from "../terminal/decoder";
 import type { ComposerContext, PickerSpec, RenderUpdate, RichLine, RunStatus, UIOptions } from "../ui-contract";
@@ -96,7 +97,7 @@ export class InkController implements TerminalController {
   }
   private prepareOutput(): void {
     if (this.reading.active) return;
-    const depth = (this.options.output as NodeJS.WriteStream).getColorDepth?.() ?? 8;
+    const depth = terminalColorDepth(this.options.output);
     const chunks = this.transcript.drain(Math.max(1, this.columns - 1), this.modes.theme, process.env.NO_COLOR !== undefined, depth);
     if (chunks.length) this.output = { id: ++this.outputId, chunks };
   }
@@ -106,6 +107,7 @@ export class InkController implements TerminalController {
       reading: this.reading.snapshot(), screenReader: this.modes.screenReader,
       status: this.status, context: this.context, plan: this.plan, mode: this.mode,
       theme: this.modes.theme, noColor: process.env.NO_COLOR !== undefined,
+      colorDepth: terminalColorDepth(this.options.output),
       pendingInput: this.pendingInput, inputHint: this.inputHint, now: Date.now(),
     };
   }
