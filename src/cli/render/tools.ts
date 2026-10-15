@@ -4,13 +4,17 @@ import { diffLines, diffStats } from "./diff";
 import { envelope, textLines } from "./envelope";
 import { wrapRichLines } from "./rich";
 import { sanitizeText } from "./sanitize";
-import { stringWidth, truncate } from "./width";
+import { graphemes, stringWidth, truncate } from "./width";
 import { toolPresentation } from "./tool-presentation";
 import { durationSuffix } from "./duration";
 
 const PREVIEW_LINES = 12;
 const PREVIEW_ROWS = 18;
 const DEFAULT_WIDTH = 80;
+// Bound how many physical rows one run_command branch may occupy in the transcript.
+const COMMAND_ROWS = 6;
+// Below this width a wrapped command branch costs more rows than it clarifies.
+const COMMAND_MIN_WIDTH = 24;
 
 const span = (text: string, tone?: Tone): Span => ({
   text: sanitizeText(text),
@@ -18,6 +22,69 @@ const span = (text: string, tone?: Tone): Span => ({
 });
 
 const line = (...parts: Span[]): RichLine => parts.filter((item) => item.text);
+
+/** Greedy word wrap for a hanging command branch; hard-splits over-long tokens. */
+const wrapCommand = (value: string, limit: number): string[] => {
+  const width = Math.max(1, limit);
+  const words = sanitizeText(value).replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const rows: string[] = [];
+  let current = "";
+  const push = (): void => {
+    if (current) {
+      rows.push(current);
+      current = "";
+    }
+  };
+  for (let word of words) {
+    while (stringWidth(word) > width) {
+      let cut = "";
+      for (const glyph of graphemes(word)) {
+        if (cut && stringWidth(cut + glyph) > width) break;
+        cut += glyph;
+      }
+      if (!cut) break;
+      push();
+      rows.push(cut);
+      word = word.slice(cut.length);
+    }
+    if (!current) current = word;
+    else if (stringWidth(current) + 1 + stringWidth(word) <= width) current += ` ${word}`;
+    else {
+      rows.push(current);
+      current = word;
+    }
+  }
+  push();
+  return rows;
+};
+
+/** run_command keeps its status/exit on the header and moves the command itself
+ * to a wrapped branch. Other tools (and short commands) keep one header line. */
+const commandLayout = (
+  name: string,
+  target: string,
+  suffix: string,
+  width: number,
+): { headerTarget: string; branch: string[] } => {
+  const limit = Math.max(1, width);
+  if (name !== "run_command" || !target || limit < COMMAND_MIN_WIDTH)
+    return { headerTarget: target, branch: [] };
+  // Branch only when the command cannot fit beside the status/exit suffix;
+  // a command that fits stays a single quiet header line.
+  const fits = stringWidth(name) + 1 + stringWidth(target) + stringWidth(suffix) <= limit;
+  if (fits) return { headerTarget: target, branch: [] };
+  const rows = wrapCommand(target, Math.max(1, limit - 4));
+  const shown = rows.slice(0, COMMAND_ROWS);
+  return {
+    headerTarget: "",
+    branch: [
+      ...shown,
+      ...(rows.length > shown.length
+        ? [`… ${rows.length - shown.length} more command lines`]
+        : []),
+    ],
+  };
+};
 
 const readValue = (raw: string): unknown => {
   try {
@@ -169,13 +236,12 @@ export const toolSummaryLines = (
     }
     if (valid) statBadge = ` [+${totalAdded} -${totalRemoved}]`;
   }
-  const header = compactToolLine(
-    call?.function.name ?? "tool",
-    call ? `${toolTarget(call)}${statBadge}` : "",
-    ` · ${label}${exit}${durationSuffix(call?.function.name, result, elapsed)}${index === undefined ? "" : ` · #${index}`}`,
-    failed ? "error" : "success",
-    width,
-  );
+  const name = call?.function.name ?? "tool";
+  const target = call ? `${toolTarget(call)}${statBadge}` : "";
+  const suffix = ` · ${label}${exit}${durationSuffix(call?.function.name, result, elapsed)}${index === undefined ? "" : ` · #${index}`}`;
+  const statusTone: Tone = failed ? "error" : "success";
+  const { headerTarget, branch } = commandLayout(name, target, suffix, width);
+  const header = compactToolLine(name, headerTarget, suffix, statusTone, width);
   const safeWidth = Math.max(1, width);
   const fit = (value: string, tone: Tone, prefix = ""): RichLine => [
     span(truncate(`${prefix}${sanitizeText(value).replace(/\s+/g, " ").trim()}`, safeWidth), tone),
@@ -192,12 +258,20 @@ export const toolSummaryLines = (
   const shownDiff = selectedDiff.map(row => row.map(part => ({ ...part,
     text: truncate(sanitizeText(part.text), safeWidth),
   })));
-  const detailPrefix = parsed.warning ? "  │ " : "  ╰ ";
+  // Branch rows share one prefix convention: intermediate rows use │, the final
+  // row closes with ╰. Command rows (run_command) precede the detail/warning.
+  const branchItems: { value: string; tone: Tone }[] = [
+    ...branch.map((value): { value: string; tone: Tone } => ({ value, tone: "muted" })),
+    { value: parsed.detail, tone: failed ? "error" : "muted" },
+    ...(parsed.warning ? [{ value: parsed.warning, tone: "warning" as Tone }] : []),
+  ];
+  const branchRows = branchItems.map((item, position) =>
+    fit(item.value, item.tone, position === branchItems.length - 1 ? "  ╰ " : "  │ "),
+  );
   return [
     // Keep physical rows bounded even when the status suffix exceeds tiny widths.
     fit(header.map(part => part.text).join(""), failed ? "error" : "accent"),
-    fit(parsed.detail, failed ? "error" : "muted", detailPrefix),
-    ...(parsed.warning ? [fit(parsed.warning, "warning", "  ╰ ")] : []),
+    ...branchRows,
     ...shownDiff,
     ...(preview.length > diffBudget || changes.length > 1 ? [fit("… more diff content", "muted")] : []),
   ];
