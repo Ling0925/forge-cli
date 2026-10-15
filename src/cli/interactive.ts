@@ -11,7 +11,7 @@ import {
   settingsFields,
 } from "../shared/schemas";
 import type { AgentEvent, ContextUsage } from "../shared/schemas";
-import { type ApprovalMode, DEFAULT_APPROVAL_MODE, approvalAudit, approvalWarning, parseApprovalAnswer, parseApprovalMode, shouldAutoApprove } from "./approval-policy";
+import { type ApprovalMode, DEFAULT_APPROVAL_MODE, approvalWarning, parseApprovalAnswer, parseApprovalMode, shouldAutoApprove } from "./approval-policy";
 import type { CliIO } from "./cli";
 import { formatHelp } from "./commands";
 import {
@@ -32,6 +32,7 @@ import {
 import { RunQueue } from "./interactive/run-queue";
 import { LiveRun } from "./live-run";
 import { historyLines } from "./render/history";
+import { autoApprovalLines } from "./render/auto-approval";
 import { plainLines, renderRichLine } from "./render/rich";
 import { ToolTranscript } from "./render/tool-transcript";
 import { createTheme } from "./theme";
@@ -632,7 +633,7 @@ export async function interactive(
             if (signal.aborted || eligiblePermission === "readonly") return false;
             if (shouldAutoApprove(approvalMode, eligiblePermission, request, signal)) {
               autoApprovedCount++;
-              safe.stdout(`${approvalAudit(request)}\n`);
+              appendLines(autoApprovalLines(request, ui?.columns ?? 80));
               return true;
             }
             try {

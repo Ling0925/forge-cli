@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { autoApprovalLines } from "../../src/cli/render/auto-approval";
+import { visibleWidth } from "../../src/cli/theme";
 
 import {
   type ApprovalMode,
   COMMAND_APPROVAL_WARNING,
-  shouldAutoApprove, DEFAULT_APPROVAL_MODE, parseApprovalMode, parseApprovalAnswer, approvalAudit,
+  shouldAutoApprove, DEFAULT_APPROVAL_MODE, parseApprovalMode, parseApprovalAnswer,
 } from "../../src/cli/approval-policy";
 import {
   type ApprovalRequest,
@@ -143,8 +145,23 @@ it("accepts only an exact empty answer or affirmative text", () => {
   for (const answer of ["", "y", "Y", "yes", " YES "]) expect(parseApprovalAnswer(answer)).toBe(true);
   for (const answer of ["n", "no", "maybe", " ", "\t"]) expect(parseApprovalAnswer(answer)).toBe(false);
 });
+it("renders bounded auto approval cards without JSON or untrusted controls", () => {
+  for (const width of [1, 8, 40, 120]) {
+    const rows = autoApprovalLines(request({ command: ["node", "a b", "", "中文".repeat(100), "\x1b]52;c;evil\x07"], childSessionId: baseRequest.sessionId }), width);
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      const text = row.map(s => s.text).join("");
+      expect(visibleWidth(text)).toBeLessThanOrEqual(width);
+      expect(text).not.toContain("\x1b"); expect(text).not.toContain("evil");
+    }
+  }
+  const body = autoApprovalLines(request({ command: ["node", "a b", ""] }), 120).flat().map(s => s.text).join("\n");
+  expect(body).toContain("Auto-approved · run_command");
+  expect(body).toContain("node 'a b' ''"); expect(body).not.toContain('["');
+  expect(autoApprovalLines(request({ command: undefined, toolName: "mcp_call_tool" }))).toHaveLength(1);
+});
 it("audit masks common argv secrets without losing tool provenance", () => {
-  const audit = approvalAudit(request({command: ["node", "--token", "private123", "password=hidden456", "Bearer secret789"]}));
+  const audit = autoApprovalLines(request({command: ["node", "--token", "private123", "password=hidden456", "Bearer secret789"]}), 200).flat().map(s => s.text).join("\n");
   expect(audit).toContain("run_command"); expect(audit).toContain("node");
   expect(audit).not.toMatch(/private123|hidden456|secret789/);
 });

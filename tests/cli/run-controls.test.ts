@@ -217,6 +217,10 @@ it("default full access audits all requests and live manual switch applies to su
   expect(h.readApproval).toHaveBeenCalledTimes(1);
   expect(h.out.join("")).toContain("FULL ACCESS");
   expect(h.out.join("")).toContain("3 tool request(s) auto-approved this run");
+  expect(h.out.join("")).toContain("Auto-approved · run_command");
+  expect(h.out.join("")).toContain("Auto-approved · mcp_call_tool");
+  expect(h.out.join("")).toContain(`child ${id}`);
+  expect(h.out.join("")).not.toContain(`Auto-approved run_command: [`);
 });
 
 it("manual fallback approves fresh Enter, rejects other input, and ask is an alias", async () => {

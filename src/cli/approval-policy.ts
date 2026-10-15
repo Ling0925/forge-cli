@@ -39,7 +39,7 @@ export const shouldAutoApprove = (
   ));
 
 /** Tool registries reject known configured secrets; additionally mask common CLI secrets. */
-export const approvalAudit = (request: ApprovalRequest): string => {
+export const approvalAuditArguments = (request: ApprovalRequest): readonly string[] => {
   let redactNext = false;
   const argv = request.command?.map(arg => {
     if (redactNext) { redactNext = false; return "[REDACTED]"; }
@@ -52,5 +52,5 @@ export const approvalAudit = (request: ApprovalRequest): string => {
       .replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]")
       .replace(/(https?:\/\/)[^/\s@]+@/gi, "$1[REDACTED]@");
   });
-  return `Auto-approved ${request.childSessionId ? `child ${request.childSessionId} ` : ""}${request.toolName}: ${JSON.stringify(argv ?? [])}`;
+  return argv ?? [];
 };
