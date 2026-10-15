@@ -1,4 +1,4 @@
-import type { AgentEvent } from "../shared/schemas";
+import type { AgentEvent, ApprovalRequest } from "../shared/schemas";
 import type { CliIO } from "./cli";
 import { createEventRenderer } from "./render/events";
 import { renderRichLine } from "./render/rich";
@@ -64,6 +64,10 @@ export class LiveRun {
       const line = toolStartLine(event.call).map((span) => span.text).join("");
       this.io.stderr(`${line}\n`);
     }
+  }
+
+  childApproval(request: ApprovalRequest): void {
+    this.write(this.renderer.childApproval(request));
   }
 
   pause(): void {}

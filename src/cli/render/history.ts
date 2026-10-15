@@ -26,7 +26,8 @@ export const historyLines = (session: SessionSnapshot, width: number, tools = ne
   for (const message of messages) {
     if (message.role === "user") {
       lines.push([{ text: message.origin === "agent_reconciliation" ? "↳ Agent results" : "❯ You", tone: "accent" }]);
-      lines.push(...markdownLines(message.content, width));
+      if (message.origin === "agent_reconciliation") lines.push([{ text: "  Child results retained in session; details omitted from main history.", tone: "muted" }]);
+      else lines.push(...markdownLines(message.content, width));
     } else if (message.role === "assistant") {
       if (message.content) {
         lines.push([{ text: "Forge", tone: "accent" }]);

@@ -1,4 +1,5 @@
 import { ForgeError } from "../shared/errors";
+import { redactCommandArguments } from "../shared/tool-activity";
 import type { ApprovalRequest, Permission } from "../shared/schemas";
 
 export type ApprovalMode = "full-access" | "manual" | "auto" | "ask";
@@ -39,18 +40,5 @@ export const shouldAutoApprove = (
   ));
 
 /** Tool registries reject known configured secrets; additionally mask common CLI secrets. */
-export const approvalAuditArguments = (request: ApprovalRequest): readonly string[] => {
-  let redactNext = false;
-  const argv = request.command?.map(arg => {
-    if (redactNext) { redactNext = false; return "[REDACTED]"; }
-    if (/^--?(?:api[-_]?key|access[-_]?token|token|password|secret|authorization)$/i.test(arg)) {
-      redactNext = true; return arg;
-    }
-    return arg
-      .replace(/\b(?:sk-[\w-]{8,}|gh[pousr]_[\w]{20,}|AKIA[A-Z0-9]{16})\b/g, "[REDACTED]")
-      .replace(/((?:api[-_]?key|token|password|secret|authorization)\s*[=:]\s*)\S+/gi, "$1[REDACTED]")
-      .replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]")
-      .replace(/(https?:\/\/)[^/\s@]+@/gi, "$1[REDACTED]@");
-  });
-  return argv ?? [];
-};
+export const approvalAuditArguments = (request: ApprovalRequest): readonly string[] =>
+  redactCommandArguments(request.command);

@@ -1,9 +1,11 @@
-import type { AgentEvent, TaskPlan, ToolCall } from "../../shared/schemas";
+import type { AgentEvent, ApprovalRequest, TaskPlan, ToolCall } from "../../shared/schemas";
 import type { RenderUpdate, RichLine, RunStatus } from "../ui-contract";
 import { estimateTokens } from "../../shared/context-usage";
 import { MarkdownStream } from "./markdown";
 import { wrapRichLines } from "./rich";
 import { sanitizeText } from "./sanitize";
+import { truncate } from "./width";
+import { approvalAuditArguments } from "../approval-policy";
 import { ToolTranscript } from "./tool-transcript";
 import { compactToolLine, toolRunningLine, toolTarget } from "./tools";
 
@@ -16,6 +18,7 @@ export interface EventRendererOptions {
 export interface EventRenderer {
   push(event: AgentEvent): RenderUpdate;
   finish(): RenderUpdate;
+  childApproval(request: ApprovalRequest): RenderUpdate;
 }
 
 const statusFor = (
@@ -44,18 +47,34 @@ export const createEventRenderer = (
     tokensEstimated: tokensEstimated || streamedText.length > 0,
   });
   let tail: readonly RichLine[] = [];
+  let messageTail: readonly RichLine[] = [];
+  const children = new Map<string, { model: string; status: string; activity: string }>();
+  const settled = new Set<string>();
+  const childLine = (id: string, child: { model: string; status: string; activity: string }): RichLine => [{
+    text: truncate(sanitizeText(`  │ Agent ${id.slice(0, 8)} · ${child.model} · ${child.status}${child.activity ? ` · ${child.activity}` : ""}`).replace(/\s+/g, " "), options.width?.() ?? 80),
+    tone: child.status === "failed" ? "error" : child.status === "completed" ? "success" : "muted",
+  }];
+  const stopChildren = (): RichLine[] => {
+    const lines = [...children].map(([id, child]) => {
+      settled.add(id);
+      return childLine(id, { ...child, status: "interrupted", activity: "" });
+    });
+    children.clear();
+    return lines;
+  };
   const active = new Map<string, ToolCall>();
   const stopTools = (label = "interrupted"): RichLine[] => {
     const lines = [...active.values()].map((call) => compactToolLine(
       call.function.name, toolTarget(call), ` · ${label}`, "warning", options.width?.() ?? 80,
     ));
     active.clear();
-    return lines;
+    return [...lines, ...stopChildren()];
   };
 
   const flushText = (): RichLine[] => {
     const done = markdown.finish();
     tail = [];
+    messageTail = [];
     return done.append;
   };
 
@@ -66,9 +85,11 @@ export const createEventRenderer = (
   ): RenderUpdate => {
     currentStatus = status ? withTokens(status) : null;
     const width = options.width?.() ?? 80;
+    messageTail = nextTail;
     tail = wrapRichLines([
       ...nextTail,
       ...[...active.values()].map((call) => toolRunningLine(call, width)),
+      ...[...children].map(([id, child]) => childLine(id, child)),
     ], width);
     return {
       append: wrapRichLines(append, width),
@@ -190,7 +211,19 @@ export const createEventRenderer = (
           }
           return { append: [], tail };
         }
-        case "agent_update":
+        case "agent_update": {
+          const id = event.childSessionId;
+          if (settled.has(id)) return { append: [], tail };
+          const child = { model: event.model, status: event.status,
+            activity: event.currentTool ? `${event.currentTool.name} ${event.currentTool.target}`.trim() : "thinking" };
+          if (["completed", "failed", "cancelled", "interrupted"].includes(event.status)) {
+            children.delete(id); settled.add(id);
+            // Do not dump the child's summary/logs or finalize parent Markdown.
+            return update([childLine(id, { ...child, activity: "" })], messageTail, currentStatus);
+          }
+          if (children.has(id) || children.size < 4) children.set(id, child);
+          return update([], messageTail, currentStatus);
+        }
         case "context_compacted":
           return {
             append: [],
@@ -202,6 +235,16 @@ export const createEventRenderer = (
           return _exhaustive;
         }
       }
+    },
+    childApproval(request): RenderUpdate {
+      const id = request.childSessionId;
+      if (!id || settled.has(id)) return { append: [], tail };
+      const previous = children.get(id);
+      if (previous || children.size < 4) children.set(id, {
+        model: previous?.model ?? "", status: "auto-approved",
+        activity: `${request.toolName} ${approvalAuditArguments(request).join(" ")}`.slice(0, 2048),
+      });
+      return update([], messageTail, currentStatus);
     },
     finish(): RenderUpdate {
       running = false;

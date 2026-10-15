@@ -633,7 +633,8 @@ export async function interactive(
             if (signal.aborted || eligiblePermission === "readonly") return false;
             if (shouldAutoApprove(approvalMode, eligiblePermission, request, signal)) {
               autoApprovedCount++;
-              appendLines(autoApprovalLines(request, ui?.columns ?? 80));
+              if (request.childSessionId) live?.childApproval(request);
+              else appendLines(autoApprovalLines(request, ui?.columns ?? 80));
               return true;
             }
             try {

@@ -218,8 +218,8 @@ it("default full access audits all requests and live manual switch applies to su
   expect(h.out.join("")).toContain("FULL ACCESS");
   expect(h.out.join("")).toContain("3 tool request(s) auto-approved this run");
   expect(h.out.join("")).toContain("Auto-approved · run_command");
-  expect(h.out.join("")).toContain("Auto-approved · mcp_call_tool");
-  expect(h.out.join("")).toContain(`child ${id}`);
+  expect(h.out.join("")).not.toContain("Auto-approved · mcp_call_tool");
+  expect(h.out.join("")).not.toContain(`child ${id}`);
   expect(h.out.join("")).not.toContain(`Auto-approved run_command: [`);
 });
 
