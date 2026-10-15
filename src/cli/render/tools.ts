@@ -161,7 +161,9 @@ export const toolSummaryLines = (
     width,
   );
   const safeWidth = Math.max(1, width);
-  const fit = (value: string, tone: Tone): RichLine => [span(truncate(sanitizeText(value).replace(/\s+/g, " "), safeWidth), tone)];
+  const fit = (value: string, tone: Tone, prefix = ""): RichLine => [
+    span(truncate(`${prefix}${sanitizeText(value).replace(/\s+/g, " ").trim()}`, safeWidth), tone),
+  ];
   const changes = call?.function.name === "edit_file" ? result.changes ?? [] : [];
   // Bound physical rows as well as logical diff lines, so long source lines
   // cannot flood the transcript. Expanded details retain the existing preview.
@@ -175,11 +177,12 @@ export const toolSummaryLines = (
   const shownDiff = selectedDiff.map(row => row.map(part => ({ ...part,
     text: truncate(sanitizeText(part.text), safeWidth),
   })));
+  const detailPrefix = parsed.warning ? "  │ " : "  ╰ ";
   return [
     // Keep physical rows bounded even when the status suffix exceeds tiny widths.
     fit(header.map(part => part.text).join(""), failed ? "error" : "accent"),
-    fit(`  │ ${parsed.detail}`, failed ? "error" : "muted"),
-    ...(parsed.warning ? [fit(`  ╰ ${parsed.warning}`, "warning")] : []),
+    fit(parsed.detail, failed ? "error" : "muted", detailPrefix),
+    ...(parsed.warning ? [fit(parsed.warning, "warning", "  ╰ ")] : []),
     ...shownDiff,
     ...(preview.length > diffBudget || changes.length > 1 ? [fit("… more diff content", "muted")] : []),
   ];

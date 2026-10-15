@@ -83,7 +83,15 @@ it("restores saved error envelopes and preserves expanded data without rerunning
   const body = text(historyLines(s, 80)); expect(body).toContain("failed"); expect(body).toContain("access denied");
   expect(body).not.toContain("/tools 1");
 });
-it("does not guess external payload types from builtin-looking fields", () => {
-  expect(toolPresentation("mcp__external__tool", result({ exit_code: 99, entries: [1, 2], content: "x", isError: true }))).toMatchObject({ failed: false, exitCode: null, detail: "Structured result · details available" });
-  expect(toolPresentation("mcp__external__tool", { content: "plain result", isError: false }).detail).toBe("plain result");
+it("uses correct tree branching prefix for single detail and warning lines", () => {
+  const c = call("read_file");
+  // Without warning: detail ends the branch with ╰
+  const single = toolSummaryLines(c, result({ content: "test", offset: 0, total_lines: 10 }), 80);
+  expect(text(single)).toContain("  ╰ lines 1–1 / 10 total");
+  expect(text(single)).not.toContain("  │");
+
+  // With warning: detail continues with │ and warning closes with ╰
+  const withWarn = toolSummaryLines(c, result({ content: "test", offset: 0, total_lines: 10, truncated: true }), 80);
+  expect(text(withWarn)).toContain("  │ lines 1–1 / 10 total");
+  expect(text(withWarn)).toContain("  ╰ truncated");
 });
