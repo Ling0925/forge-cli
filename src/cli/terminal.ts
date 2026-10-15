@@ -4,6 +4,7 @@ import { terminalText } from "./format";
 import { Controller } from "./terminal/controller";
 import { InputDecoder, type InputEvent } from "./terminal/decoder";
 import type { TerminalUI } from "./ui-contract";
+import type { TerminalController, TerminalControllerOptions } from "./terminal-controller";
 
 export const DEFAULT_MAX_QUEUE_LINES = 1_000;
 export const DEFAULT_MAX_QUEUE_BYTES = 1_000_000;
@@ -19,6 +20,7 @@ export interface TerminalReaderOptions {
   readonly onInterrupt?: () => void;
   /** Actual input EOF/error (including raw Ctrl+D), never ordinary disposal. */
   readonly onClose?: () => void;
+  readonly createController?: (options: TerminalControllerOptions) => TerminalController;
 }
 interface Waiter {
   resolve(line: string): void;
@@ -30,7 +32,7 @@ export class TerminalReader {
   readonly ui: TerminalUI;
   private readonly input: NodeJS.ReadableStream;
   private readonly output: NodeJS.WritableStream;
-  private readonly controller: Controller;
+  private readonly controller: TerminalController;
   private readonly decoder: InputDecoder;
   private readonly maxLines: number;
   private readonly maxBytes: number;
@@ -67,16 +69,17 @@ export class TerminalReader {
           "isTTY" in this.output &&
           this.output.isTTY,
       );
-    this.controller = new Controller(
-      this.input,
-      this.output,
-      tty,
-      () => this.start(),
-      (text, steer) => this.line(text, steer),
-      () =>
-        options.onInterrupt ? options.onInterrupt() : process.emit("SIGINT"),
-      (prompt, signal) => this.readApproval(prompt, signal),
-      () => this.runInput !== undefined,
+    const controls: TerminalControllerOptions = {
+      input: this.input, output: this.output, tty,
+      start: () => this.start(),
+      submit: (text, steer) => this.line(text, steer),
+      interrupt: () => { options.onInterrupt ? options.onInterrupt() : process.emit("SIGINT"); },
+      approval: (prompt, signal) => this.readApproval(prompt, signal),
+      runInputActive: () => this.runInput !== undefined,
+    };
+    this.controller = options.createController?.(controls) ?? new Controller(
+      controls.input, controls.output, controls.tty, controls.start,
+      controls.submit, controls.interrupt, controls.approval, controls.runInputActive,
     );
     const controller = this.controller;
     this.ui = {
@@ -122,6 +125,9 @@ export class TerminalReader {
       },
       choose: (spec, signal) =>
         this.closed ? Promise.resolve(null) : controller.choose(spec, signal),
+      updatePicker: (spec) => {
+        if (!this.closed) controller.updatePicker(spec);
+      },
       approve: (request, signal) =>
         this.closed
           ? Promise.resolve(false)

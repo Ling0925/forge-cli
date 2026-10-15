@@ -10,7 +10,7 @@ await build({
   bundle: true,
   platform: "node",
   target: "node22",
-  external: ["electron", "playwright", "playwright-core"],
+  external: ["electron", "playwright", "playwright-core", "ink", "react"],
   sourcemap: false,
   legalComments: "eof",
   logLevel: "info",

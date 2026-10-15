@@ -4,6 +4,7 @@ import { ForgeError } from "../shared/errors";
 import { historyEligible, openPromptHistory } from "../store/prompt-history";
 import type { CliIO } from "./cli";
 import { TerminalReader } from "./terminal";
+import { InkController } from "./ink/controller";
 
 const readStdin = (
   limit: number,
@@ -125,6 +126,7 @@ export const createNodeIO = (options: CreateNodeIOOptions = {}): CliIO => {
       isTTY: rich,
       onInterrupt: onSigInt,
       onClose: notifyClose,
+      ...(rich ? { createController: controls => new InkController(controls) } : {}),
     });
     return reader;
   };
