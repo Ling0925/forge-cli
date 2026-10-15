@@ -26,6 +26,12 @@ export function handle(controller: Controller, event: InputEvent): void {
   }
   if (event.kind === "mouse") {
     controller.screen.mouse(event);
+    if (event.action === "release" && !event.shift && !controller.screen.nativeSelection && controller.screen.hasSelection) {
+      const sent = controller.screen.copySelection();
+      controller.screen.clearSelection();
+      // OSC52 is a send-only protocol; this short UI receipt means dispatched.
+      controller.notify(sent ? "Copyed！" : "Copy failed: empty selection or over 100 KB");
+    }
     if (event.action === "wheel-up" || event.action === "wheel-down") controller.draw();
     return;
   }
@@ -44,7 +50,7 @@ export function handle(controller: Controller, event: InputEvent): void {
     if (event.kind === "key" && !event.pasted && event.key === "interrupt") {
       const sent = controller.screen.copySelection();
       controller.screen.clearSelection();
-      controller.notify(sent ? "Clipboard request sent (OSC 52) · if unavailable: Ctrl+G, then terminal Copy" : "Copy not sent: empty/over 100 KB · Ctrl+G for terminal Copy");
+      controller.notify(sent ? "Copyed！" : "Copy failed: empty selection or over 100 KB");
       return;
     }
     controller.screen.clearSelection();

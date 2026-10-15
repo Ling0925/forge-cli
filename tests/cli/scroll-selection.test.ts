@@ -19,6 +19,27 @@ const mouse = (action: Extract<InputEvent, { kind: "mouse" }>["action"], row: nu
   ({ kind: "mouse", action, row, column, shift: false });
 
 describe("scrollable transcript and durable selection", () => {
+  it("copies once on drag release, shows a short receipt and resumes without changing draft", () => {
+    const output = Object.assign(new PassThrough(), { columns: 80, rows: 24 });
+    let bytes = ""; let submitted = 0;
+    output.on("data", chunk => { bytes += String(chunk); });
+    const c = new Controller(new PassThrough(), output, true, () => {}, () => { submitted++; }, () => {}, async () => false);
+    c.screen.enabled = c.screen.fixed = true; c.prompt = "❯ "; c.editor.set("draft"); c.draw();
+    try {
+      c.handle(mouse("press", 21, 2)); c.handle(mouse("release", 21, 2));
+      expect(bytes).not.toContain("\x1b]52;");
+      c.handle(mouse("press", 21, 2)); c.handle(mouse("drag", 21, 6));
+      expect(bytes).not.toContain("\x1b]52;");
+      c.handle(mouse("release", 21, 6));
+      expect(bytes).toContain(`\x1b]52;c;${Buffer.from("draft").toString("base64")}\x07`);
+      expect(c.notice).toBe("Copyed！"); expect(c.screen.hasSelection).toBe(false);
+      c.handle(mouse("release", 21, 6)); expect(bytes.match(/\]52;c;/g)).toHaveLength(1);
+      expect(submitted).toBe(0); expect(c.editor.text).toBe("draft");
+      bytes = ""; c.append([plain("LIVE AGAIN")]); expect(bytes).toContain("LIVE AGAIN");
+      c.handle(mouse("press", 0, 0)); c.handle(mouse("drag", 0, 2)); c.handle(mouse("release", 0, 2));
+      expect(c.notice).toContain("Copy failed"); expect(bytes).not.toContain("\x1b]52;");
+    } finally { c.dispose(); }
+  });
   it("does not select or freeze after a click; drag preserves text while status updates", () => {
     const { screen, output, reset } = fixture();
     screen.append([plain("transcript")]); screen.paint([plain("draft"), plain("idle")], 0, 0);
@@ -39,7 +60,7 @@ describe("scrollable transcript and durable selection", () => {
     let bytes = ""; let submitted = 0; let interrupted = 0;
     output.on("data", chunk => { bytes += String(chunk); });
     const c = new Controller(input, output, true, () => {}, () => { submitted++; }, () => { interrupted++; }, async () => false);
-    c.screen.enabled = c.screen.fixed = true; c.editor.set("draft"); c.draw();
+    c.screen.enabled = c.screen.fixed = true; c.prompt = "❯ "; c.editor.set("draft"); c.draw();
     const decoder = new InputDecoder(event => c.handle(event));
     try {
       bytes = ""; decoder.feed("\x07");

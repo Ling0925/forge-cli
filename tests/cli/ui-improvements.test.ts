@@ -38,7 +38,7 @@ it("coalesces resize, cancels timers on dispose, and shows honest copy feedback"
     vi.spyOn(c.screen, "hasSelection", "get").mockReturnValue(true);
     vi.spyOn(c.screen, "copySelection").mockReturnValue(true);
     c.handle({kind:"key",key:"interrupt",pasted:false});
-    expect(c.notice).toContain("request sent"); expect(c.notice).not.toContain("success");
+    expect(c.notice).toBe("Copyed！");
     await vi.advanceTimersByTimeAsync(1500); expect(c.notice).toBeNull();
     c.resize(); c.dispose(); const count = paint.mock.calls.length;
     await vi.advanceTimersByTimeAsync(50); expect(paint.mock.calls.length).toBe(count);

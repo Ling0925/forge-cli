@@ -55,7 +55,7 @@ it("xterm renders a stationary editor, scrollable live transcript and persistent
     await flush();
     expect((await snapshot()).lines).toEqual(scrolled.lines);
     const row = bottom.y + 1;
-    input.write(`\x1b[<0;3;${row}M\x1b[<32;7;${row}M\x1b[<0;7;${row}m`);
+    input.write(`\x1b[<0;3;${row}M\x1b[<32;7;${row}M`);
     await flush();
     const selected = await snapshot();
     const inverse = await page.evaluate((row) => {
@@ -72,8 +72,10 @@ it("xterm renders a stationary editor, scrollable live transcript and persistent
     expect(duringSelection.lines[bottom.y]).toBe(selected.lines[bottom.y]);
     expect(duringSelection.lines.join("\n")).toContain("Working");
     expect(duringSelection.lines.join("\n")).not.toContain("LATEST-LIVE");
-    input.write("\x1b");
-    await new Promise((resolve) => setTimeout(resolve, 45));
+    input.write(`\x1b[<0;7;${row}m`);
+    expect(pending).toContain(`\x1b]52;c;${Buffer.from("draft").toString("base64")}\x07`);
+    await flush();
+    expect((await snapshot()).lines.join("\n")).toContain("Copyed！");
     input.write("\x1b[6~\x1b[6~\x1b[6~");
     await flush();
     const caughtUp = await snapshot();
