@@ -10,6 +10,37 @@ const categories = [
   ["tools", "工具", "contextTools"],
 ] as const;
 
+function formatModelSpans(
+  rawModel: string,
+  rawEffort: string | undefined,
+  maxRoom: number,
+): Span[] {
+  if (maxRoom <= 0) return [];
+  const modelText = sanitizeText(rawModel).replace(/[\n\t]/g, " ");
+  if (!rawEffort) {
+    const text = truncate(modelText, maxRoom);
+    return text ? [{ text, tone: "accent" }] : [];
+  }
+  const effortText = ` (${sanitizeText(rawEffort).replace(/[\n\t]/g, " ")})`;
+  const modelWidth = visibleWidth(modelText);
+  const effortWidth = visibleWidth(effortText);
+  if (modelWidth + effortWidth <= maxRoom) {
+    return [
+      { text: modelText, tone: "accent" },
+      { text: effortText, tone: "muted" },
+    ];
+  }
+  if (maxRoom <= modelWidth) {
+    const text = truncate(modelText, maxRoom);
+    return text ? [{ text, tone: "accent" }] : [];
+  }
+  const remaining = maxRoom - modelWidth;
+  return [
+    { text: modelText, tone: "accent" },
+    { text: truncate(effortText, remaining), tone: "muted" },
+  ];
+}
+
 /** Full-width track; the red right-hand segment marks compression headroom. */
 export function contextFooter(context: ComposerContext, columns: number, compact = false): readonly RichLine[] {
   const width = Math.max(1, Math.floor(columns));
@@ -28,18 +59,26 @@ export function contextFooter(context: ComposerContext, columns: number, compact
     const filled = Math.round(Math.min(1, Math.max(0, ratio)) * miniWidth);
     const mini = miniWidth ? ` [${"━".repeat(filled)}${"·".repeat(miniWidth - filled)}]` : "";
     const summary = truncate(`${summaryText}${mini}`, width);
-    const model = truncate(sanitizeText(context.model).replace(/[\n\t]/g, " "), Math.max(0, width - visibleWidth(summary) - 1));
-    return [[{ text: model, tone: "accent" }, { text: " ".repeat(Math.max(0, width - visibleWidth(model) - visibleWidth(summary))) }, { text: summary, tone: ratio >= 0.8 ? "warning" : "muted" }]];
+    const room = Math.max(0, width - visibleWidth(summary) - 1);
+    const modelSpans = formatModelSpans(context.model, context.reasoningEffort, room);
+    const modelWidth = modelSpans.reduce((sum, s) => sum + visibleWidth(s.text), 0);
+    return [[
+      ...modelSpans,
+      { text: " ".repeat(Math.max(0, width - modelWidth - visibleWidth(summary))) },
+      { text: summary, tone: ratio >= 0.8 ? "warning" : "muted" },
+    ]];
   }
   const right = truncate(summaryText, width);
   // Only token budgets with a known window define a meaningful reserved fraction.
   const reserveStart = usage?.windowTokens && usage.budgetTokens !== undefined
     ? Math.round(Math.min(1, Math.max(0, usage.budgetTokens / usage.windowTokens)) * width)
     : width;
-  const model = truncate(sanitizeText(context.model).replace(/[\n\t]/g, " "), Math.max(0, width - visibleWidth(right) - 2));
+  const room = Math.max(0, width - visibleWidth(right) - 2);
+  const modelSpans = formatModelSpans(context.model, context.reasoningEffort, room);
+  const modelWidth = modelSpans.reduce((sum, s) => sum + visibleWidth(s.text), 0);
   const info: Span[] = [
-    { text: model, tone: "accent" },
-    { text: " ".repeat(Math.max(0, width - visibleWidth(model) - visibleWidth(right))) },
+    ...modelSpans,
+    { text: " ".repeat(Math.max(0, width - modelWidth - visibleWidth(right))) },
     { text: right, tone: ratio >= 0.9 ? "warning" : "muted" },
   ];
   const filled = Math.round(Math.min(1, Math.max(0, ratio)) * width);

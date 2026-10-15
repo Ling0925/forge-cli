@@ -190,7 +190,11 @@ export class Controller implements TerminalUI {
     this.draw();
   }
   setContext(context: ComposerContext | null): void {
-    this.context = context === null ? null : { ...context, model: terminalText(context.model) };
+    this.context = context === null ? null : {
+      ...context,
+      model: terminalText(context.model),
+      ...(context.reasoningEffort ? { reasoningEffort: terminalText(context.reasoningEffort) } : {}),
+    };
     this.draw();
   }
   update(update: RenderUpdate): void {

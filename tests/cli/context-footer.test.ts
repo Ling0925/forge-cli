@@ -96,6 +96,25 @@ describe("composer context footer", () => {
     expect(text(contextFooter({ model: "test", usage: null }, 80)[0]!)).toContain("?% · R— · ?");
   });
 
+  it("displays reasoning effort next to model ID with distinct accent/muted tones", () => {
+    const lines = contextFooter({ ...context, model: "gpt-4o", reasoningEffort: "high" }, 80);
+    const firstLine = lines[0]!;
+    expect(text(firstLine)).toContain("gpt-4o (high)");
+    const modelSpan = firstLine.find((s) => s.text === "gpt-4o");
+    const effortSpan = firstLine.find((s) => s.text === " (high)");
+    expect(modelSpan?.tone).toBe("accent");
+    expect(effortSpan?.tone).toBe("muted");
+    expect(visibleWidth(text(firstLine))).toBe(80);
+
+    const compactLines = contextFooter({ ...context, model: "gpt-4o", reasoningEffort: "medium" }, 80, true);
+    expect(text(compactLines[0]!)).toContain("gpt-4o (medium)");
+
+    for (const width of [10, 15, 20, 40]) {
+      const tight = contextFooter({ ...context, model: "claude-3-7-sonnet", reasoningEffort: "high" }, width);
+      expect(visibleWidth(text(tight[0]!))).toBeLessThanOrEqual(width);
+    }
+  });
+
   it("uses distinct category colors even with unknown background and respects NO_COLOR", () => {
     const roles: Tone[] = ["contextInstructions", "contextMemory", "contextConversation", "contextTools"];
     for (const setting of ["system", "light", "dark"] as const) {

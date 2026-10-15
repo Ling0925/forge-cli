@@ -96,7 +96,12 @@ export async function interactive(
     const resolvedWindow = settings.modelContextWindows?.[model] ?? windows.get(model) ?? contextUsage?.windowTokens ?? windowTokens;
     const measured = contextUsage ? { ...contextUsage, windowTokens: resolvedWindow } : measureContext(session ? projectSummary(session) : [], resolvedWindow);
     const { budgetTokens: _oldTokens, budgetChars: _oldChars, ...currentUsage } = measured;
-    ui?.setContext?.({ model, usage: { ...currentUsage, ...budgetUsage(resolveContextBudget(resolvedWindow, settings)) }, estimated: true });
+    ui?.setContext?.({
+      model,
+      reasoningEffort: settings.reasoningEffort ?? "default",
+      usage: { ...currentUsage, ...budgetUsage(resolveContextBudget(resolvedWindow, settings)) },
+      estimated: true,
+    });
     if (ui && !settings.modelContextWindows?.[model] && !windows.has(model) && !loadingWindows.has(model) && service.getModelContextWindow) {
       const requestedModel = model;
       loadingWindows.add(requestedModel);
@@ -265,6 +270,8 @@ export async function interactive(
       .parse(chosen);
     if (signal.aborted) return;
     await service.updateSettings({ settings: { reasoningEffort } });
+    settings.reasoningEffort = reasoningEffort;
+    refreshContext();
     safe.stdout(`Reasoning effort: ${reasoningEffort} (saved)\n`);
   };
 
@@ -300,6 +307,7 @@ export async function interactive(
       id: session?.id ?? "not created",
       workspace: session?.workspace ?? workspace,
       model,
+      reasoningEffort: settings.reasoningEffort ?? "default",
       permission,
       mode,
       version: "0.1.0",
@@ -313,6 +321,7 @@ export async function interactive(
           id: session?.id ?? "not created",
           workspace: session?.workspace ?? workspace,
           model,
+          reasoningEffort: settings.reasoningEffort ?? "default",
           permission,
           mode,
           version: "0.1.0",
@@ -373,6 +382,7 @@ export async function interactive(
               if (value) {
                 model = settingsFields.model.parse(value);
                 safe.stdout(`Model: ${model}\n`);
+                refreshContext();
                 if (ui) await changeReasoning();
               } else {
                 active = new AbortController();
@@ -388,6 +398,7 @@ export async function interactive(
                   if (chosen !== null && !active.signal.aborted) {
                     model = chosen;
                     safe.stdout(`Model: ${model}\n`);
+                    refreshContext();
                     if (ui) await changeReasoning();
                   }
                 } finally {

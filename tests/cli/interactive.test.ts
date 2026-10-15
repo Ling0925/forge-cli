@@ -349,7 +349,7 @@ describe("rich integration adapters", () => {
     expect(await runCliWithIO(["chat"], { ...base, compactSession: async () => compacted }, host.io)).toBe(0);
     expect(host.err).toEqual([]);
     expect(host.contexts[0]).toMatchObject({ model: "test", estimated: true });
-    expect(host.contexts).toContainEqual({ model: "test", usage: { ...usage, budgetTokens: 800 }, estimated: true });
+    expect(host.contexts).toContainEqual({ model: "test", reasoningEffort: "default", usage: { ...usage, budgetTokens: 800 }, estimated: true });
     expect(host.contexts.some((value) => value?.model === "changed" && value.estimated)).toBe(true);
     expect(host.contexts.some((value) => (value?.usage?.parts.memory ?? 0) > 0)).toBe(true);
     expect(host.contexts.at(-1)).toMatchObject({ model: "changed", estimated: true, usage: { usedTokens: 0, windowTokens: null } });

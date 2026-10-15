@@ -76,6 +76,19 @@ describe("rich lines", () => {
     expect(textOf(banner)).toContain("v2");
     expect(textOf(banner)).toContain("/ 命令");
     expect(textOf(banner)).toContain("/help 帮助");
+
+    const bannerWithEffort = bannerLines(
+      {
+        version: "2",
+        model: "org/model",
+        reasoningEffort: "high",
+        workspace: "/work",
+        permission: "workspace",
+        mode: "exec",
+      },
+      80,
+    );
+    expect(textOf(bannerWithEffort)).toContain("model (high)");
     expect(textOf(banner)).not.toMatch(/token|cost|\\$\\d/i);
     expect(textOf(helpLines(40))).toContain("/help");
   });
