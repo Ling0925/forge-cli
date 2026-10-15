@@ -1,4 +1,4 @@
-import { graphemes } from "../theme";
+import { graphemes } from "../../../src/cli/theme";
 
 export class Editor {
   text = "";

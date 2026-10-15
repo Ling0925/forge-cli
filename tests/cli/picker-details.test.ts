@@ -3,9 +3,9 @@ import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import { sessionDetail } from "../../src/cli/interactive/pickers";
 import { SlashMenu } from "../../src/cli/slash-menu";
-import { Editor } from "../../src/cli/terminal/editor";
-import { Screen } from "../../src/cli/terminal/screen";
-import { draw } from "../../src/cli/terminal/view";
+import { Editor } from "./legacy/editor";
+import { Screen } from "./legacy/screen";
+import { draw } from "./legacy/view";
 import { createTheme, visibleWidth } from "../../src/cli/theme";
 import type { PickerItem } from "../../src/cli/ui-contract";
 

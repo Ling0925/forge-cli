@@ -1,7 +1,8 @@
 import { ForgeError } from "../shared/errors";
 import { parseApprovalAnswer } from "./approval-policy";
 import { terminalText } from "./format";
-import { Controller } from "./terminal/controller";
+import { PlainController } from "./plain-controller";
+import { InkController } from "./ink/controller";
 import { InputDecoder, type InputEvent } from "./terminal/decoder";
 import type { TerminalUI } from "./ui-contract";
 import type { TerminalController, TerminalControllerOptions } from "./terminal-controller";
@@ -46,8 +47,8 @@ export class TerminalReader {
   private closed = false;
   private readonly onData = (chunk: Buffer | string): void => {
     this.controller.batch = true;
-    this.decoder.feed(chunk);
-    this.controller.batch = false;
+    try { this.decoder.feed(chunk); }
+    finally { this.controller.batch = false; }
     this.controller.draw();
   };
   private readonly onEnd = (): void =>
@@ -77,10 +78,8 @@ export class TerminalReader {
       approval: (prompt, signal) => this.readApproval(prompt, signal),
       runInputActive: () => this.runInput !== undefined,
     };
-    this.controller = options.createController?.(controls) ?? new Controller(
-      controls.input, controls.output, controls.tty, controls.start,
-      controls.submit, controls.interrupt, controls.approval, controls.runInputActive,
-    );
+    this.controller = options.createController?.(controls) ?? (tty && process.env.TERM !== "dumb"
+      ? new InkController(controls) : new PlainController(controls));
     const controller = this.controller;
     this.ui = {
       get columns() {
@@ -295,16 +294,18 @@ export class TerminalReader {
     this.runInput = undefined;
     const waiter = this.waiter;
     this.waiter = undefined;
-    waiter?.reject(error);
-    this.controller.dispose();
-    this.decoder.dispose();
-    this.input.off("data", this.onData);
-    this.input.off("end", this.onEnd);
-    this.input.off("error", this.onError);
-    this.output.off("resize", this.onResize);
-    this.input.pause();
-    // Cleanup and closed guard precede callbacks, so callback disposal is safe.
-    if (inputClosed) this.notifyClose?.();
+    try {
+      waiter?.reject(error);
+      this.controller.dispose();
+    } finally {
+      this.decoder.dispose();
+      this.input.off("data", this.onData);
+      this.input.off("end", this.onEnd);
+      this.input.off("error", this.onError);
+      this.output.off("resize", this.onResize);
+      this.input.pause();
+      if (inputClosed) this.notifyClose?.();
+    }
   }
   dispose(): void {
     this.close(new ForgeError("cancelled", "Input cancelled."));

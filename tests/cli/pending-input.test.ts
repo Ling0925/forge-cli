@@ -1,8 +1,8 @@
 import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import { RunQueue } from "../../src/cli/interactive/run-queue";
-import { Controller } from "../../src/cli/terminal/controller";
-import { TerminalReader } from "../../src/cli/terminal";
+import { Controller } from "./legacy/controller";
+import { TerminalReader } from "./legacy/reader";
 import { visibleWidth } from "../../src/cli/theme";
 
 const text = (lines: readonly (readonly { text: string }[])[]) => lines.map(line => line.map(s => s.text).join(""));

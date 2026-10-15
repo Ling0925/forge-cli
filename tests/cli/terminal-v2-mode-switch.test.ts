@@ -1,6 +1,6 @@
 import { PassThrough } from "node:stream";
 import { expect, it } from "vitest";
-import { Controller } from "../../src/cli/terminal/controller";
+import { Controller } from "./legacy/controller";
 import { InputDecoder } from "../../src/cli/terminal/decoder";
 
 it("decodes split Shift+Tab and toggles only the ordinary composer, preserving draft", () => {

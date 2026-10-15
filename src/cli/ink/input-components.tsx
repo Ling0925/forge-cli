@@ -17,6 +17,7 @@ interface EditorProps {
   readonly width: number;
   readonly maxLines: number;
   readonly appearance: Appearance;
+  readonly rows?: readonly RichLine[];
 }
 /** Pure layout shared with the dock's height budget; the component owns its rows. */
 export function editorRows({ editor, prefix, hint, tone, width, maxLines, appearance }: EditorProps): readonly RichLine[] {
@@ -39,7 +40,7 @@ export function editorRows({ editor, prefix, hint, tone, width, maxLines, appear
   return rows.slice(start, start + maxLines);
 }
 export function Composer(props: EditorProps): ReactElement {
-  return <Box flexDirection="column">{editorRows(props).map((spans, index) =>
+  return <Box flexDirection="column">{(props.rows ?? editorRows(props)).map((spans, index) =>
     <RichRow key={index} spans={spans} appearance={props.appearance} width={props.width} />)}</Box>;
 }
 export function ApprovalInput(props: Omit<EditorProps, "hint" | "tone">): ReactElement {

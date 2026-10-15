@@ -1,10 +1,10 @@
 import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import { SlashMenu } from "../../src/cli/slash-menu";
-import { Editor } from "../../src/cli/terminal/editor";
-import { pickerDetail, pickerLayout } from "../../src/cli/terminal/picker-layout";
-import { Screen } from "../../src/cli/terminal/screen";
-import { draw, type View } from "../../src/cli/terminal/view";
+import { Editor } from "./legacy/editor";
+import { pickerDetail, pickerLayout } from "./legacy/picker-layout";
+import { Screen } from "./legacy/screen";
+import { draw, type View } from "./legacy/view";
 import { createTheme, graphemes, visibleWidth } from "../../src/cli/theme";
 import type { PickerSpec, RichLine } from "../../src/cli/ui-contract";
 

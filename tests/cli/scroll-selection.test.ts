@@ -1,9 +1,9 @@
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { Controller } from "../../src/cli/terminal/controller";
+import { Controller } from "./legacy/controller";
 import { InputDecoder, type InputEvent } from "../../src/cli/terminal/decoder";
-import { Screen, plain } from "../../src/cli/terminal/screen";
-import { ScreenSelection } from "../../src/cli/terminal/selection";
+import { Screen, plain } from "./legacy/screen";
+import { ScreenSelection } from "./legacy/selection";
 import { createTheme } from "../../src/cli/theme";
 
 function fixture() {

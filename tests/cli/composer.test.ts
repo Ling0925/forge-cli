@@ -1,6 +1,6 @@
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TerminalReader } from "../../src/cli/terminal";
+import { TerminalReader } from "./legacy/reader";
 const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
 describe("live slash composer", () => {
   beforeEach(() => vi.stubEnv("TERM", "xterm-256color"));

@@ -1,7 +1,7 @@
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { createTheme } from "../theme";
-import type { RichLine } from "../ui-contract";
+import { createTheme } from "../../../src/cli/theme";
+import type { RichLine } from "../../../src/cli/ui-contract";
 import { Screen, plain } from "./screen";
 
 class Output extends PassThrough {

@@ -1,8 +1,8 @@
 import { PassThrough } from "node:stream";
 import { expect, it, vi } from "vitest";
-import { TerminalReader } from "../../src/cli/terminal";
-import { Controller } from "../../src/cli/terminal/controller";
-import { Screen } from "../../src/cli/terminal/screen";
+import { TerminalReader } from "./legacy/reader";
+import { Controller } from "./legacy/controller";
+import { Screen } from "./legacy/screen";
 import { contextFooter } from "../../src/cli/terminal/context-footer";
 import { MarkdownStream } from "../../src/cli/render/markdown";
 import { diffLines } from "../../src/cli/render/diff";

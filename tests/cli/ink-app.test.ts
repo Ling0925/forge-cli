@@ -13,7 +13,7 @@ it("React subscribes to input focus without controller rerenders or a second str
   let latest = "";
   stdout.on("data", chunk => { const value = stripAnsi(chunk.toString()); if (value) latest = value; });
   const store = new InputStore(effect => { if (effect.type === "approval") store.end(); });
-  const state: InkViewState = { columns: 80, rows: 24, history: [], tail: [], status: null, context: null, plan: null,
+  const state: InkViewState = { columns: 80, rows: 24, tail: [], status: null, context: null, plan: null,
     mode: "build", theme: "dark", noColor: true, pendingInput: [], inputHint: null, now: 0 };
   const app = render(createElement(InkApp, { state, input: store }), {
     stdin: stdin as unknown as NodeJS.ReadStream, stdout: stdout as unknown as NodeJS.WriteStream,

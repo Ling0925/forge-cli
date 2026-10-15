@@ -1,12 +1,12 @@
-import type { TaskPlan } from "../../shared/schemas";
-import { terminalText } from "../format";
-import { compactTokens } from "../render/token-count";
-import { wrapRichLines } from "../render/rich";
-import type { SlashMenu } from "../slash-menu";
-import { truncate, visibleWidth } from "../theme";
+import type { TaskPlan } from "../../../src/shared/schemas";
+import { terminalText } from "../../../src/cli/format";
+import { compactTokens } from "../../../src/cli/render/token-count";
+import { wrapRichLines } from "../../../src/cli/render/rich";
+import type { SlashMenu } from "../../../src/cli/slash-menu";
+import { truncate, visibleWidth } from "../../../src/cli/theme";
 import { pickerLayout } from "./picker-layout";
-import type { ComposerContext, PickerSpec, RichLine, RunStatus } from "../ui-contract";
-import { contextFooter } from "./context-footer";
+import type { ComposerContext, PickerSpec, RichLine, RunStatus } from "../../../src/cli/ui-contract";
+import { contextFooter } from "../../../src/cli/terminal/context-footer";
 import type { Editor } from "./editor";
 import { type Screen, composerLayout, plain } from "./screen";
 

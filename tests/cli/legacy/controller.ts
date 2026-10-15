@@ -1,7 +1,7 @@
-import type { ApprovalRequest, TaskPlan } from "../../shared/schemas";
-import { approvalLines, terminalText } from "../format";
-import { SlashMenu } from "../slash-menu";
-import { createTheme, resolveTheme } from "../theme";
+import type { ApprovalRequest, TaskPlan } from "../../../src/shared/schemas";
+import { approvalLines, terminalText } from "../../../src/cli/format";
+import { SlashMenu } from "../../../src/cli/slash-menu";
+import { createTheme, resolveTheme } from "../../../src/cli/theme";
 import type {
   ComposerContext,
   PickerSpec,
@@ -10,8 +10,8 @@ import type {
   RunStatus,
   TerminalUI,
   UIOptions,
-} from "../ui-contract";
-import type { InputEvent } from "./decoder";
+} from "../../../src/cli/ui-contract";
+import type { InputEvent } from "../../../src/cli/terminal/decoder";
 import { Editor } from "./editor";
 import { handle } from "./keys";
 import { Screen, plain } from "./screen";
@@ -83,6 +83,7 @@ export class Controller implements TerminalUI {
       signal: AbortSignal,
     ) => Promise<boolean>,
     private readonly runInputEnabled: () => boolean = () => false,
+    private readonly inline = false,
   ) {
     this.screen = new Screen(output, () => this, createTheme({ isTTY: false }));
   }
@@ -131,8 +132,8 @@ export class Controller implements TerminalUI {
           typeof this.input.setRawMode === "function"
         )
           this.input.setRawMode(true);
-        this.screen.fixed = true;
-        this.output.write("\x1b[?1049h\x1b[?2004h\x1b[?1002h\x1b[?1006h\x1b[?25h");
+        this.screen.fixed = !this.inline;
+        this.output.write(this.inline ? "\x1b[?2004h\x1b[?25h" : "\x1b[?1049h\x1b[?2004h\x1b[?1002h\x1b[?1006h\x1b[?25h");
         let lastSecond = Math.floor(Date.now() / 1000);
         let lastFrame = Math.floor(Date.now() / 80);
         // Streaming draws remain immediate. Timer-only work runs once per visible

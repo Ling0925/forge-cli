@@ -2,7 +2,7 @@ import { PassThrough } from "node:stream";
 import { expect, it, vi } from "vitest";
 import type { AgentEvent, ToolCall } from "../../src/shared/schemas";
 import { createEventRenderer } from "../../src/cli/render/events";
-import { TerminalReader } from "../../src/cli/terminal";
+import { TerminalReader } from "./legacy/reader";
 import { LiveRun } from "../../src/cli/live-run";
 import { createTheme } from "../../src/cli/theme";
 import type { CliIO } from "../../src/cli/cli";

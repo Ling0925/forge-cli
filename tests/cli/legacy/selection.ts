@@ -1,5 +1,5 @@
-import { graphemeWidth, graphemes } from "../theme";
-import type { RichLine, Span } from "../ui-contract";
+import { graphemeWidth, graphemes } from "../../../src/cli/theme";
+import type { RichLine, Span } from "../../../src/cli/ui-contract";
 
 export interface Cell { row: number; column: number }
 const compare = (a: Cell, b: Cell) => a.row - b.row || a.column - b.column;

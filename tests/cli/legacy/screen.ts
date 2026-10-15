@@ -1,9 +1,9 @@
-import { terminalText } from "../format";
-import { renderRichLine, wrapRichLines } from "../render/rich";
-import { type Theme, graphemeWidth, graphemes, visibleWidth } from "../theme";
-import type { RichLine } from "../ui-contract";
+import { terminalText } from "../../../src/cli/format";
+import { renderRichLine, wrapRichLines } from "../../../src/cli/render/rich";
+import { type Theme, graphemeWidth, graphemes, visibleWidth } from "../../../src/cli/theme";
+import type { RichLine } from "../../../src/cli/ui-contract";
 import { type Cell, ScreenSelection } from "./selection";
-import type { InputEvent } from "./decoder";
+import type { InputEvent } from "../../../src/cli/terminal/decoder";
 
 export const plain = (text: string): RichLine => [{ text: terminalText(text) }];
 

@@ -1,7 +1,7 @@
 import { PassThrough } from "node:stream";
 import { chromium } from "playwright";
 import { expect, it } from "vitest";
-import { TerminalReader } from "../../src/cli/terminal";
+import { TerminalReader } from "./legacy/reader";
 import { terminalQAResources } from "./qa-resources";
 
 it("xterm renders a stationary editor, scrollable live transcript and persistent inverse selection", async () => {

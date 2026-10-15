@@ -32,6 +32,61 @@ function fixture(maxBytes?: number) {
 }
 
 describe("Ink terminal migration", () => {
+  it("cleans the TUI on SIGHUP without retaining process listeners", async () => {
+    const input = new Input(); const output = new Output(); output.on("data", () => {});
+    const io = createNodeIO({ stdin: input, stdout: output, stderr: output });
+    // Ink/cli-cursor installs a process-wide exit hook on first mount.
+    await io.ui!.configure({ theme: "dark" });
+    const before = process.listenerCount("SIGHUP");
+    const closed = vi.fn(); const off = io.onClose!(closed);
+    try {
+      process.emit("SIGHUP");
+      expect(closed).toHaveBeenCalledOnce();
+      expect(input.isRaw).toBe(false);
+    } finally { off(); await io.dispose?.(); }
+    expect(process.listenerCount("SIGHUP")).toBe(before);
+  });
+
+  it("screen-reader mode suppresses timer-only animation and partial tail churn", async () => {
+    vi.stubEnv("INK_SCREEN_READER", "true");
+    const f = fixture(); await f.reader.ui.configure({ theme: "dark" });
+    f.reader.ui.setStatus({ label: "Thinking", startedAt: Date.now(), toolCount: 0, cancellable: true });
+    await settle(); const before = f.bytes();
+    f.reader.ui.setTail([[{ text: "hidden partial stream" }]]);
+    await new Promise(resolve => setTimeout(resolve, 170));
+    expect(f.bytes()).toBe(before);
+    f.reader.ui.append([[{ text: "completed accessible answer" }]]);
+    await settle(); expect(f.bytes()).toContain("completed accessible answer");
+  });
+
+  it("freezes reading while output advances, and returns to live without submitting keys", async () => {
+    const f = fixture();
+    await f.reader.ui.configure({ theme: "dark" });
+    f.reader.ui.setTail(Array.from({ length: 80 }, (_, i) => [{ text: `live-line-${i}` }]));
+    f.input.write("draft\x1b[5~");
+    await settle();
+    expect(stripAnsi(f.bytes())).toContain("Reading");
+    const before = f.bytes();
+    f.reader.ui.update!({ append: [[{ text: "completed-while-reading" }]], tail: [], status: null });
+    await settle();
+    expect(f.bytes()).toBe(before);
+    f.input.write("\r");
+    f.input.write("\x1b[F");
+    await settle();
+    expect(stripAnsi(f.bytes())).toContain("completed-while-reading");
+    const answer = f.reader.question("❯ ", signal());
+    f.input.write("\r");
+    expect(await answer).toBe("draft");
+  });
+
+  it("approval exits reading and always presents a fresh prompt", async () => {
+    const f = fixture(); await f.reader.ui.configure({ theme: "dark" });
+    f.reader.ui.setTail([[{ text: "reading content" }]]);
+    f.input.write("\x1b[5~");
+    const approval = f.reader.readApproval("Approve? ", signal());
+    f.input.write("n\r"); expect(await approval).toBe(false);
+  });
+
   it("keeps single-request approval visible without mounting Ink", async () => {
     const f = fixture();
     const approval = f.reader.readApproval("Approval: run_command\nargv: [test]\nApprove? [Y/n] ", signal());

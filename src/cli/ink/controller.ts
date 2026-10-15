@@ -7,17 +7,23 @@ import type { TerminalController, TerminalControllerOptions } from "../terminal-
 import type { InputEvent } from "../terminal/decoder";
 import type { ComposerContext, PickerSpec, RenderUpdate, RichLine, RunStatus, UIOptions } from "../ui-contract";
 import { InputStore } from "./input-store";
+import { TerminalModes } from "./terminal-modes";
+import { Transcript, ReadingView } from "./transcript";
+import type { CommittedOutput } from "./output";
 import type { InkViewState } from "./types";
 
-/** Terminal lifecycle and output adapter. Input focus belongs to InputStore. */
+/** Terminal lifecycle/output adapter. Framework owns painting, stores own input/reading. */
 export class InkController implements TerminalController {
   busy = false;
   private batching = false;
   get batch(): boolean { return this.batching; }
   set batch(value: boolean) { this.batching = value; this.input.setBatch(value); }
   private readonly input: InputStore;
-  private history: { id: number; line: RichLine }[] = [];
-  private nextId = 0;
+  private readonly modes: TerminalModes;
+  private readonly transcript = new Transcript();
+  private readonly reading = new ReadingView();
+  private output: CommittedOutput | undefined;
+  private outputId = 0;
   private tail: readonly RichLine[] = [];
   private status: RunStatus | null = null;
   private context: ComposerContext | null = null;
@@ -26,22 +32,18 @@ export class InkController implements TerminalController {
   private modeToggle: (() => void) | undefined;
   private pendingInput: readonly string[] = [];
   private inputHint: string | null = null;
-  private theme: UIOptions["theme"] = "system";
   private instance: Instance | undefined;
   private renderView: (() => ReactNode) | undefined;
   private mounting: Promise<void> | undefined;
   private timer: ReturnType<typeof setInterval> | undefined;
   private disposed = false;
   private configured = false;
-  private oldRaw = false;
 
   constructor(private readonly options: TerminalControllerOptions) {
+    this.modes = new TerminalModes(options.input as NodeJS.ReadStream, options.output as NodeJS.WriteStream, () => this.draw());
     this.input = new InputStore(effect => {
       switch (effect.type) {
-        case "submit":
-          this.append(plainLines(effect.echo));
-          this.options.submit(effect.text, effect.steer);
-          break;
+        case "submit": this.append(plainLines(effect.echo)); this.options.submit(effect.text, effect.steer); break;
         case "approval": this.options.submit(effect.answer); break;
         case "interrupt": this.options.interrupt(); break;
         case "toggle-mode": this.modeToggle?.(); break;
@@ -62,114 +64,130 @@ export class InkController implements TerminalController {
   }
   async configure(options: UIOptions): Promise<void> {
     if (this.disposed) return;
-    const background = Number(process.env.COLORFGBG?.split(";").at(-1));
-    this.theme = options.theme === "system" && Number.isFinite(background)
-      ? background >= 7 ? "light" : "dark" : options.theme;
+    this.options.start();
+    this.configured = true;
+    this.modes.configure(options.theme);
     if (this.instance) { this.draw(); return; }
     this.mounting ??= this.mount();
     await this.mounting;
   }
   private async mount(): Promise<void> {
-    this.options.start();
-    const input = this.options.input as NodeJS.ReadStream;
-    this.oldRaw = Boolean(input.isRaw);
-    this.configured = true;
     try {
-      input.setRawMode?.(true);
-      // The decoder is the only stream owner and retains paste provenance.
-      this.options.output.write("\x1b[?2004h");
-      const [{ render }, { createElement }, { InkApp }] = await Promise.all([
-        import("ink"), import("react"), import("./app"),
-      ]);
+      const [{ render }, { createElement }, { InkApp }] = await Promise.all([import("ink"), import("react"), import("./app")]);
       if (this.disposed) return;
       this.renderView = () => createElement(InkApp, { state: this.snapshot(), input: this.input });
+      this.prepareOutput();
       this.instance = render(this.renderView(), {
-        stdin: input, stdout: this.options.output as NodeJS.WriteStream, stderr: this.options.output as NodeJS.WriteStream,
+        stdin: this.options.input as NodeJS.ReadStream,
+        stdout: this.options.output as NodeJS.WriteStream, stderr: this.options.output as NodeJS.WriteStream,
         exitOnCtrlC: false, patchConsole: false, incrementalRendering: true, maxFps: 30,
+        isScreenReaderEnabled: this.modes.screenReader,
       });
-      this.timer = setInterval(() => {
-        const focus = this.input.getSnapshot().focus;
-        if (this.status || (focus.kind === "picker" && focus.spec.items.some(item => item.active))
-          || this.tail.some(line => line.some(span => span.animation))) this.draw();
-      }, 80);
-      this.timer.unref();
-    } catch (error) {
-      this.dispose();
-      throw error;
-    }
+      if (!this.modes.screenReader) {
+        this.timer = setInterval(() => {
+          if (this.reading.active) return;
+          const focus = this.input.getSnapshot().focus;
+          if (this.status || (focus.kind === "picker" && focus.spec.items.some(item => item.active))
+            || this.tail.some(line => line.some(span => span.animation))) this.draw();
+        }, 80);
+        this.timer.unref();
+      }
+    } catch (error) { this.dispose(); throw error; }
+  }
+  private prepareOutput(): void {
+    if (this.reading.active) return;
+    const depth = (this.options.output as NodeJS.WriteStream).getColorDepth?.() ?? 8;
+    const chunks = this.transcript.drain(Math.max(1, this.columns - 1), this.modes.theme, process.env.NO_COLOR !== undefined, depth);
+    if (chunks.length) this.output = { id: ++this.outputId, chunks };
   }
   private snapshot(): InkViewState {
     return {
-      columns: this.columns, rows: this.rows, history: this.history, tail: this.tail,
+      columns: this.columns, rows: this.rows, output: this.output, tail: this.modes.screenReader ? [] : this.tail,
+      reading: this.reading.snapshot(), screenReader: this.modes.screenReader,
       status: this.status, context: this.context, plan: this.plan, mode: this.mode,
-      theme: this.theme, noColor: process.env.NO_COLOR !== undefined,
+      theme: this.modes.theme, noColor: process.env.NO_COLOR !== undefined,
       pendingInput: this.pendingInput, inputHint: this.inputHint, now: Date.now(),
     };
   }
   draw(): void {
-    if (!this.batch && !this.disposed && this.renderView) this.instance?.rerender(this.renderView());
+    if (!this.batch && !this.disposed && this.renderView && this.instance) {
+      this.prepareOutput();
+      this.instance.rerender(this.renderView());
+    }
   }
-  resize(): void { this.draw(); }
+  resize(): void { this.reading.resize(Math.max(1, this.columns - 1)); this.draw(); }
   append(lines: readonly RichLine[]): void {
-    if (lines.length) this.history = [...this.history, ...lines.map(line => ({ id: this.nextId++, line }))];
+    this.transcript.append(lines, this.reading.active);
+    if (this.reading.active) { this.reading.changed(); return; }
     this.draw();
   }
-  setTail(lines: readonly RichLine[]): void { this.tail = lines; this.draw(); }
-  setStatus(status: RunStatus | null): void { this.status = status; this.draw(); }
-  setBusy(busy: boolean): void { this.busy = busy; this.draw(); }
-  setMode(mode: "build" | "plan"): void { this.mode = mode; this.draw(); }
-  setPlan(plan: TaskPlan | null): void { this.plan = plan; this.draw(); }
-  setContext(context: ComposerContext | null): void { this.context = context; this.draw(); }
-  setInputHint(hint: string | null): void { this.inputHint = hint; this.draw(); }
-  setPendingInput(lines: readonly string[]): void { this.pendingInput = lines.slice(0, 2); this.draw(); }
-  onModeToggle(callback: () => void): () => void {
-    this.modeToggle = callback;
-    return () => { if (this.modeToggle === callback) this.modeToggle = undefined; };
+  setTail(lines: readonly RichLine[]): void {
+    this.tail = lines;
+    if (this.reading.active) { this.reading.changed(); return; }
+    this.draw();
   }
+  setStatus(status: RunStatus | null): void { this.status = status; if (!this.reading.active) this.draw(); }
+  setBusy(busy: boolean): void { this.busy = busy; if (!this.reading.active) this.draw(); }
+  setMode(mode: "build" | "plan"): void { this.mode = mode; if (!this.reading.active) this.draw(); }
+  setPlan(plan: TaskPlan | null): void { this.plan = plan; if (!this.reading.active) this.draw(); }
+  setContext(context: ComposerContext | null): void { this.context = context; if (!this.reading.active) this.draw(); }
+  setInputHint(hint: string | null): void { this.inputHint = hint; if (!this.reading.active) this.draw(); }
+  setPendingInput(lines: readonly string[]): void { this.pendingInput = lines.slice(0, 2); if (!this.reading.active) this.draw(); }
+  onModeToggle(callback: () => void): () => void { this.modeToggle = callback; return () => { if (this.modeToggle === callback) this.modeToggle = undefined; }; }
   update(update: RenderUpdate): void {
     const previous = this.batch;
     this.batch = true;
     try {
-      this.append(update.append);
+      this.transcript.append(update.append, this.reading.active);
       this.tail = update.tail;
       if ("status" in update) this.status = update.status ?? null;
     } finally { this.batch = previous; }
+    if (this.reading.active) { this.reading.changed(); return; }
     this.draw();
   }
   begin(prompt: string, fresh: boolean): void {
+    if (fresh) { this.reading.close(); this.draw(); }
     this.input.begin(prompt, fresh);
     if (!this.configured) this.options.output.write(terminalText(prompt));
   }
   end(): void { this.input.end(); }
-  handle(event: InputEvent): void { this.input.dispatch(event, this.busy, this.options.runInputActive()); }
+  handle(event: InputEvent): void {
+    if (this.disposed || this.modes.handle(event)) return;
+    const key = event.kind === "key" && !event.pasted ? event.key : "";
+    if (this.reading.active) {
+      if (key === "page-up" || key === "page-down") this.reading.move((key === "page-up" ? -1 : 1) * Math.max(1, this.rows - 3), Math.max(1, this.rows - 2));
+      else if (key === "escape" || key === "end" || key === "interrupt") this.reading.close();
+      // Text/Enter while reading is never an implicit submission or approval.
+      this.draw();
+      return;
+    }
+    if (key === "page-up" && this.configured && !this.modes.screenReader && this.input.getSnapshot().focus.kind === "composer") {
+      this.reading.open(this.transcript.recent(Math.max(1, this.columns - 1)), this.tail, Math.max(1, this.columns - 1));
+      this.draw();
+      return;
+    }
+    this.input.dispatch(event, this.busy, this.options.runInputActive());
+  }
   updatePicker(spec: PickerSpec): void { this.input.updatePicker(spec); }
   choose(spec: PickerSpec, signal: AbortSignal): Promise<string | null> {
     if (this.disposed || signal.aborted || this.fresh) return Promise.resolve(null);
-    this.options.start();
+    this.reading.close(); this.draw(); this.options.start();
     return this.input.choose(spec, signal);
   }
   approve(request: ApprovalRequest, signal: AbortSignal): Promise<boolean> {
+    this.reading.close();
     this.append(approvalLines(request, this.columns).slice(0, -1));
     return this.options.approval("Approve? [Y/n] ", signal);
   }
   dispose(): void {
     if (this.disposed) return;
+    this.reading.close();
+    this.draw();
     this.disposed = true;
     if (this.timer) clearInterval(this.timer);
-    this.modeToggle = undefined;
-    this.input.dispose();
+    this.modeToggle = undefined; this.input.dispose();
     try {
-      if (this.instance) {
-        this.instance.rerender(null);
-        this.instance.unmount();
-        this.instance.cleanup();
-        this.instance = undefined;
-      }
-    } finally {
-      if (this.configured) {
-        this.options.output.write("\x1b[?2004l");
-        (this.options.input as NodeJS.ReadStream).setRawMode?.(this.oldRaw);
-      }
-    }
+      if (this.instance) { this.instance.rerender(null); this.instance.unmount(); this.instance.cleanup(); this.instance = undefined; }
+    } finally { this.modes.dispose(); }
   }
 }

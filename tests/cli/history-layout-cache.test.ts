@@ -2,9 +2,9 @@ import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as rich from "../../src/cli/render/rich";
 import { SlashMenu } from "../../src/cli/slash-menu";
-import { Editor } from "../../src/cli/terminal/editor";
-import { Screen, plain } from "../../src/cli/terminal/screen";
-import { draw, type View } from "../../src/cli/terminal/view";
+import { Editor } from "./legacy/editor";
+import { Screen, plain } from "./legacy/screen";
+import { draw, type View } from "./legacy/view";
 import { createTheme } from "../../src/cli/theme";
 
 function fixture() {

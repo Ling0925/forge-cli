@@ -1,6 +1,6 @@
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { Screen, plain } from "../../src/cli/terminal/screen";
+import { Screen, plain } from "./legacy/screen";
 import { createTheme } from "../../src/cli/theme";
 
 function fixture() {

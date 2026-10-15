@@ -1,6 +1,6 @@
 import { PassThrough } from "node:stream";
 import { expect, it, vi } from "vitest";
-import { Controller } from "../../src/cli/terminal/controller";
+import { Controller } from "./legacy/controller";
 import type { RichLine } from "../../src/cli/ui-contract";
 const text = (line: RichLine | undefined) => line?.map(s => s.text).join("") ?? "";
 it.each([2, 4, 12, 24, 30, 40, 60])("keeps cursor and activity stable across background updates at %s rows", rows => {

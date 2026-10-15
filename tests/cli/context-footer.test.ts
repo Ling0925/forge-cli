@@ -1,7 +1,7 @@
 import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
-import { TerminalReader } from "../../src/cli/terminal";
-import { Controller } from "../../src/cli/terminal/controller";
+import { TerminalReader } from "./legacy/reader";
+import { Controller } from "./legacy/controller";
 import { contextFooter } from "../../src/cli/terminal/context-footer";
 import { resolveTheme, visibleWidth } from "../../src/cli/theme";
 import type { ComposerContext, RichLine, Tone } from "../../src/cli/ui-contract";

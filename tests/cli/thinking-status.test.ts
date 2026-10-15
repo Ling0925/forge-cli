@@ -1,7 +1,7 @@
 import { PassThrough } from "node:stream";
 import { expect, it, vi } from "vitest";
 import { createEventRenderer } from "../../src/cli/render/events";
-import { TerminalReader } from "../../src/cli/terminal";
+import { TerminalReader } from "./legacy/reader";
 import { stripAnsi } from "../../src/cli/theme";
 import type { AgentEvent, ContextUsage } from "../../src/shared/schemas";
 

@@ -203,13 +203,21 @@ export const createNodeIO = (options: CreateNodeIOOptions = {}): CliIO => {
           callback();
         }
       };
+      const terminate = (): void => {
+        close();
+        reader?.dispose();
+      };
       const unsubscribe = (): void => {
+        process.off("SIGHUP", terminate);
+        process.off("SIGTERM", terminate);
         stdin.off("end", close);
         stdin.off("error", close);
         closeSubscriptions.delete(unsubscribe);
         closeListeners.delete(close);
       };
       closeListeners.add(close);
+      process.on("SIGHUP", terminate);
+      process.on("SIGTERM", terminate);
       stdin.on("end", close);
       stdin.on("error", close);
       closeSubscriptions.add(unsubscribe);

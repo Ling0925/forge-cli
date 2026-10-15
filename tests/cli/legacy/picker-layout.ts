@@ -1,6 +1,6 @@
-import { terminalText } from "../format";
-import { graphemeWidth, graphemes, truncate, visibleWidth } from "../theme";
-import type { PickerSpec, RichLine } from "../ui-contract";
+import { terminalText } from "../../../src/cli/format";
+import { graphemeWidth, graphemes, truncate, visibleWidth } from "../../../src/cli/theme";
+import type { PickerSpec, RichLine } from "../../../src/cli/ui-contract";
 import { composerLayout } from "./screen";
 
 /** Picker data is never terminal markup, including before width measurement. */

@@ -1,5 +1,5 @@
 import type { Controller } from "./controller";
-import type { InputEvent } from "./decoder";
+import type { InputEvent } from "../../../src/cli/terminal/decoder";
 export function handle(controller: Controller, event: InputEvent): void {
   // Any pasted event taints this approval, including special keys handled early.
   if (controller.fresh && (event.kind === "text" || event.kind === "key") && event.pasted) controller.editor.tainted = true;

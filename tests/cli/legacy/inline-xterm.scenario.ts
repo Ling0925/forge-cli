@@ -1,9 +1,12 @@
 import { PassThrough } from "node:stream";
 import { chromium } from "playwright";
 import { expect, it } from "vitest";
-import { wrapRichLines } from "../../src/cli/render/rich";
-import { TerminalReader } from "../../src/cli/terminal";
-import { terminalQAResources } from "./qa-resources";
+// Archived pre-Ink inline geometry scenario. Superseded by ../ink-xterm.test.ts.
+// Kept intact for reference: its final mixed-width resize assertion fails on the
+// retired engine, and its scrollback contract contradicts the later alternate UI.
+import { wrapRichLines } from "../../../src/cli/render/rich";
+import { TerminalReader } from "./reader";
+import { terminalQAResources } from "../qa-resources";
 
 interface BrowserAddon {
   activate(terminal: BrowserTerminal): void;
@@ -75,7 +78,8 @@ it("actual browser xterm replaces transient frames through width/height resize",
     pending += chunk.toString();
     emitted += chunk.toString();
   });
-  const reader = new TerminalReader({ input, output, isTTY: true });
+  // This historical scenario asserts inline scrollback, not the later alternate-screen UI.
+  const reader = new TerminalReader({ input, output, isTTY: true, inline: true });
   try {
     const page = await browser.newPage();
     await page.setContent('<div id="terminal"></div>');
@@ -131,6 +135,7 @@ it("actual browser xterm replaces transient frames through width/height resize",
         new Promise<void>((resolve) => window.term.write("\r\x1b[2K", resolve)),
     );
     const flush = async () => {
+      await new Promise(resolve => setTimeout(resolve, 25)); // Legacy resize debounce is 16ms.
       const bytes = pending;
       pending = "";
       await page.evaluate(

@@ -2,7 +2,7 @@ import { PassThrough } from "node:stream";
 import { afterEach, expect, it, vi } from "vitest";
 import { watchResumedSession } from "../../src/cli/interactive/resumed-session";
 import { pickSession } from "../../src/cli/interactive/pickers";
-import { Controller } from "../../src/cli/terminal/controller";
+import { Controller } from "./legacy/controller";
 import { sessionSnapshotSchema } from "../../src/shared/schemas";
 import type { CliIO } from "../../src/cli/cli";
 import type { HarnessService } from "../../src/shared/contracts";

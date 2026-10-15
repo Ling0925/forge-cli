@@ -1,8 +1,8 @@
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { TerminalReader } from "../../src/cli/terminal";
+import { TerminalReader } from "./legacy/reader";
 import { InputDecoder, type InputEvent } from "../../src/cli/terminal/decoder";
-import { Editor } from "../../src/cli/terminal/editor";
+import { Editor } from "./legacy/editor";
 
 function fixture(maxBytes = 10000) {
   const input = new PassThrough();

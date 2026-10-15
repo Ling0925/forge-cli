@@ -1,7 +1,7 @@
 import { PassThrough } from "node:stream";
 import { expect, it, vi } from "vitest";
-import { Controller } from "../../src/cli/terminal/controller";
-import { Editor } from "../../src/cli/terminal/editor";
+import { Controller } from "./legacy/controller";
+import { Editor } from "./legacy/editor";
 import { InputDecoder } from "../../src/cli/terminal/decoder";
 import { visibleWidth } from "../../src/cli/theme";
 

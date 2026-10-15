@@ -1,6 +1,6 @@
 import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
-import { Controller } from "../../src/cli/terminal/controller";
+import { Controller } from "./legacy/controller";
 import type { PickerSpec } from "../../src/cli/ui-contract";
 
 const spec: PickerSpec = {

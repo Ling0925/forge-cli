@@ -5,7 +5,9 @@ import type { TaskPlan } from "../../shared/schemas";
 export interface InkViewState {
   readonly columns: number;
   readonly rows: number;
-  readonly history: readonly { id: number; line: RichLine }[];
+  readonly output?: import("./output").CommittedOutput | undefined;
+  readonly reading?: import("./transcript").ReadingSnapshot | null;
+  readonly screenReader?: boolean;
   readonly tail: readonly RichLine[];
   readonly status: RunStatus | null;
   readonly context: ComposerContext | null;

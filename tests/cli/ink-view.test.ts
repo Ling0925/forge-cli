@@ -10,7 +10,7 @@ import { stripAnsi, visibleWidth } from "../../src/cli/theme";
 import { measureContext } from "../../src/shared/context-usage";
 
 const base: InkViewState = {
-  columns: 80, rows: 24, history: [], tail: [], status: null, context: null, plan: null,
+  columns: 80, rows: 24, tail: [], status: null, context: null, plan: null,
   mode: "build", theme: "dark", noColor: true, pendingInput: [], inputHint: null, now: 2000,
 };
 function frame(patch: Partial<InkViewState>, input: InputState = initialInput()): string {
@@ -73,7 +73,7 @@ describe("Ink view components", () => {
 
   it("sanitizes untrusted history, picker and tail spans", () => {
     const bad = "safe\x1b]52;c;attack\x07\x1b[2J";
-    const output = frame({ history: [{ id: 1, line: [{ text: bad }] }], tail: [[{ text: bad }]] });
+    const output = frame({ tail: [[{ text: bad }]] });
     expect(output).toContain("safe");
     expect(output).not.toContain("attack");
     expect(output).not.toContain("\x1b");

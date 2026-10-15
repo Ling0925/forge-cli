@@ -1,6 +1,6 @@
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { Controller } from "../../src/cli/terminal/controller";
+import { Controller } from "./legacy/controller";
 import { SlashMenu } from "../../src/cli/slash-menu";
 import type { InputEvent } from "../../src/cli/terminal/decoder";
 

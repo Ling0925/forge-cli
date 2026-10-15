@@ -1,7 +1,7 @@
 import { PassThrough } from "node:stream";
 import { expect, it, vi } from "vitest";
-import { TerminalReader } from "../../src/cli/terminal";
-import { Screen, composerLayout } from "../../src/cli/terminal/screen";
+import { TerminalReader } from "./legacy/reader";
+import { Screen, composerLayout } from "./legacy/screen";
 import { stripAnsi } from "../../src/cli/theme";
 
 class Input extends PassThrough {

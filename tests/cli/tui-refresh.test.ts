@@ -1,7 +1,7 @@
 import { PassThrough } from "node:stream";
 import { afterEach, expect, it, vi } from "vitest";
-import { Controller } from "../../src/cli/terminal/controller";
-import { Screen, plain } from "../../src/cli/terminal/screen";
+import { Controller } from "./legacy/controller";
+import { Screen, plain } from "./legacy/screen";
 import { resolveTheme } from "../../src/cli/theme";
 import * as rich from "../../src/cli/render/rich";
 import { contextFooter } from "../../src/cli/terminal/context-footer";
