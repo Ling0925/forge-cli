@@ -67,8 +67,11 @@ it("xterm renders a stationary editor, scrollable live transcript and persistent
     reader.ui.append([[{ text: "NEW-COMMITTED" }]]);
     reader.ui.setTail([[{ text: "LATEST-LIVE" }]]);
     reader.ui.setStatus({ label: "Working", startedAt: Date.now(), toolCount: 0, cancellable: true });
-    expect(pending).toBe("");
-    expect(await snapshot()).toEqual(selected);
+    await flush();
+    const duringSelection = await snapshot();
+    expect(duringSelection.lines[bottom.y]).toBe(selected.lines[bottom.y]);
+    expect(duringSelection.lines.join("\n")).toContain("Working");
+    expect(duringSelection.lines.join("\n")).not.toContain("LATEST-LIVE");
     input.write("\x1b");
     await new Promise((resolve) => setTimeout(resolve, 45));
     input.write("\x1b[6~\x1b[6~\x1b[6~");

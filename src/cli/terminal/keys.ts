@@ -14,6 +14,16 @@ export function handle(controller: Controller, event: InputEvent): void {
     }
     return;
   }
+  if (event.kind === "key" && !event.pasted && event.key === "native-selection") {
+    controller.toggleNativeSelection();
+    return;
+  }
+  if (controller.screen.nativeSelection && (event.kind === "key" || event.kind === "text")) {
+    controller.resumeNativeSelection();
+    // The first key exits copy mode; never accidentally submits or cancels a run.
+    controller.draw();
+    return;
+  }
   if (event.kind === "mouse") {
     controller.screen.mouse(event);
     if (event.action === "wheel-up" || event.action === "wheel-down") controller.draw();
@@ -34,7 +44,7 @@ export function handle(controller: Controller, event: InputEvent): void {
     if (event.kind === "key" && !event.pasted && event.key === "interrupt") {
       const sent = controller.screen.copySelection();
       controller.screen.clearSelection();
-      controller.notify(sent ? "Clipboard request sent (OSC 52); terminal support required" : "Copy not sent: empty selection or over 100 KB");
+      controller.notify(sent ? "Clipboard request sent (OSC 52) · if unavailable: Ctrl+G, then terminal Copy" : "Copy not sent: empty/over 100 KB · Ctrl+G for terminal Copy");
       return;
     }
     controller.screen.clearSelection();

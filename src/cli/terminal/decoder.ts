@@ -36,6 +36,7 @@ const controls: Readonly<Record<string, string>> = {
   "\b": "backspace",
   "\x03": "interrupt",
   "\x04": "eof",
+  "\x07": "native-selection",
   "\x01": "home",
   "\x05": "end",
   "\x15": "kill",

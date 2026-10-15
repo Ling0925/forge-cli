@@ -43,6 +43,24 @@ export class Controller implements TerminalUI {
   private resizeTimer: ReturnType<typeof setTimeout> | undefined;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
   notice: string | null = null;
+  toggleNativeSelection(): void {
+    if (!this.screen.enabled || !this.screen.fixed || this.fresh || this.picker) return;
+    if (this.screen.nativeSelection) {
+      this.screen.nativeSelection = false;
+      this.output.write("\x1b[?1002h\x1b[?1006h");
+      this.notify("Live view resumed · Ctrl+G for terminal-native copy");
+    } else {
+      this.screen.clearSelection();
+      this.notify("Native selection · terminal Copy / Ctrl+Shift+C · Ctrl+G resume");
+      this.screen.nativeSelection = true;
+      this.output.write("\x1b[?1002l\x1b[?1006l");
+    }
+  }
+  resumeNativeSelection(): void {
+    if (!this.screen.nativeSelection) return;
+    this.screen.nativeSelection = false;
+    this.output.write("\x1b[?1002h\x1b[?1006h");
+  }
   notify(text: string): void {
     this.notice = text;
     if (this.noticeTimer) clearTimeout(this.noticeTimer);
@@ -196,6 +214,7 @@ export class Controller implements TerminalUI {
     this.dismissed = false;
     this.menu.close();
     if (fresh) {
+      this.resumeNativeSelection();
       if (this.resizeTimer) {
         clearTimeout(this.resizeTimer);
         this.resizeTimer = undefined;

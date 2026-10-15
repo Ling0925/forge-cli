@@ -109,11 +109,14 @@ export class Screen {
   }
   private viewport: readonly RichLine[] = [];
   private selection: ScreenSelection | undefined;
+  private selectionAnchor: Cell | undefined;
+  /** Explicit terminal-native selection mode; resume with Ctrl+G. */
+  nativeSelection = false;
   private fixedTarget = -1;
   private fixedColumn = -1;
   get hasSelection(): boolean { return this.selection !== undefined; }
   selectedText(): string { return this.selection?.text() ?? ""; }
-  clearSelection(): void { this.selection = undefined; }
+  clearSelection(): void { this.selection = undefined; this.selectionAnchor = undefined; }
   copySelection(): boolean {
     const text = this.selectedText();
     // Sending OSC 52 is not an acknowledgement from the system clipboard.
@@ -122,7 +125,7 @@ export class Screen {
     return true;
   }
   mouse(event: Extract<InputEvent, { kind: "mouse" }>): void {
-    if (!this.fixed || event.shift) return;
+    if (!this.fixed || this.nativeSelection || event.shift) return;
     if (event.action === "wheel-up" || event.action === "wheel-down") {
       this.scroll(event.action === "wheel-up" ? 3 : -3);
       return;
@@ -131,9 +134,21 @@ export class Screen {
       row: Math.min(Math.max(0, this.fixedRows - 1), safeIndex(event.row)),
       column: safeColumn(event.column, this.fixedColumns),
     };
-    if (event.action === "press") this.selection = new ScreenSelection(this.viewport, cell);
-    else if (this.selection) this.selection.focus = cell;
-    if (this.selection) this.writeFixed(this.selection.highlight(), this.fixedTarget, this.fixedColumn);
+    if (event.action === "press") {
+      this.clearSelection();
+      this.paintFixed(this.lastFixedLines, this.lastFixedRow, this.lastFixedColumn);
+      this.selectionAnchor = cell;
+      return;
+    }
+    const anchor = this.selectionAnchor;
+    if (!this.selection && anchor && (anchor.row !== cell.row || anchor.column !== cell.column)) {
+      this.selection = new ScreenSelection(this.viewport, anchor);
+    }
+    if (this.selection) {
+      this.selection.focus = cell;
+      this.writeFixed(this.selection.highlight(), this.fixedTarget, this.fixedColumn);
+    }
+    if (event.action === "release") this.selectionAnchor = undefined;
   }
   setTranscript(lines: readonly RichLine[]): void {
     // Render updates replace immutable tail snapshots; draw reuses the same one.
@@ -247,9 +262,22 @@ export class Screen {
     const { columns: rawColumns, rows: rawRows } = this.dimensions();
     const columns = positiveDimension(rawColumns);
     const rows = positiveDimension(rawRows);
-    if (this.selection && this.fixedColumns === columns && this.fixedRows === rows) return;
-    this.clearSelection();
+    const sameSize = this.fixedColumns === columns && this.fixedRows === rows;
+    if (this.nativeSelection && sameSize) return;
     const composer = lines.slice(0, Math.max(1, rows - 1));
+    if (this.selection && sameSize) {
+      // Freeze selected transcript cells only, not the whole application. Dock
+      // rows outside the selected range can still show activity/approvals.
+      const selected = this.selection.highlight();
+      const dockStart = rows - composer.length;
+      const first = Math.min(this.selection.anchor.row, this.selection.focus.row);
+      const last = Math.max(this.selection.anchor.row, this.selection.focus.row);
+      const merged = selected.map((line, index) => index >= dockStart && (index < first || index > last)
+        ? composer[index - dockStart] ?? line : line);
+      this.writeFixed(merged, Math.min(rows - 1, dockStart + safeIndex(row)), safeColumn(column, columns));
+      return;
+    }
+    if (!sameSize) this.clearSelection();
     const available = Math.max(0, rows - composer.length);
     const wrapped = this.layoutTranscript(Math.max(1, columns - 1));
     if (this.scrollOffset && this.fixedColumns === columns)

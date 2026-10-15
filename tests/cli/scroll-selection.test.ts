@@ -19,6 +19,42 @@ const mouse = (action: Extract<InputEvent, { kind: "mouse" }>["action"], row: nu
   ({ kind: "mouse", action, row, column, shift: false });
 
 describe("scrollable transcript and durable selection", () => {
+  it("does not select or freeze after a click; drag preserves text while status updates", () => {
+    const { screen, output, reset } = fixture();
+    screen.append([plain("transcript")]); screen.paint([plain("draft"), plain("idle")], 0, 0);
+    screen.mouse(mouse("press", 5, 0)); screen.mouse(mouse("release", 5, 0));
+    expect(screen.hasSelection).toBe(false);
+    reset(); screen.paint([plain("draft"), plain("thinking")], 0, 0);
+    expect(output()).toContain("thinking");
+    screen.mouse(mouse("press", 5, 0)); screen.mouse(mouse("drag", 5, 4)); screen.mouse(mouse("release", 5, 4));
+    expect(screen.selectedText()).toBe("trans");
+    reset(); screen.paint([plain("draft"), plain("tool running")], 0, 0);
+    expect(output()).toContain("tool running"); expect(screen.selectedText()).toBe("trans");
+    screen.mouse(mouse("press", 6, 0)); screen.mouse(mouse("release", 6, 0));
+    expect(screen.hasSelection).toBe(false);
+  });
+  it("offers terminal-native selection without OSC52 and resumes safely", () => {
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 100, rows: 24 });
+    let bytes = ""; let submitted = 0; let interrupted = 0;
+    output.on("data", chunk => { bytes += String(chunk); });
+    const c = new Controller(input, output, true, () => {}, () => { submitted++; }, () => { interrupted++; }, async () => false);
+    c.screen.enabled = c.screen.fixed = true; c.editor.set("draft"); c.draw();
+    const decoder = new InputDecoder(event => c.handle(event));
+    try {
+      bytes = ""; decoder.feed("\x07");
+      expect(c.screen.nativeSelection).toBe(true); expect(bytes).toContain("\x1b[?1002l");
+      expect(bytes).toContain("Ctrl+G resume");
+      bytes = ""; c.append([plain("new output")]); expect(bytes).toBe("");
+      decoder.feed("\r"); expect(c.screen.nativeSelection).toBe(false);
+      expect(submitted).toBe(0); expect(interrupted).toBe(0); expect(c.editor.text).toBe("draft");
+      expect(bytes).toContain("new output"); expect(bytes).toContain("\x1b[?1002h");
+      decoder.feed("\x1b[200~\x07\x1b[201~"); expect(c.screen.nativeSelection).toBe(false);
+      decoder.feed("\x07"); c.begin("Approve? [Y/n] ", true);
+      expect(c.screen.nativeSelection).toBe(false);
+      decoder.feed("\x07"); expect(c.screen.nativeSelection).toBe(false);
+    } finally { decoder.dispose(); c.dispose(); }
+  });
   it("decodes fragmented SGR drag, release and wheel without inserting protocol text", () => {
     const events: InputEvent[] = [];
     const decoder = new InputDecoder((event) => events.push(event));
@@ -75,8 +111,10 @@ describe("scrollable transcript and durable selection", () => {
     screen.append([plain("new message")]);
     screen.setTranscript([plain("streaming")]);
     screen.paint([plain("❯ draft"), plain("changed status")], 0, 2);
-    expect(output()).toBe("");
+    expect(output()).toContain("❯ draft"); // unselected dock row remains live
+    expect(output()).not.toContain("streaming");
     expect(screen.selectedText()).toBe("draft");
+    reset();
     screen.copySelection();
     expect(output()).toBe(`\x1b]52;c;${Buffer.from("draft").toString("base64")}\x07`);
     reset();
