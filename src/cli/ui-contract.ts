@@ -80,6 +80,8 @@ export type PickerSpec = Readonly<{
   readonly selected?: string;
   readonly placeholder?: string;
   readonly emptyLabel?: string;
+  /** Explicit consent picker: any pasted input invalidates its selection. */
+  readonly confirmation?: boolean;
 }>;
 
 /**
@@ -137,6 +139,9 @@ export type TerminalUI = Readonly<{
    * when dismissed or when `signal` aborts. The terminal is restored on return.
    */
   choose(spec: PickerSpec, signal: AbortSignal): Promise<string | null>;
+
+  /** Updates only an open picker with the same title; preserves query/selection. */
+  updatePicker?(spec: PickerSpec): void;
 
   /**
    * Requests a one-shot decision for `request`. Resolves true only for fresh,

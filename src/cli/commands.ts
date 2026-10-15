@@ -14,6 +14,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   { name: "/approval", args: "[full-access|auto|manual]", description: "本 CLI 会话审批：默认全放行 / 命令自动 / 逐次确认（非沙箱）", category: "config" },
   { name: "/queue", args: "[clear|run]", description: "查看/清空待发消息，失败后显式继续", category: "workflow" },
   { name: "/tools", args: "[N]", description: "查看工具摘要或第 N 次调用的参数与结果", category: "workflow" },
+  { name: "/tasks", args: "[agent|command ID]", description: "运行任务面板：查看子代理/后台命令与停止本进程任务", category: "workflow" },
   {
     name: "/model",
     args: "[id]",

@@ -25,6 +25,7 @@ import {
 } from "./format";
 import { abortable } from "./interactive/abortable";
 import { watchResumedSession } from "./interactive/resumed-session";
+import { showTasks } from "./interactive/tasks";
 import {
   isActiveSession,
   pickModel,
@@ -163,6 +164,29 @@ export async function interactive(
   let active: AbortController | undefined;
   let awaitingInput: AbortController | undefined;
   let interruptedOnce = false;
+  let taskPanel: AbortController | undefined;
+  let taskPanelWork: Promise<void> | undefined;
+  let taskApproval = false;
+  const closeTasks = async (): Promise<void> => {
+    taskPanel?.abort();
+    await taskPanelWork;
+  };
+  const openTasks = (value = ""): Promise<void> => {
+    if (taskPanelWork) return taskPanelWork;
+    if (taskApproval || lifetime.signal.aborted) return Promise.resolve();
+    if (!service.tasks || !session) {
+      safe.stdout(!session ? "No active session. Start or resume a session before /tasks.\n" : "Task panel is unavailable in this host.\n");
+      return Promise.resolve();
+    }
+    const controller = new AbortController();
+    taskPanel = controller;
+    const parentId = session.id;
+    const work = showTasks(service.tasks, safe, parentId, AbortSignal.any([lifetime.signal, controller.signal]), value)
+      .catch(error => { if (!controller.signal.aborted && !lifetime.signal.aborted) safe.stderr(`${toErrorInfo(error).message}\n`); })
+      .finally(() => { if (taskPanel === controller) { taskPanel = undefined; taskPanelWork = undefined; } });
+    taskPanelWork = work;
+    return work;
+  };
   let live: LiveRun | undefined;
   let statusGeneration = 0;
   let activeStatus: number | undefined;
@@ -237,6 +261,7 @@ export async function interactive(
         if (/^\/steer(?:\s|$)/.test(text)) addSteering(text.slice(6).trim());
         else if (text === "/queue" || text.startsWith("/queue ")) queueCommand(text.slice(6).trim());
         else if (text === "/tools" || text.startsWith("/tools ")) toolCommand(text.slice(6).trim());
+        else if (text === "/tasks" || text.startsWith("/tasks ")) void openTasks(text.slice(6).trim());
         else if (text === "/help") {
           if (ui) ui.append(helpLines(ui.columns));
           else styled(`${formatHelp(theme)}\n`);
@@ -341,6 +366,7 @@ export async function interactive(
   });
 
   const off = io.onInterrupt(() => {
+    if (taskPanel) { taskPanel.abort(); return; }
     if (active && !active.signal.aborted) {
       active.abort();
       interruptedOnce = true;
@@ -433,6 +459,9 @@ export async function interactive(
             case "/quit":
             case "/exit":
               return 0;
+            case "/tasks":
+              await openTasks(value);
+              break;
             case "/steer":
               throw new ForgeError("invalid_input", "/steer requires an active run; send a normal prompt when idle.");
             case "/help":
@@ -730,7 +759,9 @@ export async function interactive(
               else appendLines(autoApprovalLines(request, ui?.columns ?? 80));
               return true;
             }
+            taskApproval = true;
             try {
+              await closeTasks();
               live?.pause();
               if (ui) {
                 const approved = await ui.approve(request, signal);
@@ -750,6 +781,7 @@ export async function interactive(
             } catch {
               return false;
             } finally {
+              taskApproval = false;
               live?.resume();
             }
           },
@@ -772,6 +804,7 @@ export async function interactive(
         const info = toErrorInfo(error);
         safe.stderr(`${info.code}: ${info.message}\n`);
       } finally {
+        await closeTasks();
         if (runInProgress) safe.stdout(`Approval summary: ${autoApprovedCount} tool request(s) auto-approved this run.\n`);
         autoApprovedCount = 0;
         offRunInput?.();
@@ -787,6 +820,7 @@ export async function interactive(
     }
     return 0;
   } finally {
+    await closeTasks();
     clearResumedWatch();
     titleRefreshClosed = true;
     if (titleRefresh) clearTimeout(titleRefresh);

@@ -216,6 +216,7 @@ export class Controller implements TerminalUI {
     return this.runInputEnabled();
   }
   begin(prompt: string, fresh: boolean): void {
+    if (fresh) this.picker?.resolve(null);
     this.prompt = terminalText(prompt);
     this.fresh = fresh;
     this.dismissed = false;
@@ -257,6 +258,10 @@ export class Controller implements TerminalUI {
     this.resizeTimer.unref();
   }
   handle(event: InputEvent): void {
+    // Taint before dispatch: some keys (e.g. Shift+Tab) return early in keys.ts.
+    if (this.picker?.spec.confirmation && (event.kind === "text" || event.kind === "key") && event.pasted) {
+      this.picker.editor.tainted = true;
+    }
     handle(this, event);
   }
   finish(steer = false): void {
@@ -278,21 +283,35 @@ export class Controller implements TerminalUI {
         .includes(query),
     );
   }
+  updatePicker(spec: PickerSpec): void {
+    const picker = this.picker;
+    if (!picker || picker.spec.title !== spec.title || this.fresh) return;
+    const selected = this.filtered()[picker.index]?.value;
+    picker.spec = spec;
+    const items = this.filtered();
+    const index = items.findIndex(item => item.value === selected);
+    picker.index = index >= 0 ? index : Math.max(0, Math.min(picker.index, items.length - 1));
+    this.draw();
+  }
   async choose(spec: PickerSpec, signal: AbortSignal): Promise<string | null> {
-    if (signal.aborted) return null;
+    if (signal.aborted || this.fresh) return null;
     this.start();
     this.picker?.resolve(null);
     return new Promise((resolve) => {
+      const editor = new Editor();
+      let settled = false;
       const abort = () => finish(null);
       const finish = (value: string | null) => {
+        if (settled) return;
+        settled = true;
         signal.removeEventListener("abort", abort);
         this.picker = undefined;
         this.draw();
-        resolve(value);
+        resolve(spec.confirmation && editor.tainted ? null : value);
       };
       this.picker = {
         spec,
-        editor: new Editor(),
+        editor,
         index: Math.max(
           0,
           spec.items.findIndex((item) => item.value === spec.selected),
