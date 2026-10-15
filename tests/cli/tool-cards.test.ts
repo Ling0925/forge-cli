@@ -14,6 +14,8 @@ it.each([
   ["list_files", { entries: [{ path: "src/a.ts", kind: "file" }] }, "1 entries"],
   ["search_files", { matches: [{ path: "a.ts", line: 42, excerpt: "BIG_BODY" }] }, "a.ts:42"],
   ["write_file", { written: true }, "File written"],
+  ["write_file", { written: false, unchanged: true }, "No changes · content already matches"],
+  ["edit_file", { edited: false, unchanged: true, replacements: 0 }, "No changes · replacement already matches"],
   ["edit_file", { edited: true, replacements: 2 }, "2 replacements"],
   ["make_directory", { created: true }, "Directory ready"],
   ["git_status", { output: " M a.ts\n?? b.ts" }, "2 visible status entries"],
@@ -52,7 +54,8 @@ it("shows real edit diffs inline with bounded rows and preserves detail access",
   const large = { ...edited, changes: [{ ...edited.changes[0]!, before: "old\n".repeat(200), after: ("长".repeat(100) + "\n").repeat(200), truncated: true }] };
   const bounded = tools.summary(c.id, large, 40);
   expect(bounded.length).toBeLessThanOrEqual(22); expect(text(bounded)).toContain("partial preview");
-  expect(text(bounded)).toContain("more diff");
+  expect(text(bounded)).not.toContain("-old");
+  expect(text(tools.detail(1, 120))).toContain("exact diff unavailable");
   for (const row of bounded) expect(visibleWidth(text([row]))).toBeLessThanOrEqual(40);
   expect(text(toolSummaryLines(call("write_file"), edited, 80))).not.toContain("+const");
   expect(text(toolSummaryLines(c, { ...edited, changes: [{ ...edited.changes[0]!, before: null }] }, 80))).toContain("unavailable");

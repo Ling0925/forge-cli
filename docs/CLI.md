@@ -92,6 +92,10 @@ env -u NO_COLOR TERM=xterm-256color node scripts/qa-cli-terminal.mjs --cli dist/
 
 共享核心提示词明确：新建/整体替换文件用 `write_file`，局部字面替换用 `edit_file`，缺少父目录时用 `make_directory`。不得用 Node/Python/sed/cat、重定向或脚本替代原生文件编辑工具。`run_command` 保留构建、测试、git、包管理等用途；正常构建生成产物不等于借命令改写源文件。
 
+文件工具实行运行时“先读后写”：覆盖或编辑已有文件之前，必须由同一会话成功调用 `read_file` 读取当前版本。内部读取、`search_files`、越界空页不算；至少返回一行的分页读取可以建立读取记录，但模型仍须读完与修改有关的页面。文件被外部改动或本次写入成功后，须重新读取；新建文件无需先读不存在的目标。读取记录仅在当前工具实例内有效，重启后须重读，并发会话不能互相授权。`read_file` 额外返回 SHA-256 `version`、`size_bytes` 和 `lines_returned`。内容完全相同的 write/edit 返回 `unchanged: true`，不写磁盘、不创建 checkpoint，也不输出伪 diff。
+
+CLI 内联 diff 根据本次工具操作的 before/after 计算，不是工作区累计的 `git diff`。按公共前后缀与有预算的 Myers 搜索对齐，未变行显示为中性上下文；邻近片段按编辑脚本范围合并，统计只计真实插入/删除。预览源已截断或搜索超预算时，明确显示精确 diff 不可用，不伪造整文件删除/新增或精确行数；末尾换行和 CR 差异明确标注。超过预览长度的完整内容仍需通过 checkpoint 查看/恢复。
+
 默认 harness 为原生文件编辑配置 checkpoint store，可通过 checkpoint 恢复；自定义工具注册器未配置 store 时不能承诺恢复。有限的 before/after 预览不等于备份。命令副作用不纳入 checkpoint。这是工具选择指引，不是 shell 写入的运行时检测器，更不是 OS 沙箱；不能声称已强制识别/拦截任意脚本写文件。
 
 `run_command` 运维契约：显式 argv（允许显式 shell），cwd 经路径守卫；最小环境不继承凭据或代理环境变量，但 HOME 使用宿主用户目录（`os.homedir()`，优先尊重宿主 HOME），不再重定向到工作区。因此命令可使用本机用户配置和认证，也可能改动用户目录；命令审批仍须考虑这些副作用。TMPDIR/TMP/TEMP 仍指向工作区，PATH 包含系统工具、宿主 Node 目录及已有的绝对调用方 PATH 目录。超时默认 30 秒、最大 120 秒；stdout/stderr 合计上限 64 KiB，溢出终止进程组并不返回部分输出。编码结果上限 128 KiB，截断有明确标记；UTF-8 尾部不完整序列替换解码。超时/取消等待进程实际关闭。不因压缩面向模型的工具描述而放宽上述行为。

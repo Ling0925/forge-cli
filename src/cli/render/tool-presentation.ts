@@ -44,8 +44,8 @@ function builtinDetail(name: string, r: Record<string, unknown>, value: unknown)
       const matches = array(r.matches);
       return `${matches.length} matches · ${matches.slice(0, 2).map(item => { const m = object(item); return `${scalar(m?.path)}:${scalar(m?.line)}`; }).join(", ")}`;
     }
-    case "write_file": return r.written === true ? "File written" : "Write result unavailable";
-    case "edit_file": return r.edited === true ? `File edited · ${scalar(r.replacements)} replacements` : "Edit result unavailable";
+    case "write_file": return r.unchanged === true ? "No changes · content already matches" : r.written === true ? "File written" : "Write result unavailable";
+    case "edit_file": return r.unchanged === true ? "No changes · replacement already matches" : r.edited === true ? `File edited · ${scalar(r.replacements)} replacements` : "Edit result unavailable";
     case "make_directory": return r.created === true ? "Directory ready" : "Directory result unavailable";
     case "run_command": {
       // Duration is shown once in the card header for every tool.
