@@ -21,12 +21,15 @@ export const lastReasoningLine = (text: string): string => {
 export const reasoningLine = (
   text: string,
   width: number,
+  animated = false,
 ): RichLine | undefined => {
   const current = lastReasoningLine(text);
   if (!current) return undefined;
   const room = Math.max(0, Math.floor(width) - 2);
   return [
-    { text: REASONING_PREFIX, tone: "muted" },
+    animated
+      ? { text: "⠋ ", tone: "accent", animation: "spinner" }
+      : { text: REASONING_PREFIX, tone: "muted" },
     { text: truncate(current, room), tone: "muted" },
   ];
 };

@@ -56,7 +56,7 @@ export const createEventRenderer = (
     const merged = reasoningAccumulator + text;
     reasoningAccumulator =
       merged.length > REASONING_KEEP ? merged.slice(-REASONING_KEEP) : merged;
-    reasoningLine = buildReasoningLine(reasoningAccumulator, options.width?.() ?? 80);
+    reasoningLine = buildReasoningLine(reasoningAccumulator, options.width?.() ?? 80, true);
   };
   const children = new Map<string, { model: string; status: string; activity: string }>();
   const settled = new Set<string>();

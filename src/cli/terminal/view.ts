@@ -223,7 +223,7 @@ export function draw(view: View): void {
       }
     }
   }
-  const frame = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[Math.floor(Date.now() / 100) % 10]!;
+  const frame = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[Math.floor(Date.now() / 80) % 10]!;
   const tokenLabel = view.status?.tokens === undefined ? "?"
     : `${view.status.tokensEstimated ? "≈" : ""}${compactTokens(view.status.tokens)}`;
   const available = contentLimit - composer.length - below.length;

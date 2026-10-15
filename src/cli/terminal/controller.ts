@@ -131,12 +131,13 @@ export class Controller implements TerminalUI {
         this.screen.fixed = true;
         this.output.write("\x1b[?1049h\x1b[?2004h\x1b[?1002h\x1b[?1006h\x1b[?25h");
         let lastSecond = Math.floor(Date.now() / 1000);
+        // ~45 FPS animation and status update rate
         this.timer = setInterval(() => {
           const animated = this.tail.some((line) => line.some((span) => span.animation === "spinner"));
           const second = Math.floor(Date.now() / 1000);
           if (animated || this.status?.cancellable || (this.status && second !== lastSecond)) this.draw();
           lastSecond = second;
-        }, 100);
+        }, 22);
         this.timer.unref();
       }
     }
