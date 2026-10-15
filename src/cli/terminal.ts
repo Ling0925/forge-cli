@@ -100,6 +100,14 @@ export class TerminalReader {
       setBusy: (busy) => {
         if (!this.closed) controller.setBusy(busy);
       },
+      setMode: (mode) => {
+        if (!this.closed) controller.setMode(mode);
+      },
+      onModeToggle: (callback) =>
+        this.closed ? () => {} : controller.onModeToggle(callback),
+      setPlan: (plan) => {
+        if (!this.closed) controller.setPlan(plan);
+      },
       setContext: (context) => {
         if (!this.closed) controller.setContext(context);
       },
@@ -159,8 +167,15 @@ export class TerminalReader {
     )
       this.overflow();
   }
+  private historyListener: ((text: string) => void) | undefined;
+  setHistory(entries: readonly string[], listener?: (text: string) => void): void {
+    if (this.closed || this.controller.fresh) return;
+    this.controller.editor.loadHistory(entries);
+    this.historyListener = listener;
+  }
   private line(raw: string, steer = false): void {
     const line = terminalText(raw);
+    if (!this.controller.fresh) this.historyListener?.(line);
     if (Buffer.byteLength(line) > this.maxBytes) {
       this.overflow();
       return;

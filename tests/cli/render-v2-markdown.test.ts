@@ -1,135 +1,53 @@
-import { describe, expect, it } from "vitest";
-import {
-  MarkdownStream,
-  renderMarkdownLine,
-} from "../../src/cli/render/markdown";
+import { expect, it } from "vitest";
+import { markdownLines, MarkdownStream } from "../../src/cli/render/markdown";
+import { visibleWidth, createTheme } from "../../src/cli/theme";
+import { renderRichLine } from "../../src/cli/render/rich";
 import type { RichLine } from "../../src/cli/ui-contract";
+const text = (lines: readonly RichLine[]) => lines.map(line => line.map(span => span.text).join("")).join("\n");
 
-const text = (lines: readonly RichLine[]): string =>
-  lines.map((line) => line.map((span) => span.text).join("")).join("\n");
-
-const render = (source: string): RichLine[] => {
-  const stream = new MarkdownStream();
-  const first = stream.push(source);
-  const done = stream.finish();
-  return [...first.append, ...done.append];
-};
-
-const renderSplit = (source: string, size: number): RichLine[] => {
-  const stream = new MarkdownStream();
-  const lines: RichLine[] = [];
-  for (let index = 0; index < source.length; index += size) {
-    lines.push(...stream.push(source.slice(index, index + size)).append);
+it("uses GFM for nested/task lists, six headings, emphasis, strike and references", () => {
+  const source = '# Title\n\n###### Deep\n\n- parent\n  - child\n- [x] done\n- [ ] pending\n\n**bold** *emphasis* ~~removed~~ `code`\n\n[docs][ref]\n\n[ref]: https://example.com\n';
+  const lines = markdownLines(source);
+  const body = text(lines);
+  for (const value of ["# Title", "###### Deep", "parent", "child", "[X]", "[ ]", "bold", "emphasis", "removed", "code", "https://example.com"]) expect(body).toContain(value);
+  expect(body).not.toContain("**bold**");
+  expect(lines.flat().some(span => span.bold && span.text.includes("bold"))).toBe(true);
+});
+it("renders aligned multiline CJK tables with library borders and bounded widths", () => {
+  const source = '| 名称 | Value |\n| :--- | ---: |\n| 中文 | long value with spaces |\n| a\\|b | `code` |\n';
+  for (const width of [20,40,80]) {
+    const lines = markdownLines(source,width); const body = text(lines);
+    expect(body).toContain("┌"); expect(body).toContain("中文"); expect(body).toContain("a|b");
+    for (const line of lines) expect(visibleWidth(text([line]))).toBeLessThanOrEqual(width);
   }
-  lines.push(...stream.finish().append);
-  return lines;
-};
-
-describe("CLI markdown blockquotes", () => {
-  it("renders quote markers as muted quote bars and preserves inline spans", () => {
-    const line = renderMarkdownLine("> quoted `code` and **bold**", false);
-    expect(line[0]).toMatchObject({ text: "│ ", tone: "muted" });
-    expect(text([line])).toBe("│ quoted code and bold");
-    expect(line).toContainEqual({ text: "code", tone: "accent" });
-    expect(line).toContainEqual({ text: "bold", tone: "accent" });
-  });
-
-  it("does not parse quote markers inside fenced code", () => {
-    const body = text(render("```md\n> quoted\n```\n"));
-    expect(body).toBe("> quoted");
-    expect(body).not.toContain("│ quoted");
-  });
-
-  it("filters hostile terminal controls in quoted text", () => {
-    const body = text(render("> safe\u001b]52;c;AAAA\u0007after\n"));
-    expect(body).toBe("│ safeafter");
-    expect(body).not.toContain("\u001b");
-    expect(body).not.toContain("]52");
-  });
-
-  it("keeps quote rendering stable when split across chunks", () => {
-    expect(text(renderSplit("> split `code`\n", 1))).toBe("│ split code");
-  });
 });
-
-describe("CLI markdown horizontal rules", () => {
-  it("renders common horizontal rule markers", () => {
-    expect(renderMarkdownLine("---", false)).toEqual([
-      { text: "────────", tone: "muted" },
-    ]);
-    expect(renderMarkdownLine("  ***  ", false)).toEqual([
-      { text: "────────", tone: "muted" },
-    ]);
-    expect(renderMarkdownLine("___", false)).toEqual([
-      { text: "────────", tone: "muted" },
-    ]);
-  });
-
-  it("does not parse horizontal rules inside fenced code", () => {
-    const body = text(render("```md\n---\n```\n"));
-    expect(body).toBe("---");
-    expect(body).not.toContain("────────");
-  });
-
-  it("does not let controls adjacent to rules inject terminal sequences", () => {
-    const body = text(render("---\u001b[31m\nnext\n"));
-    expect(body).toBe("────────\nnext");
-    expect(body).not.toContain("\u001b");
-    expect(body).not.toContain("[31m");
-  });
-
-  it("keeps rule rendering stable when split across chunks", () => {
-    expect(text(renderSplit("---\n", 1))).toBe("────────");
-  });
+it("renders fenced and indented code literally, with library highlighting", () => {
+  const source = '~~~ts\nconst n = 42; // comment\n~~~\n\n    > not quote\n    ---\n';
+  const lines = markdownLines(source); const body = text(lines);
+  expect(body).toContain("── ts ──"); expect(body).toContain("const n = 42;");
+  expect(body).toContain("> not quote"); expect(body).toContain("---");
+  expect(lines.flat().some(s=>s.tone === "warning" && s.text.includes("42"))).toBe(true);
+  expect(text(markdownLines('```unknown\nkeep me'))).toContain("keep me");
 });
-
-describe("CLI markdown GFM tables", () => {
-  it("renders a basic table with a styled header and muted cell borders", () => {
-    const lines = render("| Name | Value |\n| --- | --- |\n| one | `two` |\n");
-    expect(text(lines)).toBe("│ Name │ Value │\n│ one │ two │");
-    expect(lines[0]?.[0]).toMatchObject({ text: "│ ", tone: "muted" });
-    expect(lines[0]?.find((span) => span.text === "Name")).toMatchObject({
-      tone: "accent",
-      bold: true,
-    });
-    expect(lines[1]?.find((span) => span.text === "two")).toMatchObject({
-      tone: "accent",
-    });
-  });
-
-  it("does not parse tables inside fenced code", () => {
-    const body = text(render("```md\n| A | B |\n| --- | --- |\n```\n"));
-    expect(body).toBe("| A | B |\n| --- | --- |");
-    expect(body).not.toContain("│ A │ B │");
-  });
-
-  it("filters hostile controls from table cells before parsing", () => {
-    const body = text(
-      render(
-        "| A | B |\n| --- | --- |\n| safe\u001b]8;;http://x\u0007 | after |\n",
-      ),
-    );
-    expect(body).toBe("│ A │ B │\n│ safe │ after │");
-    expect(body).not.toContain("\u001b");
-    expect(body).not.toContain("]8");
-  });
-
-  it("recognizes a table when the header and delimiter are split across chunks", () => {
-    const body = text(renderSplit("| A | B |\n| --- | --- |\n| 1 | 2 |\n", 3));
-    expect(body).toBe("│ A │ B │\n│ 1 │ 2 │");
-  });
-
-  it("flushes a pipe-containing non-table line without losing text", () => {
-    expect(text(render("ordinary | text\nnext\n"))).toBe(
-      "ordinary | text\nnext",
-    );
-  });
+it("keeps every split equivalent at finish, including references and hostile controls", () => {
+  const source = '> **quote**\n\n| A | B |\n| --- | --- |\n| one | two |\n\n[ref][id]\n\n[id]: https://example.com\n\n```js\nlet x = 1;\n```\n\x1b]52;c;EVIL\x07safe';
+  const expected = markdownLines(source);
+  for (let split=0;split<source.length;split++) {
+    const stream = new MarkdownStream();
+    expect(stream.push(source.slice(0,split)).append).toEqual([]);
+    stream.push(source.slice(split)); expect(stream.finish().append).toEqual(expected);
+    expect(stream.finish().append).toEqual([]);
+  }
+  expect(text(expected)).not.toContain("EVIL"); expect(text(expected)).not.toContain("\x1b");
 });
-
-it("does not discard extra table cells or reinterpret complex pipes", () => {
-  const prefix = "| a | b |\n| --- | --- |\n";
-  expect(text(render(`${prefix}| one | two | KEEP |\n`))).toContain("KEEP");
-  expect(text(render(`${prefix}| a\\|b | KEEP |\n`))).toContain("a\\|b");
-  expect(text(render(`${prefix}| \`a|b\` | KEEP |\n`))).toContain("a|b");
-  expect(text(render(`${prefix}> quote | KEEP\n`))).toContain("│ quote | KEEP");
+it("never fetches images or forwards raw terminal controls, including encoded controls", () => {
+  const lines = markdownLines('![alt](https://example.com/image) <script>x</script>\n\n[a](javascript:alert) &#27;[2J &#x1b;]52;c;bad&#7;');
+  expect(text(lines)).toContain("[image: alt]");
+  expect(text(lines)).not.toContain("\x1b");
+  const plain = lines.map(line=>renderRichLine(line,createTheme({isTTY:false}))).join("\n");
+  expect(plain).not.toContain("\x1b");
+});
+it("preserves full source above parse limit without pretending it is rendered", () => {
+  const source = '# title\n' + 'text '.repeat(21000) + 'END';
+  expect(text(markdownLines(source))).toBe(source);
 });

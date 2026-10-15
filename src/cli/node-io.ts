@@ -1,4 +1,7 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { ForgeError } from "../shared/errors";
+import { historyEligible, openPromptHistory } from "../store/prompt-history";
 import type { CliIO } from "./cli";
 import { TerminalReader } from "./terminal";
 
@@ -126,7 +129,55 @@ export const createNodeIO = (options: CreateNodeIOOptions = {}): CliIO => {
     return reader;
   };
 
+  let disposed = false;
+  let historyGeneration = 0;
+  let historyEnabled = false;
+  let historyScope = "";
+  let historyWork = Promise.resolve();
+  let historyPending = 0;
+  let historyFailed = false;
+  const historyHome = () => process.env.FORGE_HOME ?? join(homedir(), ".local", "share", "forge");
+  const promptHistory: NonNullable<CliIO["promptHistory"]> = async (action, workspace) => {
+    if (disposed || inputClosed) return "Prompt history unavailable: input is closed.";
+    if (!isTTY) return "Prompt history requires an interactive terminal.";
+    if (action === "status") return `Prompt history: ${historyEnabled ? "on" : "off"} (workspace scoped; opt-in each process).`;
+    if (action === "scope" && workspace === historyScope) return "";
+    const generation = ++historyGeneration;
+    const stale = () => disposed || inputClosed || generation !== historyGeneration;
+    const wasEnabled = historyEnabled;
+    historyEnabled = false;
+    reader?.setHistory([]);
+    await historyWork;
+    if (stale()) return "Prompt history operation cancelled.";
+    if (action === "off") return "Prompt history: off; saved entries retained. /history clear removes them.";
+    if (action === "scope" && !wasEnabled) { historyScope = workspace; return ""; }
+    const store = await openPromptHistory(historyHome(), workspace);
+    if (stale()) return "Prompt history operation cancelled.";
+    historyScope = workspace;
+    if (action === "clear") {
+      await store.clear();
+      return "Prompt history cleared for this workspace; recording off.";
+    }
+    const entries = await store.load();
+    if (stale()) return "Prompt history operation cancelled.";
+    historyEnabled = true;
+    historyFailed = false;
+    getReader().setHistory(entries, text => {
+      if (!historyEnabled || !historyEligible(text)) return;
+      if (historyPending >= 32) { historyEnabled = false; getReader().ui.append([[{text:"Prompt history paused: write queue full.", tone:"warning"}]]); return; }
+      historyPending++;
+      historyWork = historyWork.then(async () => {
+        if (!historyFailed) await store.append(text);
+      }).catch(() => {
+        historyFailed = true; historyEnabled = false;
+        getReader().ui.append([[{text:"Prompt history unavailable; recording disabled. No automatic retry.", tone:"warning"}]]);
+      }).finally(() => { historyPending--; });
+    });
+    return "Prompt history: on for this workspace. Inputs are stored locally (1000 entries / 1 MB). Leading-space inputs, commands and common secret patterns are excluded; arbitrary secrets cannot be detected. /history off or clear to stop.";
+  };
+
   return {
+    promptHistory,
     get ui() {
       return rich ? getReader().ui : undefined;
     },
@@ -181,9 +232,13 @@ export const createNodeIO = (options: CreateNodeIOOptions = {}): CliIO => {
       };
     },
     dispose: () => {
+      disposed = true;
+      historyGeneration++;
       for (const unsubscribe of closeSubscriptions) unsubscribe();
       reader?.dispose();
       interruptListeners = [];
+      historyEnabled = false;
+      return historyWork;
     },
   };
 };

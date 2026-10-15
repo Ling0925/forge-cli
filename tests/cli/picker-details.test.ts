@@ -85,7 +85,7 @@ describe("selected picker details", () => {
           line.some((span) => span.tone === "muted"),
         ),
       ).toHaveLength(3);
-      expect(result.lines.length).toBeLessThanOrEqual(10);
+      expect(result.lines.length).toBeLessThanOrEqual(13);
       for (const line of result.text)
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);
     });
@@ -137,9 +137,9 @@ describe("menu continuation", () => {
   });
   it("reports the reduced session window without losing details", () => {
     const result = frame(40, 30, sessions, 9);
-    expect(result.text.join("\n")).toContain("7–12/15");
+    expect(result.text.join("\n")).toContain("6–13/15");
     expect(result.text.join("\n")).toContain("Completed · 2026-01-02 14:35");
-    expect(result.lines).toHaveLength(10);
+    expect(result.lines).toHaveLength(13);
   });
   it("uses real slash filtered items and updates the range on navigation", () => {
     const menu = new SlashMenu();
@@ -171,7 +171,7 @@ describe("menu continuation", () => {
         frame(40, rows, models),
         frame(40, rows, [], 0, "/", menu),
       ]) {
-        expect(result.lines.length).toBeLessThanOrEqual(Math.min(10, rows - 1));
+        expect(result.lines.length).toBeLessThanOrEqual(Math.min(20, Math.max(4, Math.floor(rows * 0.45)), rows - 1));
         expect(result.cursor).toBeGreaterThanOrEqual(0);
         expect(result.cursor).toBeLessThan(result.lines.length);
         const options = result.text.filter(

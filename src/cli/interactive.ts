@@ -394,6 +394,12 @@ export async function interactive(
                 }
               }
               break;
+            case "/history": {
+              const action = value || "status";
+              if (action !== "on" && action !== "off" && action !== "clear" && action !== "status") throw new ForgeError("invalid_input", "Expected /history [on|off|clear|status].");
+              safe.stdout(`${await io.promptHistory?.(action, session?.workspace ?? workspace) ?? "Prompt history is unavailable in this adapter."}\n`);
+              break;
+            }
             case "/reasoning":
               await changeReasoning(value);
               break;
@@ -455,6 +461,8 @@ export async function interactive(
                 );
                 if (active.signal.aborted) break;
                 session = resumed;
+                try { await io.promptHistory?.("scope", session.workspace); }
+                catch { safe.stderr("Prompt history unavailable for this workspace; recording off.\n"); }
                 tools = new ToolTranscript();
                 resetSessionControls();
                 model = session.model;

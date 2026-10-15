@@ -3,6 +3,36 @@ import { expect, it, vi } from "vitest";
 import { Controller } from "../../src/cli/terminal/controller";
 import { Editor } from "../../src/cli/terminal/editor";
 import { InputDecoder } from "../../src/cli/terminal/decoder";
+import { visibleWidth } from "../../src/cli/theme";
+
+it.each([12, 24, 40, 80, 120])("keeps live activity ahead of plan and notices at %s columns", columns => {
+  vi.useFakeTimers(); vi.setSystemTime(10000);
+  const output = Object.assign(new PassThrough(), { columns, rows: 24 });
+  const c = new Controller(new PassThrough(), output, false, () => {}, () => {}, () => {}, async () => false);
+  c.screen.enabled = true; c.screen.fixed = true; c.prompt = "❯ ";
+  const paint = vi.spyOn(c.screen, "paint");
+  const rowText = () => paint.mock.calls.at(-1)?.[0][0]?.map(s => s.text).join("") ?? "";
+  try {
+    c.setPlan({ explanation: "", steps: [{ step: "很长的计划步骤".repeat(30), status: "in_progress" }] });
+    const initial = paint.mock.calls.at(-1);
+    c.setStatus({ label: "thinking", startedAt: 0, toolCount: 1, cancellable: true });
+    const first = rowText();
+    expect(first).toContain("10s");
+    if (columns >= 24) expect(first).toContain("thinking");
+    if (columns >= 40) expect(first).toContain("Plan 0/1");
+    expect(visibleWidth(first)).toBeLessThanOrEqual(columns);
+    vi.setSystemTime(11100); c.draw(); expect(rowText()).not.toBe(first);
+    expect(rowText()).toContain("11s");
+    c.notify("Clipboard request sent");
+    if (columns >= 24) expect(rowText()).toContain("thinking");
+    expect(paint.mock.calls.at(-1)?.[1]).toBe(initial?.[1]);
+    expect(paint.mock.calls.at(-1)?.[0].length).toBe(initial?.[0].length);
+    c.setStatus({ label: "run_command", startedAt: 0, toolCount: 2, cancellable: true });
+    if (columns >= 40) expect(rowText()).toContain("run_command");
+    c.setStatus(null); c.notice = null; c.draw(); expect(rowText()).toContain("Plan 0/1");
+    expect(rowText()).not.toContain("thinking");
+  } finally { c.dispose(); vi.useRealTimers(); }
+});
 
 it("pins bounded authoritative plan without moving composer or growing dock", () => {
   const c = new Controller(new PassThrough(), new PassThrough(), false, () => {}, () => {}, () => {}, async () => false);

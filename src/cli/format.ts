@@ -251,10 +251,9 @@ export const renderMarkdown = (
   text: string,
   theme: Theme = defaultTheme,
 ): string => {
-  const done = new MarkdownStream().push(
-    `${text.endsWith("\n") ? text : `${text}\n`}`,
-  );
-  return paint(done.append, theme, getTerminalWidth());
+  const stream = new MarkdownStream(() => getTerminalWidth());
+  stream.push(text);
+  return paint(stream.finish().append, theme, getTerminalWidth());
 };
 
 export const formatBanner = (

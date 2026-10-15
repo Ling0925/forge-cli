@@ -57,14 +57,14 @@ it("animates thinking without tool events, shows k/m tokens and stops repainting
     await reader.ui.configure({ theme: "dark" });
     const renderer = createEventRenderer();
     reader.ui.update!(renderer.push(event({ type: "run_started" })));
-    expect(stripAnsi(bytes)).toContain("thinking ⠋ · 0k tokens");
+    expect(stripAnsi(bytes)).toContain("⠋ thinking · 0s · 0k tokens");
     reader.ui.update!(renderer.push(usage(100000)));
     reader.ui.update!(renderer.push(event({ type: "text_delta", text: "a".repeat(51200) })));
     reader.ui.update!(renderer.push(event({ type: "state_changed", status: "running" })));
-    expect(stripAnsi(bytes)).toContain("thinking ⠋ · ≈12.8k tokens");
+    expect(stripAnsi(bytes)).toContain("⠋ thinking · 0s · ≈12.8k tokens");
     bytes = "";
     vi.advanceTimersByTime(100);
-    expect(stripAnsi(bytes)).toContain("thinking ⠙ · ≈12.8k tokens");
+    expect(stripAnsi(bytes)).toContain("⠙ thinking · 0s · ≈12.8k tokens");
     reader.ui.update!(renderer.push(usage(1150000, { basis: "request-with-output", promptTokens: 100000, completionTokens: 1050000 })));
     expect(stripAnsi(bytes)).toContain("1.05m tokens");
     reader.ui.update!(renderer.finish());

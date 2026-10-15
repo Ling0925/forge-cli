@@ -27,6 +27,7 @@ export interface View {
   mode?: "build" | "plan";
   menu: SlashMenu;
   status: RunStatus | null;
+  notice?: string | null;
   inputHint?: string | null;
   pendingInput?: readonly string[];
   context?: ComposerContext | null;
@@ -36,16 +37,18 @@ export interface View {
 export function draw(view: View): void {
   if (!view.screen.enabled) return;
   // Bound expanded input/menus; do not fill unused rows in the dock.
-  const limit = Math.max(1, Math.min(10, view.rows - 1));
+  const limit = Math.max(1, Math.min(20, Math.max(4, Math.floor(view.rows * 0.45)), view.rows - 1));
+  const compactFooter = view.rows <= 20;
+  const itemLimit = view.rows >= 36 ? 12 : 8;
   const picker = view.picker;
   const pending = !picker && !view.fresh
     ? (view.pendingInput ?? []).slice(0, Math.min(2, Math.max(0, limit - 2))).map(line =>
       [{ text: truncate(line, view.columns), tone: "accent" as const }]) : [];
-  const footer = !picker && !view.fresh && view.context
-    ? contextFooter(view.context, view.columns).slice(0, Math.max(0, limit - 2 - pending.length)) : [];
+  const footer = !picker && !view.menu.isActive && !view.fresh && view.context
+    ? contextFooter(view.context, view.columns, compactFooter).slice(0, Math.max(0, limit - 2 - pending.length)) : [];
   // Fixed mode reserves footer and status slots even when they are empty.
   // Background activity must not change the editor's physical row.
-  const fixedFooter = view.screen.fixed ? Math.min(2, Math.max(0, limit - 2 - pending.length)) : footer.length;
+  const fixedFooter = view.screen.fixed ? (picker || view.menu.isActive ? 0 : Math.min(compactFooter ? 1 : 2, Math.max(0, limit - 2 - pending.length))) : footer.length;
   const footerLines = view.screen.fixed
     ? [...footer, ...Array.from({ length: Math.max(0, fixedFooter - footer.length) }, () => plain(""))]
     : footer;
@@ -95,9 +98,9 @@ export function draw(view: View): void {
       .filter(Boolean);
     const detailCount = Math.min(details.length, 2, Math.max(0, room - 1));
     const optionRoom = Math.max(0, room - detailCount);
-    const hidden = items.length > Math.min(8, optionRoom);
+    const hidden = items.length > Math.min(itemLimit, optionRoom);
     const cueRow = hidden && optionRoom > 1 ? 1 : 0;
-    const count = Math.min(8, optionRoom - cueRow, items.length);
+    const count = Math.min(itemLimit, optionRoom - cueRow, items.length);
     const first = Math.max(
       0,
       Math.min(picker.index - Math.floor(count / 2), items.length - count),
@@ -161,9 +164,9 @@ export function draw(view: View): void {
       below = [plain(picker.spec.emptyLabel ?? "No matches")];
   } else if (view.menu.isActive && room) {
     const state = view.menu.state;
-    const hidden = state.items.length > Math.min(8, room);
+    const hidden = state.items.length > Math.min(itemLimit, room);
     const cueRow = hidden && room > 1 ? 1 : 0;
-    const count = Math.min(8, room - cueRow, state.items.length);
+    const count = Math.min(itemLimit, room - cueRow, state.items.length);
     const first = Math.max(
       0,
       Math.min(
@@ -241,6 +244,22 @@ export function draw(view: View): void {
           ],
         ]
       : [];
+  // A pinned plan must never hide live execution. Keep one physical status
+  // slot, reserve its leading cells for activity, then fit secondary details.
+  let liveStatus: RichLine | undefined;
+  if (view.status && view.screen.fixed && !picker && !view.fresh) {
+    const elapsed = Math.max(0, Math.floor((Date.now() - view.status.startedAt) / 1000));
+    const suffix = ` · ${elapsed}s`;
+    const marker = view.status.cancellable ? `${frame} ` : "";
+    const labelWidth = Math.max(0, Math.min(24, Math.floor(view.columns / 2), view.columns - visibleWidth(marker + suffix)));
+    const activity = truncate(`${marker}${truncate(terminalText(view.status.label), labelWidth)}${suffix}`, view.columns);
+    const detail = view.notice ? plain(terminalText(view.notice)) : pinned ?? history ?? plain(`${tokenLabel} tokens · ${view.status.toolCount} tools${view.status.cancellable ? " · Ctrl+C cancel" : ""}`);
+    const remaining = view.columns - visibleWidth(activity) - 3;
+    liveStatus = [
+      { text: activity, tone: view.status.cancellable ? "accent" : "warning" },
+      ...(remaining > 0 ? [{ text: " · ", tone: "muted" as const }, { text: truncate(detail.map(span => span.text).join(""), remaining), tone: "muted" as const }] : []),
+    ];
+  }
   const spacer = available > status.length && view.rows >= 6 ? [plain("")] : [];
   const animatedTail = view.tail.some((line) => line.some((span) => span.animation === "spinner"))
     ? view.tail.map((line) => line.map((span) =>
@@ -258,7 +277,7 @@ export function draw(view: View): void {
   if (view.screen.fixed) {
     view.screen.setTranscript(animatedTail);
     view.screen.paint(
-      [...(statusSlot ? [pinned ?? history ?? status[0] ?? plain("")] : []), ...composer, ...below, ...pending, ...footerLines],
+      [...(statusSlot ? [liveStatus ?? (!picker && !view.fresh && view.notice ? plain(truncate(view.notice, view.columns)) : pinned ?? history ?? status[0] ?? plain(""))] : []), ...composer, ...below, ...pending, ...footerLines],
       statusSlot + layout.row - start, layout.column,
     );
     return;

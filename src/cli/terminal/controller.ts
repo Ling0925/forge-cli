@@ -40,6 +40,16 @@ export class Controller implements TerminalUI {
   private configured = false;
   private queried = false;
   private timer: ReturnType<typeof setInterval> | undefined;
+  private resizeTimer: ReturnType<typeof setTimeout> | undefined;
+  private noticeTimer: ReturnType<typeof setTimeout> | undefined;
+  notice: string | null = null;
+  notify(text: string): void {
+    this.notice = text;
+    if (this.noticeTimer) clearTimeout(this.noticeTimer);
+    this.noticeTimer = setTimeout(() => { this.notice = null; this.noticeTimer = undefined; this.draw(); }, 1500);
+    this.noticeTimer.unref();
+    this.draw();
+  }
   constructor(
     private readonly input: NodeJS.ReadableStream,
     private readonly output: NodeJS.WritableStream,
@@ -186,6 +196,11 @@ export class Controller implements TerminalUI {
     this.dismissed = false;
     this.menu.close();
     if (fresh) {
+      if (this.resizeTimer) {
+        clearTimeout(this.resizeTimer);
+        this.resizeTimer = undefined;
+        this.screen.invalidate();
+      }
       // Approval must be visible even if the user was selecting old output.
       this.screen.clearSelection();
       this.screen.scroll(-Number.MAX_SAFE_INTEGER);
@@ -206,8 +221,14 @@ export class Controller implements TerminalUI {
     this.draw();
   }
   resize(): void {
-    this.screen.invalidate();
-    this.draw();
+    this.screen.clearSelection();
+    if (this.resizeTimer) return;
+    this.resizeTimer = setTimeout(() => {
+      this.resizeTimer = undefined;
+      this.screen.invalidate();
+      this.draw();
+    }, 16);
+    this.resizeTimer.unref();
   }
   handle(event: InputEvent): void {
     handle(this, event);
@@ -262,10 +283,15 @@ export class Controller implements TerminalUI {
     return this.approval("Approve? [Y/n] ", signal);
   }
   draw(): void {
-    if (!this.batch) draw(this);
+    if (!this.batch && !this.resizeTimer) draw(this);
   }
   dispose(): void {
     this.picker?.resolve(null);
+    if (this.resizeTimer) clearTimeout(this.resizeTimer);
+    if (this.noticeTimer) clearTimeout(this.noticeTimer);
+    this.resizeTimer = undefined;
+    this.noticeTimer = undefined;
+    this.modeToggle = undefined;
     if (this.timer) clearInterval(this.timer);
     if (this.probe) clearTimeout(this.probe);
     this.screen.clear();

@@ -24,7 +24,7 @@ describe("pending input dock", () => {
     expect(queue.preview()).toEqual([]);
   });
 
-  it("pins previews while typing, streaming, scrolling and resizing; hides them for consent", () => {
+  it("pins previews while typing, streaming, scrolling and resizing; hides them for consent", async () => {
     const output = Object.assign(new PassThrough(), { columns: 80, rows: 24 });
     const controller = new Controller(new PassThrough(), output, true, () => {}, () => {}, () => {}, async () => false);
     controller.screen.enabled = true;
@@ -47,6 +47,7 @@ describe("pending input dock", () => {
       output.rows = rows;
       output.columns = 24;
       controller.resize();
+      await new Promise(resolve => setTimeout(resolve, 25));
       [lines, row] = paint.mock.calls.at(-1)!;
       expect(lines.length).toBeLessThanOrEqual(rows - 1);
       expect(text(lines)[row]).toContain("draft");

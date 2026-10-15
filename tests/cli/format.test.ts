@@ -146,7 +146,7 @@ describe("Formatters", () => {
     const output = renderMarkdown(md, theme);
     expect(output).toContain("# Title");
     expect(output).toContain("## Section");
-    expect(output).toContain("• item 1");
+    expect(output).toContain("* item 1");
     expect(output).toContain("const x = 1;");
     expect(output).not.toContain("┌");
   });

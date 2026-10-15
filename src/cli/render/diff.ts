@@ -171,6 +171,10 @@ export const diffLines = (change: FileChange): readonly RichLine[] => {
   }
   const body: RichLine[] = [];
   const hunks = hunksOf(before.lines, after.lines);
+  const changedRows = hunks.flatMap(hunk => hunk.rows);
+  const added = changedRows.filter(line => line[0]?.tone === "success").length;
+  const removed = changedRows.filter(line => line[0]?.tone === "error").length;
+  const stats = row(`${change.path} [+${added} -${removed}]${change.truncated ? " (partial preview)" : ""}`, "muted");
   if (hunks.length === 0) body.push(row("(no textual change)", "muted"));
   for (const hunk of hunks) {
     body.push(
@@ -183,5 +187,5 @@ export const diffLines = (change: FileChange): readonly RichLine[] => {
   }
   if (change.truncated)
     body.push(row("(content truncated at source)", "warning"));
-  return bounded([header, next, ...body]);
+  return bounded([stats, header, next, ...body]);
 };

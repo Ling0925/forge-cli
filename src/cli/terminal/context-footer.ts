@@ -11,12 +11,20 @@ const categories = [
 ] as const;
 
 /** Full-width track; the red right-hand segment marks compression headroom. */
-export function contextFooter(context: ComposerContext, columns: number): readonly RichLine[] {
+export function contextFooter(context: ComposerContext, columns: number, compact = false): readonly RichLine[] {
   const width = Math.max(1, Math.floor(columns));
   const usage = context.usage;
   const ratio = usage?.windowTokens ? usage.usedTokens / usage.windowTokens : 0;
   const percentage = usage?.windowTokens ? `${usage.estimated ? "≈" : ""}${(ratio * 100).toFixed(1)}%` : "?%";
   const count = usage?.windowTokens ? compactTokens(usage.windowTokens) : "?";
+  if (compact) {
+    const miniWidth = width >= 40 ? 6 : 0;
+    const filled = Math.round(Math.min(1, Math.max(0, ratio)) * miniWidth);
+    const mini = miniWidth ? ` [${"━".repeat(filled)}${"·".repeat(miniWidth - filled)}]` : "";
+    const summary = truncate(`${percentage} · ${count}${mini}`, width);
+    const model = truncate(sanitizeText(context.model).replace(/[\n\t]/g, " "), Math.max(0, width - visibleWidth(summary) - 1));
+    return [[{ text: model, tone: "accent" }, { text: " ".repeat(Math.max(0, width - visibleWidth(model) - visibleWidth(summary))) }, { text: summary, tone: ratio >= 0.8 ? "warning" : "muted" }]];
+  }
   const right = truncate(`${percentage} · ${count}`, width);
   // Only token budgets with a known window define a meaningful reserved fraction.
   const reserveStart = usage?.windowTokens && usage.budgetTokens !== undefined

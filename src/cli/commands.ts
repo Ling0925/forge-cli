@@ -9,6 +9,7 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS: readonly SlashCommand[] = [
+  { name: "/history", args: "[on|off|clear|status]", description: "显式开启/关闭/清除工作区输入历史（默认关闭）", category: "config" },
   { name: "/steer", args: "<message>", description: "向当前运行插话，在模型/工具交换结束后生效", category: "workflow" },
   { name: "/approval", args: "[full-access|auto|manual]", description: "本 CLI 会话审批：默认全放行 / 命令自动 / 逐次确认（非沙箱）", category: "config" },
   { name: "/queue", args: "[clear|run]", description: "查看/清空待发消息，失败后显式继续", category: "workflow" },

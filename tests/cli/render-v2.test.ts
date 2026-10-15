@@ -129,10 +129,10 @@ describe("streaming markdown", () => {
   it("finalizes a fence split across deltas without losing text", () => {
     const stream = new MarkdownStream();
     const first = stream.push("```ts\nconst ");
-    expect(textOf(first.append)).toBe("");
+    expect(first.append).toEqual([]);
     expect(textOf(first.tail)).toContain("const");
     const second = stream.push("value\n```\n# Title");
-    expect(textOf(second.append)).toContain("const value");
+    expect(textOf(second.tail)).toContain("const value");
     const done = stream.finish();
     const all = `${textOf(first.append)}\n${textOf(second.append)}\n${textOf(done.append)}`;
     expect(all).toContain("# Title");
@@ -612,8 +612,8 @@ describe("live width", () => {
         .every((line) => line.length <= 120),
     ).toBe(true);
     expect(
-      tails.some((tail) => tail.split("\n").some((line) => line.length > 40)),
-    ).toBe(false);
+      tails.at(-1)?.split("\n").some((line) => line.length > 40),
+    ).toBe(true);
     const narrow = tails[0]?.split("\n") ?? [];
     expect(narrow.length).toBeGreaterThan(1);
     expect(narrow.every((line) => line.length <= 40)).toBe(true);

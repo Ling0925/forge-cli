@@ -114,11 +114,12 @@ export class Screen {
   get hasSelection(): boolean { return this.selection !== undefined; }
   selectedText(): string { return this.selection?.text() ?? ""; }
   clearSelection(): void { this.selection = undefined; }
-  copySelection(): void {
+  copySelection(): boolean {
     const text = this.selectedText();
-    // OSC 52 is emitted only on an explicit copy key, never on model output.
-    if (text && Buffer.byteLength(text) <= 100_000)
-      this.output.write(`\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
+    // Sending OSC 52 is not an acknowledgement from the system clipboard.
+    if (!text || Buffer.byteLength(text) > 100_000) return false;
+    this.output.write(`\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
+    return true;
   }
   mouse(event: Extract<InputEvent, { kind: "mouse" }>): void {
     if (!this.fixed || event.shift) return;

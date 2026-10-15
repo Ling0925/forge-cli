@@ -16,6 +16,7 @@ export function handle(controller: Controller, event: InputEvent): void {
   }
   if (event.kind === "mouse") {
     controller.screen.mouse(event);
+    if (event.action === "wheel-up" || event.action === "wheel-down") controller.draw();
     return;
   }
   if (event.kind === "key" && event.key === "shift-tab") {
@@ -31,7 +32,9 @@ export function handle(controller: Controller, event: InputEvent): void {
   }
   if (controller.screen.hasSelection) {
     if (event.kind === "key" && !event.pasted && event.key === "interrupt") {
-      controller.screen.copySelection();
+      const sent = controller.screen.copySelection();
+      controller.screen.clearSelection();
+      controller.notify(sent ? "Clipboard request sent (OSC 52); terminal support required" : "Copy not sent: empty selection or over 100 KB");
       return;
     }
     controller.screen.clearSelection();
@@ -42,10 +45,11 @@ export function handle(controller: Controller, event: InputEvent): void {
   }
   if (event.kind === "key" && !event.pasted && (event.key === "page-up" || event.key === "page-down")) {
     controller.screen.scroll((event.key === "page-up" ? 1 : -1) * Math.max(1, controller.rows - 5));
+    controller.draw();
     return;
   }
   if (event.kind === "key" && !event.pasted && !controller.fresh && !controller.picker && controller.screen.historyOffset > 0 && (event.key === "end" || (event.key === "escape" && !controller.editor.text))) {
-    controller.screen.scroll(-Number.MAX_SAFE_INTEGER); return;
+    controller.screen.scroll(-Number.MAX_SAFE_INTEGER); controller.draw(); return;
   }
   const editor = controller.picker?.editor ?? controller.editor;
   const previousText = editor.text;

@@ -228,7 +228,7 @@ it("composer placeholder, accent spans, stable dock and aligned menu preserve in
     const empty = paint.mock.calls.at(-1);
     expect(empty?.[0][empty?.[1] ?? 0]?.map((span) => span.text).join("")).toContain("Ask anything");
     expect(empty?.[1]).toBe(1);
-    expect(empty?.[0]).toHaveLength(4);
+    expect(empty?.[0]).toHaveLength(3);
     expect(
       empty?.[0].flat().find((span) => span.text.includes("Ask anything"))
         ?.tone,
@@ -275,6 +275,7 @@ it("composer placeholder, accent spans, stable dock and aligned menu preserve in
     expect(await approval).toBe(false);
     f.output.rows = 2;
     f.output.emit("resize");
+    await new Promise(resolve => setTimeout(resolve, 25));
     const small = paint.mock.calls.at(-1);
     expect(small?.[0]).toHaveLength(1);
     expect(small?.[1]).toBe(0);

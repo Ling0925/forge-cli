@@ -1,6 +1,6 @@
 import type { SessionSnapshot } from "../../shared/schemas";
 import type { RichLine } from "../ui-contract";
-import { MarkdownStream } from "./markdown";
+import { markdownLines } from "./markdown";
 import { wrapRichLines } from "./rich";
 import { sanitizeText } from "./sanitize";
 import { ToolTranscript } from "./tool-transcript";
@@ -17,11 +17,11 @@ export const historyLines = (session: SessionSnapshot, width: number, tools = ne
   for (const message of messages) {
     if (message.role === "user") {
       lines.push([{ text: message.origin === "agent_reconciliation" ? "↳ Agent results" : "❯ You", tone: "accent" }]);
-      lines.push(...markdownLines(message.content));
+      lines.push(...markdownLines(message.content, width));
     } else if (message.role === "assistant") {
       if (message.content) {
         lines.push([{ text: "Forge", tone: "accent" }]);
-        lines.push(...markdownLines(message.content));
+        lines.push(...markdownLines(message.content, width));
       }
       for (const call of message.tool_calls ?? []) {
         const index = tools.start(call);
@@ -35,10 +35,4 @@ export const historyLines = (session: SessionSnapshot, width: number, tools = ne
   }
   lines.push([{ text: "End of history", tone: "muted" }]);
   return wrapRichLines(lines, width);
-};
-
-const markdownLines = (text: string): RichLine[] => {
-  const stream = new MarkdownStream();
-  const chunk = stream.push(text);
-  return [...chunk.append, ...stream.finish().append];
 };

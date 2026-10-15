@@ -7,6 +7,12 @@ export class Editor {
   private history: string[] = [];
   private index = 0;
   private saved = "";
+  loadHistory(entries: readonly string[]): void {
+    this.history = entries.slice(-1000);
+    while (this.history.reduce((sum, text) => sum + Buffer.byteLength(text), 0) > 1_000_000) this.history.shift();
+    this.index = this.history.length;
+    this.saved = "";
+  }
   clear(): void {
     this.text = "";
     this.cursor = 0;

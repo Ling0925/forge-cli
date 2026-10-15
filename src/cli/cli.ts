@@ -90,6 +90,7 @@ export interface CliIO {
   /** Interactive input lifetime only; machine stdin EOF is not cancellation. */
   readonly onClose?: (callback: () => void) => () => void;
   readonly onInterrupt: (callback: () => void) => () => void;
+  readonly promptHistory?: (action: "on" | "off" | "clear" | "status" | "scope", workspace: string) => Promise<string>;
   readonly dispose?: () => Promise<void> | void;
 }
 

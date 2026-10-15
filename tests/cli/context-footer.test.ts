@@ -121,7 +121,7 @@ describe("composer context footer", () => {
     expect(chunks).toEqual([]);
   });
 
-  it.each([false, true])("keeps the footer adjacent to input, preserves cursor and hides it during approval (fixed=%s)", (fixed) => {
+  it.each([false, true])("keeps the footer adjacent to input, preserves cursor and hides it during approval (fixed=%s)", async (fixed) => {
     const input = new PassThrough();
     const output = Object.assign(new PassThrough(), { columns: 80, rows: 24 });
     const controller = new Controller(input, output, true, () => {}, () => {}, () => {}, async () => false);
@@ -154,8 +154,10 @@ describe("composer context footer", () => {
     output.columns = 18;
     output.rows = 5;
     controller.resize();
+    await new Promise(resolve => setTimeout(resolve, 25));
     const resized = paint.mock.calls.at(-1)![0];
-    expect(resized.map(text)).toContain("─".repeat(18));
+    expect(resized.map(text).join("\n")).toContain("50.0%");
+    expect(resized.map(text)).not.toContain("─".repeat(18));
     expect(resized.length).toBeLessThanOrEqual(4);
     controller.dispose();
   });
