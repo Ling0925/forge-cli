@@ -48,6 +48,31 @@ export const createEventRenderer = (
   });
   let tail: readonly RichLine[] = [];
   let messageTail: readonly RichLine[] = [];
+  // Latest single line of streamed reasoning; replaces in place (scrolling preview).
+  let reasoningLine: RichLine | undefined;
+  let reasoningAccumulator = "";
+  const REASONING_KEEP = 8 * 1024;
+  const isBreak = (char: string): boolean => char === "\n" || char === "\r";
+  const updateReasoning = (text: string): void => {
+    const merged = reasoningAccumulator + text;
+    reasoningAccumulator =
+      merged.length > REASONING_KEEP ? merged.slice(-REASONING_KEEP) : merged;
+    let last = reasoningAccumulator.length;
+    while (last > 0 && isBreak(reasoningAccumulator[last - 1] as string)) last -= 1;
+    let start = last;
+    while (start > 0 && !isBreak(reasoningAccumulator[start - 1] as string))
+      start -= 1;
+    const current = sanitizeText(reasoningAccumulator.slice(start, last))
+      .replace(/\s+/g, " ")
+      .trim();
+    const width = options.width?.() ?? 80;
+    reasoningLine = current
+      ? [
+          { text: "✻ ", tone: "muted" },
+          { text: truncate(current, Math.max(0, width - 2)), tone: "muted" },
+        ]
+      : undefined;
+  };
   const children = new Map<string, { model: string; status: string; activity: string }>();
   const settled = new Set<string>();
   const childLine = (id: string, child: { model: string; status: string; activity: string }): RichLine => [{
@@ -87,6 +112,7 @@ export const createEventRenderer = (
     const width = options.width?.() ?? 80;
     messageTail = nextTail;
     tail = wrapRichLines([
+      ...(reasoningLine ? [reasoningLine] : []),
       ...nextTail,
       ...[...active.values()].map((call) => toolRunningLine(call, width)),
       ...[...children].map(([id, child]) => childLine(id, child)),
@@ -112,16 +138,29 @@ export const createEventRenderer = (
           completedOutputTokens = 0;
           tokensEstimated = false;
           streamedText = "";
+          reasoningLine = undefined;
+          reasoningAccumulator = "";
           running = true;
           return update(flushText(), [], live("thinking"));
+        case "reasoning_delta": {
+          running = true;
+          updateReasoning(event.text);
+          return update([], messageTail, live("thinking"));
+        }
         case "text_delta": {
           running = true;
+          // The answer has begun; the transient reasoning preview is done.
+          reasoningLine = undefined;
+          reasoningAccumulator = "";
           streamedText += event.text;
           const chunk = markdown.push(event.text);
           return update(chunk.append, chunk.tail, live("responding"));
         }
         case "tool_started": {
           running = true;
+          // A tool call ends the reasoning phase for this request.
+          reasoningLine = undefined;
+          reasoningAccumulator = "";
           if (!active.has(event.call.id)) toolCount += 1;
           tools.start(event.call, now());
           active.set(event.call.id, event.call);
@@ -150,6 +189,8 @@ export const createEventRenderer = (
           );
         case "error":
           running = false;
+          reasoningLine = undefined;
+          reasoningAccumulator = "";
           return update(
             [
               ...flushText(),
@@ -161,6 +202,8 @@ export const createEventRenderer = (
           );
         case "run_finished": {
           running = false;
+          reasoningLine = undefined;
+          reasoningAccumulator = "";
           const tone =
             event.status === "completed"
               ? "success"
@@ -186,6 +229,8 @@ export const createEventRenderer = (
         case "state_changed":
           if (event.status === "cancelled") {
             running = false;
+            reasoningLine = undefined;
+            reasoningAccumulator = "";
             return update([...flushText(), ...stopTools("cancelled")], [], null);
           }
           return {
@@ -248,6 +293,8 @@ export const createEventRenderer = (
     },
     finish(): RenderUpdate {
       running = false;
+      reasoningLine = undefined;
+      reasoningAccumulator = "";
       return update([...flushText(), ...stopTools()], [], null);
     },
   };

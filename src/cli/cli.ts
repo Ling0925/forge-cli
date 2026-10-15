@@ -235,6 +235,8 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
     case "approval_requested":
     case "context_usage":
     case "context_compacted":
+    // Live reasoning preview is a rich-terminal affordance; plain output stays quiet.
+    case "reasoning_delta":
       return;
     default:
       assertNever(event);
