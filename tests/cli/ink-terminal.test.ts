@@ -176,6 +176,37 @@ describe("Ink terminal migration", () => {
     expect(await next).toBe("ok");
   });
 
+  it("approval preempts task focus without leaking its answer into follow-ups", async () => {
+    const f = fixture();
+    await f.reader.ui.configure({ theme: "dark" });
+    f.reader.ui.setBusy(true);
+    const received = vi.fn();
+    const off = f.reader.onRunInput(received);
+    f.input.write("draft中\x1b[D");
+    const task = f.reader.ui.choose({ title: "Tasks", items: [{ value: "a", label: "agent" }] }, signal());
+    f.input.write("agent");
+    const approval = f.reader.readApproval("Approve? ", signal());
+    expect(await task).toBeNull();
+    f.input.write("n\r");
+    expect(await approval).toBe(false);
+    expect(received).not.toHaveBeenCalled();
+    f.input.write("Z\r");
+    expect(received.mock.calls).toEqual([["draftZ中", false]]);
+    off();
+  });
+
+  it("denies an overflowing approval while retaining the suspended draft", async () => {
+    const f = fixture(16);
+    await f.reader.ui.configure({ theme: "dark" });
+    f.input.write("draft\x1b[D");
+    const approval = f.reader.readApproval("Approve? ", signal());
+    f.input.write("x".repeat(17));
+    expect(await approval).toBe(false);
+    const next = f.reader.question("❯ ", signal());
+    f.input.write("Z\r");
+    expect(await next).toBe("drafZt");
+  });
+
   it("restores the existing raw mode if disposed while Ink is loading", async () => {
     const f = fixture();
     f.input.isRaw = true;

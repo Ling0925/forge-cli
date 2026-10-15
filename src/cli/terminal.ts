@@ -154,9 +154,7 @@ export class TerminalReader {
     if (
       event.kind === "text" &&
       Buffer.byteLength(event.text) +
-        Buffer.byteLength(
-          this.controller.picker?.editor.text ?? this.controller.editor.text,
-        ) +
+        Buffer.byteLength(this.controller.inputText) +
         this.bytes >
         this.maxBytes
     ) {
@@ -164,19 +162,13 @@ export class TerminalReader {
       return;
     }
     this.controller.handle(event);
-    if (
-      Buffer.byteLength(
-        this.controller.picker?.editor.text ?? this.controller.editor.text,
-      ) +
-        this.bytes >
-      this.maxBytes
-    )
+    if (Buffer.byteLength(this.controller.inputText) + this.bytes > this.maxBytes)
       this.overflow();
   }
   private historyListener: ((text: string) => void) | undefined;
   setHistory(entries: readonly string[], listener?: (text: string) => void): void {
     if (this.closed || this.controller.fresh) return;
-    this.controller.editor.loadHistory(entries);
+    this.controller.loadHistory(entries);
     this.historyListener = listener;
   }
   private line(raw: string, steer = false): void {
@@ -228,8 +220,7 @@ export class TerminalReader {
   private overflow(): void {
     this.queue.length = 0;
     this.bytes = 0;
-    this.controller.editor.clear();
-    this.controller.picker?.resolve(null);
+    this.controller.clearInput();
     const error = new ForgeError(
       "invalid_input",
       "Buffered input exceeds the allowed size.",

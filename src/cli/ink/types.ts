@@ -1,7 +1,7 @@
-import type { SlashMenuState } from "../slash-menu";
-import type { ComposerContext, PickerItem, PickerSpec, RichLine, RunStatus, UIOptions } from "../ui-contract";
+import type { ComposerContext, RichLine, RunStatus, UIOptions } from "../ui-contract";
 import type { TaskPlan } from "../../shared/schemas";
 
+/** Output state only. Input focus is an independent React external store. */
 export interface InkViewState {
   readonly columns: number;
   readonly rows: number;
@@ -13,13 +13,7 @@ export interface InkViewState {
   readonly mode: "build" | "plan";
   readonly theme: UIOptions["theme"];
   readonly noColor: boolean;
-  readonly prompt: string;
-  readonly text: string;
-  readonly cursor: number;
-  readonly fresh: boolean;
   readonly pendingInput: readonly string[];
   readonly inputHint: string | null;
-  readonly menu: SlashMenuState;
-  readonly picker: { spec: PickerSpec; items: readonly PickerItem[]; index: number } | null;
   readonly now: number;
 }

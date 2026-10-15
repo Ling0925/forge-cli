@@ -1,14 +1,14 @@
 import type { InputEvent } from "./terminal/decoder";
-import type { Editor } from "./terminal/editor";
 import type { TerminalUI } from "./ui-contract";
 
-/** Input lifecycle shared by the plain reader and the staged Ink migration. */
+/** Reader accesses input operations, never a controller's mutable editing state. */
 export interface TerminalController extends Required<TerminalUI> {
-  editor: Editor;
-  picker: { editor: Editor; resolve(value: string | null): void } | undefined;
-  busy: boolean;
+  readonly inputText: string;
+  readonly busy: boolean;
   batch: boolean;
-  fresh: boolean;
+  readonly fresh: boolean;
+  loadHistory(entries: readonly string[]): void;
+  clearInput(): void;
   begin(prompt: string, fresh: boolean): void;
   end(): void;
   draw(): void;

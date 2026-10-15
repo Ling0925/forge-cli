@@ -4,21 +4,21 @@ import { render } from "ink";
 import { describe, expect, it } from "vitest";
 import { InkView } from "../../src/cli/ink/view";
 import type { InkViewState } from "../../src/cli/ink/types";
+import { emptyEditor, setText } from "../../src/cli/ink/input-editor";
+import { initialInput, type InputState } from "../../src/cli/ink/input-state";
 import { stripAnsi, visibleWidth } from "../../src/cli/theme";
 import { measureContext } from "../../src/shared/context-usage";
 
 const base: InkViewState = {
   columns: 80, rows: 24, history: [], tail: [], status: null, context: null, plan: null,
-  mode: "build", theme: "dark", noColor: true, prompt: "❯ ", text: "", cursor: 0,
-  fresh: false, pendingInput: [], inputHint: null, menu: { active: false, items: [], query: "", selectedIndex: 0 },
-  picker: null, now: 2000,
+  mode: "build", theme: "dark", noColor: true, pendingInput: [], inputHint: null, now: 2000,
 };
-function frame(patch: Partial<InkViewState>): string {
+function frame(patch: Partial<InkViewState>, input: InputState = initialInput()): string {
   const state = { ...base, ...patch };
   const output = Object.assign(new PassThrough(), { columns: state.columns, rows: state.rows, isTTY: true });
   let latest = "";
   output.on("data", chunk => { const text = stripAnsi(chunk.toString()); if (text) latest = text; });
-  const app = render(createElement(InkView, { state }), { stdout: output as unknown as NodeJS.WriteStream,
+  const app = render(createElement(InkView, { state, input }), { stdout: output as unknown as NodeJS.WriteStream,
     stdin: new PassThrough() as unknown as NodeJS.ReadStream, debug: true, patchConsole: false, exitOnCtrlC: false });
   const result = latest;
   app.unmount(); app.cleanup();
@@ -27,11 +27,10 @@ function frame(patch: Partial<InkViewState>): string {
 
 describe("Ink view components", () => {
   it.each([[80, 24], [24, 8], [8, 4], [2, 2]])("bounds live output at %sx%s without losing the insertion point", (columns, rows) => {
-    const output = frame({ columns, rows, text: "中文👩‍💻ab\nnext", cursor: 6,
-      tail: Array.from({ length: 100 }, (_, i) => [{ text: `tail-${i}` }]),
-      pendingInput: ["queued message"],
+    const output = frame({ columns, rows,
+      tail: Array.from({ length: 100 }, (_, i) => [{ text: `tail-${i}` }]), pendingInput: ["queued message"],
       status: { label: "Thinking", startedAt: 0, toolCount: 2, cancellable: true },
-    });
+    }, { ...initialInput(), composer: { ...setText(emptyEditor(), "中文👩‍💻ab\nnext"), cursor: 7 } });
     const lines = output.replace(/\n$/, "").split("\n");
     expect(lines.length).toBeLessThanOrEqual(rows - 1);
     expect(lines.every(line => visibleWidth(line) <= Math.max(1, columns - 1))).toBe(true);
@@ -39,14 +38,15 @@ describe("Ink view components", () => {
   });
 
   it("shows picker identity, selected detail, filtering hint and empty state", () => {
-    const picker = { spec: { title: "Resume session", items: [], placeholder: "Filter sessions" },
-      items: [{ value: "one", label: "Selected session", detail: "/workspace\nmodel/exact", active: true }], index: 0 };
-    const output = frame({ picker });
+    const focus = { kind: "picker" as const, id: 1, editor: emptyEditor(), index: 0,
+      spec: { title: "Resume session", placeholder: "Filter sessions",
+        items: [{ value: "one", label: "Selected session", detail: "/workspace\nmodel/exact", active: true }] } };
+    const output = frame({}, { ...initialInput(), focus });
     expect(output).toContain("Resume session");
     expect(output).toContain("Selected session");
     expect(output).toContain("/workspace");
     expect(output).toContain("Enter select");
-    expect(frame({ picker: { ...picker, items: [] } })).toContain("No matches");
+    expect(frame({}, { ...initialInput(), focus: { ...focus, spec: { ...focus.spec, items: [] } } })).toContain("No matches");
   });
 
   it("renders plan, context, pending input and runtime usage without inventing observed metrics", () => {
@@ -63,10 +63,12 @@ describe("Ink view components", () => {
     expect(observing).not.toMatch(/tokens|tools|cancel/);
   });
 
-  it("does not show chat suggestions during fresh approval", () => {
-    const output = frame({ fresh: true, prompt: "Approve? [Y/n] ", inputHint: "Enter queues" });
+  it("mounts only fresh approval, not the saved composer or suggestions", () => {
+    const input: InputState = { ...initialInput(), composer: setText(emptyEditor(), "saved secret draft"),
+      prompt: "Approve? [Y/n] ", focus: { kind: "approval", editor: emptyEditor() } };
+    const output = frame({ inputHint: "Enter queues" }, input);
     expect(output).toContain("Approve?");
-    expect(output).not.toMatch(/Ask anything|Enter queues/);
+    expect(output).not.toMatch(/Ask anything|Enter queues|saved secret draft/);
   });
 
   it("sanitizes untrusted history, picker and tail spans", () => {

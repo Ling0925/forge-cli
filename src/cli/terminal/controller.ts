@@ -19,6 +19,9 @@ import { type Picker, draw } from "./view";
 
 export class Controller implements TerminalUI {
   editor = new Editor();
+  get inputText(): string { return this.picker?.editor.text ?? this.editor.text; }
+  loadHistory(entries: readonly string[]): void { if (!this.fresh) this.editor.loadHistory(entries); }
+  clearInput(): void { this.editor.clear(); this.picker?.resolve(null); }
   readonly menu = new SlashMenu(8);
   readonly screen: Screen;
   busy = false;
