@@ -236,6 +236,7 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
       );
       return;
     case "state_changed":
+    case "permission_changed":
     case "approval_requested":
     case "context_usage":
     case "context_compacted":

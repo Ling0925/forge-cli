@@ -282,6 +282,7 @@ export const createEventRenderer = (
           if (children.has(id) || children.size < 4) children.set(id, child);
           return update([], messageTail, currentStatus);
         }
+        case "permission_changed":
         case "context_compacted":
           return {
             append: [],
