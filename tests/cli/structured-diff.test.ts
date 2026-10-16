@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import type { FileChange, ToolCall } from "../../src/shared/schemas";
 import { createDiffPatch } from "../../src/shared/diff";
-import { parseSessionId, sessionSnapshotSchema } from "../../src/shared/schemas";
+import { fileChangeSchema, parseSessionId, sessionSnapshotSchema } from "../../src/shared/schemas";
 import { createEventRenderer } from "../../src/cli/render/events";
 import { historyLines } from "../../src/cli/render/history";
 import { diffLines, diffStats } from "../../src/cli/render/diff";
@@ -10,14 +10,14 @@ import { stringWidth } from "../../src/cli/render/width";
 import type { RichLine } from "../../src/cli/ui-contract";
 const text = (rows: readonly RichLine[]) => rows.map(row => row.map(span => span.text).join("")).join("\n");
 const change = (before: string | null, after: string, kind: FileChange["kind"] = "modified"): FileChange => ({
-  path: "a.ts", before, after, kind, truncated: false, patch: createDiffPatch(before ?? "", after),
+  path: "a.ts", kind, patch: createDiffPatch(before ?? "", after),
 });
 const call: ToolCall = { id: "write-1", type: "function", function: { name: "write_file", arguments: '{"path":"a.ts","content":"DO_NOT_INVENT"}' } };
 
 it("uses the recorded patch consistently for live events and restored history", () => {
   const base = { sessionId: parseSessionId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"), timestamp: "2026-01-01T00:00:00Z" };
   const result = { content: '{"written":true}', isError: false, changes: [
-    { ...change("old captured\n", "new captured\n"), before: "truncated unrelated prefix", after: "truncated unrelated prefix", truncated: true },
+    change("old captured\n", "new captured\n"),
   ] };
   const renderer = createEventRenderer({ width: () => 80 });
   renderer.push({ ...base, type: "tool_started", call });
@@ -45,26 +45,30 @@ it("shows creation (including an empty file) and overwrite from real write chang
   expect(noChanges).not.toContain("[+0");
 });
 
-it("prefers the complete patch for a late edit beyond the 8192-character preview", () => {
+it("keeps the complete patch for a late edit far beyond any preview window", () => {
   const before = Array.from({ length: 1800 }, (_, i) => `line ${i}\n`).join("");
   const after = before.replace("line 1700\n", "changed late\n");
-  const item = { ...change(before, after), before: before.slice(0, 8192), after: after.slice(0, 8192), truncated: true };
+  const item = change(before, after);
   expect(diffStats(item)).toEqual({ added: 1, removed: 1 });
   expect(text(diffLines(item))).toContain("1701 - line 1700");
   expect(text(diffLines(item))).toContain("1701 + changed late");
 });
 
-it("falls back only for complete historical content and never reports unknown as zero", () => {
-  const { patch: _patch, ...legacy } = change("old\n", "new\n");
-  expect(diffStats(legacy)).toEqual({ added: 1, removed: 1 });
-  expect(text(diffLines(legacy))).toContain("1 + new");
-  const partial = { ...legacy, truncated: true };
+it("migrates legacy before/after previews into a patch and never reports unknown as zero", () => {
+  // Legacy records carried bounded before/after previews plus a truncated flag.
+  const legacy = { path: "a.ts", kind: "modified", before: "old\n", after: "new\n", truncated: false };
+  const migrated = fileChangeSchema.parse(legacy);
+  expect(migrated).not.toHaveProperty("before");
+  expect(diffStats(migrated)).toEqual({ added: 1, removed: 1 });
+  expect(text(diffLines(migrated))).toContain("1 + new");
+  // A truncated legacy preview cannot yield an exact diff; label it unavailable.
+  const partial = fileChangeSchema.parse({ ...legacy, truncated: true });
   expect(diffStats(partial)).toBeNull();
   expect(text(diffLines(partial))).toContain("exact diff unavailable");
   expect(text(diffLines(partial))).not.toContain("[+0");
-  const unknown = { ...legacy, patch: createDiffPatch("old\n".repeat(3000), "new\n".repeat(3000)) };
-  expect(diffStats(unknown)).toBeNull();
-  expect(text(diffLines(unknown))).toContain("budget exceeded");
+  // A record with no patch at all is unknown, not zero.
+  const missing = fileChangeSchema.parse({ path: "a.ts", kind: "modified" });
+  expect(diffStats(missing)).toBeNull();
 });
 
 it("keeps a chronological prefix under row budgets, not a later green line", () => {
@@ -129,7 +133,7 @@ it("shows exact totals and a clear omission notice for truncated patches", () =>
   const item = change(null, "new\n".repeat(600), "created");
   expect(item.patch?.status).toBe("truncated");
   expect(diffStats(item)).toEqual({ added: 600, removed: 0 });
-  const output = text(diffLines({ ...item, truncated: true }, { maxRows: 700 }));
+  const output = text(diffLines(item, { maxRows: 700 }));
   expect(output).toContain("new file · 600 lines");
   expect(output).toContain("patch truncated");
   const short = text(diffLines(item, { maxRows: 5 }));

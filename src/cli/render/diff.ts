@@ -1,5 +1,5 @@
 import type { FileChange } from "../../shared/schemas";
-import { createDiffPatch } from "../../shared/diff";
+import { createDiffPatch, unavailablePatch } from "../../shared/diff";
 import type { RichLine, Span } from "../ui-contract";
 import { ControlFilter, sanitizeText } from "./sanitize";
 import { graphemes, graphemeWidth, stringWidth, truncate } from "./width";
@@ -7,20 +7,8 @@ import { graphemes, graphemeWidth, stringWidth, truncate } from "./width";
 type Patch = ReturnType<typeof createDiffPatch>;
 type PatchLine = Patch["hunks"][number]["lines"][number];
 export interface DiffOptions { width?: number; maxRows?: number }
-const fallbackCache = new WeakMap<FileChange, Patch>();
-const unavailable: Patch = { version: 1, status: "unavailable", omittedLines: 0, omittedHunks: 0, hunks: [] };
-const patchOf = (change: FileChange): Patch => {
-  // The persisted patch describes the full operation even when before/after are previews.
-  if (change.patch) return change.patch;
-  const cached = fallbackCache.get(change);
-  if (cached) return cached;
-  const complete = !change.truncated
-    && (change.before !== null || change.kind === "created")
-    && (change.after !== null || change.kind === "deleted");
-  const patch = complete ? createDiffPatch(change.before ?? "", change.after ?? "") : unavailable;
-  fallbackCache.set(change, patch);
-  return patch;
-};
+const unavailable: Patch = unavailablePatch();
+const patchOf = (change: FileChange): Patch => change.patch ?? unavailable;
 export const diffStats = (change: FileChange): { added: number; removed: number } | null => {
   const patch = patchOf(change);
   return patch.status !== "unavailable" && patch.added !== undefined && patch.removed !== undefined
@@ -134,9 +122,7 @@ export const diffLines = (change: FileChange, options: DiffOptions = {}): readon
     const created = change.kind === "created";
     yield meta(stats ? created ? `${change.path} · new file · ${stats.added} lines` : `${change.path} [+${stats.added} -${stats.removed}]` : `${change.path} · changed`);
     if (patch.status === "unavailable") {
-      yield meta(change.truncated && !change.patch
-        ? "(partial preview; content truncated at source, exact diff unavailable)"
-        : `(exact diff unavailable; ${patch.reason === "budget" ? "diff computation budget exceeded" : "full content unavailable"})`, "warning");
+      yield meta(`(exact diff unavailable; ${patch.reason === "budget" ? "diff computation budget exceeded" : "full content unavailable"})`, "warning");
       return;
     }
     if (patch.hunks.length === 0 && patch.status === "complete") {

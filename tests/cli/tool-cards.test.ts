@@ -4,6 +4,7 @@ import { toolSummaryLines } from "../../src/cli/render/tools";
 import { ToolTranscript } from "../../src/cli/render/tool-transcript";
 import { historyLines } from "../../src/cli/render/history";
 import { sessionSnapshotSchema, type ToolCall } from "../../src/shared/schemas";
+import { createDiffPatch } from "../../src/shared/diff";
 import { visibleWidth } from "../../src/cli/theme";
 import type { RichLine } from "../../src/cli/ui-contract";
 const text = (rows: readonly RichLine[]) => rows.map(row => row.map(s => s.text).join("")).join("\n");
@@ -43,7 +44,7 @@ it.each([
   expect(rendered).not.toContain('{"'); expect(rendered).not.toContain("/tools 1");
 });
 it("shows real edit diffs inline with bounded rows and preserves detail access", () => {
-  const edited = { ...result({ edited: true, replacements: 1 }), changes: [{ path: "a.ts", kind: "modified" as const, before: "const old = 1;", after: "const next = 2;", truncated: false }] };
+  const edited = { ...result({ edited: true, replacements: 1 }), changes: [{ path: "a.ts", kind: "modified" as const, patch: createDiffPatch("const old = 1;", "const next = 2;") }] };
   const tools = new ToolTranscript(); const c = call("edit_file"); tools.start(c);
   const rows = tools.summary(c.id, edited, 80);
   expect(text(rows)).toContain("[+1 -1]");
@@ -51,14 +52,17 @@ it("shows real edit diffs inline with bounded rows and preserves detail access",
   expect(rows.flat().some(s => s.tone === "diffAdded")).toBe(true);
   expect(text(rows)).not.toContain("details:");
   expect(text(tools.detail(1, 80))).toContain("1 + const next = 2;");
-  const large = { ...edited, changes: [{ ...edited.changes[0]!, before: "old\n".repeat(200), after: ("长".repeat(100) + "\n").repeat(200), truncated: true }] };
+  const large = { ...edited, changes: [{ path: "a.ts", kind: "modified" as const, patch: createDiffPatch("old\n".repeat(200), ("长".repeat(100) + "\n").repeat(200)) }] };
   const bounded = tools.summary(c.id, large, 40);
-  expect(bounded.length).toBeLessThanOrEqual(22); expect(text(bounded)).toContain("partial preview");
-  expect(text(bounded)).not.toContain("-old");
-  expect(text(tools.detail(1, 120))).toContain("exact diff unavailable");
+  // Header + detail + at most 20 diff rows + the indexed /tools hint.
+  expect(bounded.length).toBeLessThanOrEqual(23);
+  // The narrow card clips the combined row/patch omission notice; /tools keeps it in full.
+  expect(text(bounded)).toContain("more diff content omitted");
+  expect(text(bounded)).toContain("/tools 1");
+  expect(text(tools.detail(1, 120))).toContain("patch also truncated");
   for (const row of bounded) expect(visibleWidth(text([row]))).toBeLessThanOrEqual(40);
   expect(text(toolSummaryLines(call("write_file"), edited, 80))).toContain("1 + const next = 2;");
-  expect(text(toolSummaryLines(c, { ...edited, changes: [{ ...edited.changes[0]!, before: null }] }, 80))).toContain("unavailable");
+  expect(text(toolSummaryLines(c, { ...edited, changes: [{ path: "a.ts", kind: "modified" as const }] }, 80))).toContain("unavailable");
 });
 it("keeps errors, timeout, truncation and pagination visible", () => {
   const command = toolPresentation("run_command", result({ stdout: "ok", stderr: "broken", exit_code: null, timed_out: true, duration_ms: 100, truncated: true }));

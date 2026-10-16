@@ -1,9 +1,10 @@
 import { expect, it } from "vitest";
 import { diffLines, diffStats } from "../../src/cli/render/diff";
 import { editScript } from "../../src/cli/render/edit-script";
+import { createDiffPatch, unavailablePatch } from "../../src/shared/diff";
 import type { FileChange } from "../../src/shared/schemas";
 const change = (before: string, after: string): FileChange => ({
-  path: "a.ts", kind: "modified", before, after, truncated: false,
+  path: "a.ts", kind: "modified", patch: createDiffPatch(before, after),
 });
 // Ignore the presentation gutter here; structured-diff covers its exact numbering.
 const text = (value: FileChange) => diffLines(value).map(line => line.map(span => span.text).join("").replace(/^\s*\d+ ([ +\-]) /, "$1")).join("\n");
@@ -42,11 +43,11 @@ it("reports identical large content as unchanged", () => {
   expect(diffStats(change(same, same))).toEqual({ added: 0, removed: 0 });
   expect(text(change(same, same))).toContain("no textual change");
 });
-it("does not invent +/- rows or exact counts from truncated previews", () => {
-  const value = { ...change("unchanged prefix\npart", "unchanged prefix\npartial"), truncated: true };
+it("does not invent +/- rows or exact counts from an unavailable patch", () => {
+  const value: FileChange = { path: "a.ts", kind: "modified", patch: unavailablePatch() };
   expect(diffStats(value)).toBeNull();
   expect(text(value)).toContain("exact diff unavailable");
-  expect(text(value)).not.toContain("-part");
+  expect(text(value)).not.toContain("partial");
   expect(text(value)).not.toContain("[+");
 });
 it("does not invent a full-file replacement when the search budget is exhausted", () => {

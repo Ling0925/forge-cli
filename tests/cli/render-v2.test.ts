@@ -20,6 +20,7 @@ import {
   toolStartLine,
 } from "../../src/cli/render/tools";
 import { createTheme, resolveTheme, stringWidth } from "../../src/cli/theme";
+import { createDiffPatch } from "../../src/shared/diff";
 import type { TerminalUI } from "../../src/cli/ui-contract";
 import type {
   AgentEvent,
@@ -246,9 +247,7 @@ describe("tools and diffs", () => {
     const change: FileChange = {
       path: "src/a.ts",
       kind: "modified",
-      before,
-      after,
-      truncated: false,
+      patch: createDiffPatch(before, after),
     };
     const lines = diffLines(change);
     expect(lines.length).toBeLessThanOrEqual(25);
@@ -256,7 +255,7 @@ describe("tools and diffs", () => {
     expect(textOf(lines)).toContain("omitted");
     expect(textOf(lines)).not.toContain("+ new 0"); // Never reorder later additions.
     expect(textOf(diffLines(change, { maxRows: 100 }))).toContain("1 + new 0");
-    const missing = diffLines({ ...change, before: null, kind: "modified" });
+    const missing = diffLines({ path: "src/a.ts", kind: "modified" });
     expect(textOf(missing)).toContain("unavailable");
     expect(textOf(missing)).not.toContain("-old");
   });
@@ -265,9 +264,7 @@ describe("tools and diffs", () => {
     const created = diffLines({
       path: "src/new.ts",
       kind: "created",
-      before: null,
-      after: "export const ready = true;\n",
-      truncated: false,
+      patch: createDiffPatch("", "export const ready = true;\n"),
     });
     const createdText = textOf(created);
     expect(createdText).toContain("1   export const ready = true;");
@@ -278,9 +275,7 @@ describe("tools and diffs", () => {
     const deleted = diffLines({
       path: "src/old.ts",
       kind: "deleted",
-      before: "export const gone = true;",
-      after: null,
-      truncated: false,
+      patch: createDiffPatch("export const gone = true;", ""),
     });
     expect(textOf(deleted)).toContain("1 - export const gone = true;");
     expect(textOf(deleted)).toContain("@@ -1,1 +0,0 @@");
@@ -296,9 +291,7 @@ describe("tools and diffs", () => {
     const lines = diffLines({
       path: "src/late.ts",
       kind: "modified",
-      before: before.join("\n"),
-      after: after.join("\n"),
-      truncated: false,
+      patch: createDiffPatch(before.join("\n"), after.join("\n")),
     });
     const body = textOf(lines);
     expect(body).toContain("101 + inserted change");

@@ -6,6 +6,8 @@ import { Screen } from "./legacy/screen";
 import { contextFooter } from "../../src/cli/terminal/context-footer";
 import { MarkdownStream } from "../../src/cli/render/markdown";
 import { diffLines } from "../../src/cli/render/diff";
+import { createDiffPatch, unavailablePatch } from "../../src/shared/diff";
+import type { FileChange } from "../../src/shared/schemas";
 import { visibleWidth } from "../../src/cli/theme";
 import type { RichLine } from "../../src/cli/ui-contract";
 const text = (lines: readonly RichLine[]) => lines.map(l => l.map(s => s.text).join("")).join("\n");
@@ -70,9 +72,9 @@ it("renders code borders and lossless multicolor tokens identically across every
   const unknown = new MarkdownStream(); const shown = [...unknown.push('```unknown\nkeep\x1b]52;c;bad\x07\n').append,...unknown.finish().append];
   expect(text(shown)).toContain("  keep"); expect(text(shown)).toContain("── unknown ──"); expect(text(shown)).not.toContain("bad");
 });
-it("shows diff statistics and labels source-limited counts", () => {
-  const change = {path:"a.ts",kind:"modified" as const,before:"a\nb\nc",after:"a\nx\ny\nc",truncated:false};
+it("shows diff statistics and labels an unavailable diff", () => {
+  const change: FileChange = {path:"a.ts",kind:"modified",patch:createDiffPatch("a\nb\nc","a\nx\ny\nc")};
   expect(text(diffLines(change))).toContain("[+2 -1]");
-  expect(text(diffLines({...change,truncated:true}))).toContain("partial preview");
-  expect(text(diffLines({...change,before:null}))).not.toContain("[+2");
+  expect(text(diffLines({path:"a.ts",kind:"modified",patch:unavailablePatch()}))).toContain("unavailable");
+  expect(text(diffLines({path:"a.ts",kind:"modified"}))).not.toContain("[+");
 });
