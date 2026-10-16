@@ -1,0 +1,81 @@
+diff --git a/build/measure-text.js b/build/measure-text.js
+index 6934dc529bf94feed37afdf95633e4f36c6aad32..0d78e3db6031d3b1a2461edc82036e9a4cd0baf4 100644
+--- a/build/measure-text.js
++++ b/build/measure-text.js
+@@ -1,5 +1,6 @@
+ import widestLine from 'widest-line';
+-const cache = new Map();
++import TextCache from './text-cache.js';
++const cache = new TextCache();
+ const measureText = (text) => {
+     if (text.length === 0) {
+         return {
+diff --git a/build/text-cache.js b/build/text-cache.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b0941d27b911954ec871cc56d67f7f1c4ba27a7d
+--- /dev/null
++++ b/build/text-cache.js
+@@ -0,0 +1,34 @@
++// Forge local patch: bound process-lifetime text caches for streaming terminals.
++// Cost is a conservative UTF-16 estimate, not an exact V8 heap measurement.
++export default class TextCache {
++    entries = new Map();
++    retainedBytes = 0;
++    constructor(maxEntries = 2048, maxBytes = 2 * 1024 * 1024) {
++        this.maxEntries = maxEntries;
++        this.maxBytes = maxBytes;
++    }
++    get(key) {
++        const entry = this.entries.get(key);
++        if (!entry) return undefined;
++        this.entries.delete(key);
++        this.entries.set(key, entry);
++        return entry.value;
++    }
++    set(key, value) {
++        const previous = this.entries.get(key);
++        if (previous) {
++            this.retainedBytes -= previous.cost;
++            this.entries.delete(key);
++        }
++        const cost = 256 + key.length * 2 + (typeof value === 'string' ? value.length * 2 : 32);
++        // Oversized input is still rendered, just never retained by this cache.
++        if (this.maxEntries < 1 || cost > this.maxBytes) return;
++        while (this.entries.size >= this.maxEntries || this.retainedBytes + cost > this.maxBytes) {
++            const oldest = this.entries.keys().next().value;
++            this.retainedBytes -= this.entries.get(oldest).cost;
++            this.entries.delete(oldest);
++        }
++        this.entries.set(key, { value, cost });
++        this.retainedBytes += cost;
++    }
++}
+diff --git a/build/wrap-text.js b/build/wrap-text.js
+index 7cee4b8a500df85b2df3294904834c0091289e8c..bd447674920e612968bfaadb4ee3c35be76b35be 100644
+--- a/build/wrap-text.js
++++ b/build/wrap-text.js
+@@ -1,10 +1,11 @@
+ import wrapAnsi from 'wrap-ansi';
+ import cliTruncate from 'cli-truncate';
+-const cache = {};
++import TextCache from './text-cache.js';
++const cache = new TextCache();
+ const wrapText = (text, maxWidth, wrapType) => {
+-    const cacheKey = text + String(maxWidth) + String(wrapType);
+-    const cachedText = cache[cacheKey];
+-    if (cachedText) {
++    const cacheKey = `${maxWidth}:${wrapType}:${text}`;
++    const cachedText = cache.get(cacheKey);
++    if (cachedText !== undefined) {
+         return cachedText;
+     }
+     let wrappedText = text;
+@@ -24,7 +25,7 @@ const wrapText = (text, maxWidth, wrapType) => {
+         }
+         wrappedText = cliTruncate(text, maxWidth, { position });
+     }
+-    cache[cacheKey] = wrappedText;
++    cache.set(cacheKey, wrappedText);
+     return wrappedText;
+ };
+ export default wrapText;

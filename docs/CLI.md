@@ -123,6 +123,13 @@ forge config set --reasoning-effort default
 
 `forge config show` 只显示公共配置；`forge config set --api-key-stdin` 避免把 key 放在 argv。不要分享私有配置。`/export` 导出对话，分享前检查。checkpoint restore 会修改文件，先 list/diff。非交互自动审批仅限明确的 unrestricted 权限与 `--yes`；workspace 权限不能自动授权。
 
+### 长时间运行与内存
+
+- Ink 6.6.0 原有的文字测量/换行缓存无淘汰上限。本仓库通过 `pnpm-workspace.yaml` 的 `patchedDependencies` 固定应用 `patches/ink@6.6.0.patch`：两个缓存分别限制为 2048 项、2 MiB 估算成本，LRU 淘汰；超大文本正常计算但不缓存。该预算不是进程总内存上限。
+- 补丁随 `pnpm install` 应用，不要仅手改 `node_modules`，升级 Ink 时应检查上游修复并重新验证。CLI 当前将 Ink 作为外部依赖，单独复制 `dist/cli.mjs` 并不能携带该修复。
+- 聚焦内存回归：`pnpm exec vitest run tests/cli/ink-memory.test.ts`。测试在隔离子进程中使用合成文本、256 MiB 堆限制和显式 GC，检查连续两批变化后的保留内存，并验证缓存淘汰不改变渲染结果。不读取真实会话，也不生成堆快照。
+- `heap out of memory` 不等同于会话文件损坏。重启后可用 `forge sessions` / `forge resume UUID` 查看已持久化内容；崩溃前未落盘的增量无法保证恢复，不应自动重跑结果不确定的工具。core dump / heap snapshot 可能含会话内容和凭据，不要直接公开上传。
+
 ## 源码工作区验证
 
 运行 `env -u NO_COLOR TERM=xterm-256color pnpm test`、`pnpm typecheck` 和 `pnpm exec biome check src/cli tests/cli`。完整测试包含富终端呈现断言，需要上述明确的终端环境；NO_COLOR、dumb 和非 TTY 降级由专门用例覆盖。终端模拟器测试需要预先准备 Chromium、xterm.js 和官方 Unicode11 addon；缺少资源会明确失败，不会跳过测试或自动安装。
