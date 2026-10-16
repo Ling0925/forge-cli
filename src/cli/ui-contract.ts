@@ -35,6 +35,8 @@ export type Span = Readonly<{
   readonly inverse?: boolean;
   /** Local presentation marker; animated only in the transient terminal tail. */
   readonly animation?: "spinner";
+  /** Collapsed preview stays one physical row, including after a viewport resize. */
+  readonly preview?: "reasoning";
 }>;
 
 /** A logical output line, rendered as a sequence of spans. */

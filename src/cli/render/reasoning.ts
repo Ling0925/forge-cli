@@ -31,8 +31,8 @@ export const reasoningLine = (
   const room = Math.max(0, Math.floor(width) - 2);
   return [
     animated
-      ? { text: prefix, tone: "accent", animation: "spinner" }
-      : { text: prefix, tone: "muted" },
+      ? { text: prefix, tone: "accent", animation: "spinner", preview: "reasoning" }
+      : { text: prefix, tone: "muted", preview: "reasoning" },
     { text: truncate(current, room, symbols.ellipsis), tone: "muted" },
   ];
 };

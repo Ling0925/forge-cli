@@ -1,7 +1,7 @@
 import type { Theme } from "../theme";
 import type { RichLine, Span } from "../ui-contract";
 import { sanitizeText } from "./sanitize";
-import { graphemeWidth, graphemes } from "./width";
+import { graphemeWidth, graphemes, stringWidth, truncate } from "./width";
 
 export const textSpan = (text: string): Span => ({ text: sanitizeText(text) });
 
@@ -38,6 +38,22 @@ export const wrapRichLines = (
   const limit = Math.max(1, Math.floor(columns));
   const wrapped: RichLine[] = [];
   for (const line of lines) {
+    if (line.some(item => item.preview === "reasoning")) {
+      // Producers can use a wider width than Ink, and frozen/history rows are
+      // reflowed again on resize. A collapsed thought must never become two rows.
+      let remaining = limit;
+      const preview: Span[] = [];
+      for (const item of line) {
+        if (remaining <= 0) break;
+        const clean = sanitizeText(item.text).replace(/[\n\t]/g, " ");
+        const text = truncate(clean, remaining);
+        preview.push({ ...item, text });
+        remaining -= stringWidth(text);
+        if (stringWidth(clean) > stringWidth(text)) break;
+      }
+      wrapped.push(preview);
+      continue;
+    }
     let current: Span[] = [];
     let used = 0;
     const flush = (): void => {

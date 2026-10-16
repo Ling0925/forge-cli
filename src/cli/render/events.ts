@@ -76,7 +76,9 @@ export const createEventRenderer = (
     const merged = reasoningAccumulator + text;
     reasoningAccumulator =
       merged.length > REASONING_KEEP ? merged.slice(-REASONING_KEEP) : merged;
-    reasoningLine = buildReasoningLine(reasoningAccumulator, options.width?.() ?? 80, true);
+    // A streamed newline/indent is not a new visible thought. Keep the previous
+    // preview until text arrives; otherwise the entire history viewport jumps.
+    reasoningLine = buildReasoningLine(reasoningAccumulator, options.width?.() ?? 80, true) ?? reasoningLine;
     return [];
   };
   const children = new Map<string, { model: string; status: string; activity: string }>();
