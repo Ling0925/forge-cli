@@ -25,8 +25,8 @@ function colorFgBg(value: string | undefined): "light" | "dark" | "unknown" {
 /**
  * Terminal-mode ownership only; the reader/decoder remains the sole input-stream owner.
  *
- * This class never subscribes to input or captures the mouse. It owns raw/paste,
- * the fullscreen alternate-buffer lifecycle, and the one-shot background probe.
+ * This class never subscribes to input. It owns raw/paste, fullscreen mouse
+ * reports, the alternate-buffer lifecycle, and the one-shot background probe.
  * Ink alone owns screen drawing; screen-reader mode stays inline.
  */
 export class TerminalModes {
@@ -36,12 +36,21 @@ export class TerminalModes {
   private previousRaw = false;
   private pasteAttempted = false;
   private alternateAttempted = false;
+  private mouseAttempted = false;
+  get mouseEnabled(): boolean { return this.mouseAttempted && !this.disposed; }
   /** Fullscreen is opt-in at the render boundary, never for a standalone approval. */
   enterFullscreen(): void {
     if (this.disposed || this.screenReader || this.alternateAttempted || !this.input.isTTY || !this.output.isTTY || process.env.TERM === "dumb") return;
     this.alternateAttempted = true;
-    try { this.output.write("\x1b[?1049h"); }
-    catch (error) { try { this.dispose(); } catch {} throw error; }
+    try {
+      this.output.write("\x1b[?1049h");
+      if (!/^(?:0|false|off|no)$/i.test(process.env.FORGE_MOUSE ?? "")) {
+        // Basic button/wheel reports only, not motion tracking. Shift+drag remains
+        // the terminal's native selection gesture; FORGE_MOUSE=0 opts out.
+        this.mouseAttempted = true;
+        this.output.write("\x1b[?1006h\x1b[?1000h");
+      }
+    } catch (error) { try { this.dispose(); } catch {} throw error; }
   }
   private queried = false;
   private deadline = 0;
@@ -173,6 +182,13 @@ export class TerminalModes {
         this.output.write(PASTE_OFF);
       } catch (error) {
         failure = error;
+      }
+    }
+    if (this.mouseAttempted) {
+      this.mouseAttempted = false;
+      // Try each reset even when a previous write failed.
+      for (const reset of ["\x1b[?1000l", "\x1b[?1006l"]) {
+        try { this.output.write(reset); } catch (error) { failure ??= error; }
       }
     }
     if (this.alternateAttempted) {

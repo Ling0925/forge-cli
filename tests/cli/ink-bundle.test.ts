@@ -52,7 +52,11 @@ it.each(["none", "light", "dark"] as const)("starts the built Ink chat with %s c
     expect(output).toContain("\x1b[?25h");
     expect(output).toContain("\x1b[?1049h");
     expect(output).toContain("\x1b[?1049l");
-    expect(output).not.toMatch(/\x1b\[\?(?:1002|1006)h/);
+    expect(output).toContain("\x1b[?1000h");
+    expect(output).toContain("\x1b[?1006h");
+    expect(output).toContain("\x1b[?1000l");
+    expect(output).toContain("\x1b[?1006l");
+    expect(output).not.toMatch(/\x1b\[\?(?:1002|1003)h/);
     expect(output).not.toContain("\x1b[3J");
     if (color === "none") expect(output).not.toMatch(/\x1b\[[\d;]*m/);
     else expect(output).toContain(color === "light" ? "\x1b[38;2;85;104;77m" : "\x1b[38;2;143;173;130m");

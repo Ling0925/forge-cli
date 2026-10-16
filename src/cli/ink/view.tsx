@@ -83,7 +83,7 @@ export function InkView({ state, input }: { state: InkViewState; input: InputSta
         <Box flexDirection="column" flexGrow={1} flexShrink={1} overflowY="hidden">
           {readingRows.map((spans, index) => <RichRow key={`read-${index}`} spans={spans} appearance={{ ...appearance, now: 0 }} width={width} />)}
         </Box>
-        {limit > 0 && <RichRow spans={line(`Reading ${Math.max(1, reading.end - readRows + 1)}${symbols.range}${reading.end}/${reading.lines.length} ${symbols.separator} PgUp/PgDn ${symbols.separator} End/Esc live`, "muted")} appearance={appearance} width={width} />}
+        {limit > 0 && <RichRow spans={line(`Reading ${Math.max(1, reading.end - readRows + 1)}${symbols.range}${reading.end}/${reading.lines.length} ${symbols.separator} Wheel/PgUp/PgDn ${symbols.separator} End/Esc live`, "muted")} appearance={appearance} width={width} />}
       </> : <>
         <Box flexDirection="column" flexGrow={1} flexShrink={1} overflowY="hidden">
           {history.map((spans, index) => <RichRow key={`history-${index}`} spans={spans} appearance={appearance} width={width} />)}

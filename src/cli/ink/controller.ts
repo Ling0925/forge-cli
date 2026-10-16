@@ -161,6 +161,21 @@ export class InkController implements TerminalController {
   handle(event: InputEvent): void {
     if (this.disposed || this.modes.handle(event)) return;
     const key = event.kind === "key" && !event.pasted ? event.key : "";
+    if (event.kind === "mouse") {
+      // Clicks never select actions or authorize tools. The decoder suppresses
+      // pasted reports; modified gestures are reserved for native selection.
+      if (!this.modes.mouseEnabled || event.shift || this.input.getSnapshot().focus.kind !== "composer"
+        || (event.action !== "wheel-up" && event.action !== "wheel-down")) return;
+      if (!this.reading.active) {
+        if (event.action === "wheel-down") return;
+        this.reading.open(this.transcript.recent(Math.max(1, this.columns - 1)), this.tail, Math.max(1, this.columns - 1));
+      }
+      this.reading.move(event.action === "wheel-up" ? -3 : 3, Math.max(1, this.rows - 2));
+      const snapshot = this.reading.snapshot();
+      if (event.action === "wheel-down" && snapshot && snapshot.end >= snapshot.lines.length) this.reading.close();
+      this.draw();
+      return;
+    }
     if (this.reading.active) {
       if (key === "page-up" || key === "page-down") this.reading.move((key === "page-up" ? -1 : 1) * Math.max(1, this.rows - 3), Math.max(1, this.rows - 2));
       else if (key === "escape" || key === "end" || key === "interrupt") this.reading.close();

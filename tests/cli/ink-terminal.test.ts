@@ -96,7 +96,7 @@ describe("Ink terminal migration", () => {
     expect(await approval).toBe(false);
   });
 
-  it("uses Ink fullscreen through the default rich adapter without mouse capture", async () => {
+  it("uses Ink fullscreen through the default rich adapter with wheel reports and cleanup", async () => {
     const input = new Input();
     const output = new Output();
     let bytes = "";
@@ -111,7 +111,9 @@ describe("Ink terminal migration", () => {
     await settle();
     expect(stripAnsi(bytes)).toContain("ink-static-marker");
     expect(bytes).toContain("\x1b[?1049h");
-    expect(bytes).not.toMatch(/\x1b\[\?(?:1002|1006)h/);
+    expect(bytes).toContain("\x1b[?1000h");
+    expect(bytes).toContain("\x1b[?1006h");
+    expect(bytes).not.toMatch(/\x1b\[\?(?:1002|1003)h/);
     await io.dispose?.();
     expect(bytes).toContain("\x1b[?1049l");
     expect(input.isRaw).toBe(false);

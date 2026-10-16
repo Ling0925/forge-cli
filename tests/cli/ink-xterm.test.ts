@@ -6,6 +6,7 @@ import { terminalQAResources } from "./qa-resources";
 
 interface Term {
   open(element: HTMLElement): void; write(text: string, done: () => void): void; resize(columns: number, rows: number): void;
+  onData(callback: (data: string) => void): { dispose(): void };
   select(column: number, row: number, length: number): void; getSelection(): string;
   buffer: { active: { type: string; length: number; baseY: number; getLine(i: number): { translateToString(trim: boolean): string } | undefined } };
 }
@@ -24,10 +25,13 @@ it("Ink fullscreen anchors its dock, retains readable history and restores the o
     const page = await browser.newPage();
     await page.setContent('<div id="terminal"></div>');
     await page.addScriptTag({ path: resources.xterm });
+    const reports: string[] = [];
+    await page.exposeFunction("sendTerminalInput", (data: string) => { reports.push(data); input.write(data); });
     await page.evaluate(() => {
       const w = window as unknown as ReturnType<typeof browserWindow>;
       w.inkTerm = new w.Terminal({ cols: 80, rows: 24, scrollback: 5000, convertEol: true });
       w.inkTerm.open(document.getElementById("terminal")!);
+      w.inkTerm.onData(data => { void (window as unknown as { sendTerminalInput(data: string): Promise<void> }).sendTerminalInput(data); });
     });
     const write = (data: string) => page.evaluate(async data => {
       await new Promise<void>(resolve => (window as unknown as ReturnType<typeof browserWindow>).inkTerm.write(data, resolve));
@@ -52,6 +56,19 @@ it("Ink fullscreen anchors its dock, retains readable history and restores the o
     await flush();
     expect((await lines()).join("\n").split("HISTORY-059").length - 1).toBe(1);
     expect(await dockRow()).toBe(22);
+    // Exercise actual browser wheel -> xterm SGR report -> decoder -> Ink viewport.
+    const bounds = await page.locator(".xterm-screen").boundingBox();
+    expect(bounds).not.toBeNull();
+    await page.mouse.move(bounds!.x + 20, bounds!.y + 30);
+    await page.mouse.wheel(0, -120); await flush();
+    expect(reports.some(data => data.startsWith("\x1b[<64;"))).toBe(true);
+    expect((await lines()).join("\n")).toContain("Reading");
+    expect((await lines()).join("\n")).not.toContain("HISTORY-059");
+    await page.mouse.wheel(0, 120); await flush();
+    expect(reports.some(data => data.startsWith("\x1b[<65;"))).toBe(true);
+    expect((await lines()).join("\n")).not.toContain("Reading");
+    expect(await dockRow()).toBe(22);
+    expect((await lines()).join("\n")).toContain("HISTORY-059");
     for (const count of [1, 40, 0]) {
       reader.ui.setTail(Array.from({ length: count }, (_, i) => [{ text: `UNFINISHED-${i}` }])); await flush();
       expect(await dockRow()).toBe(22);
@@ -93,7 +110,10 @@ it("Ink fullscreen anchors its dock, retains readable history and restores the o
     reader.dispose(); await flush();
     expect(await page.evaluate(() => (window as unknown as ReturnType<typeof browserWindow>).inkTerm.buffer.active.type)).toBe("normal");
     expect((await lines()).join("\n")).toContain("ORIGINAL-SHELL");
-    expect(emitted).not.toMatch(/\x1b\[\?(?:1002|1006)h/);
+    expect(emitted).toContain("\x1b[?1000h");
+    expect(emitted).toContain("\x1b[?1000l");
+    expect(emitted).toContain("\x1b[?1006l");
+    expect(emitted).not.toMatch(/\x1b\[\?(?:1002|1003)h/);
   } finally { reader.dispose(); await browser.close(); }
   expect(input.isRaw).toBe(false);
 });
