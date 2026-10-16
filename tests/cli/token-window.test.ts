@@ -4,12 +4,13 @@ import { agentEventSchema } from "../../src/shared/schemas";
 import { contextFooter } from "../../src/cli/terminal/context-footer";
 
 describe("token window accounting", () => {
-  it("uses per-model overrides then metadata then exact known IDs; unknown stays unknown", () => {
+  it("uses overrides then metadata then exact known IDs, defaulting unknown windows to 300K", () => {
     expect(resolveContextWindow("alias", { modelContextWindows: { alias: 64000 } }, 128000)).toBe(64000);
     expect(resolveContextWindow("gpt-4o", {}, 32000)).toBe(32000);
     expect(resolveContextWindow("gpt-4o", {})).toBe(128000);
-    expect(resolveContextWindow("alias/gpt-4o", {})).toBeNull();
-    expect(resolveContextWindow("alias", { modelContextWindows: { alias: null } })).toBeNull();
+    expect(resolveContextWindow("alias/gpt-4o", {})).toBe(300000);
+    expect(resolveContextWindow("alias", { modelContextWindows: { alias: null } }, null)).toBe(300000);
+    expect(resolveContextWindow("alias", { modelContextWindows: { alias: null } }, 1000000)).toBe(1000000);
   });
   it("estimates CJK differently and includes tool schemas without local metadata", () => {
     expect(estimateTokens("你好世界")).toBe(4);
