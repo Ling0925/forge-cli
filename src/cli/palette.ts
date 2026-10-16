@@ -7,7 +7,10 @@ export interface ResolveThemeOptions {
   readonly noColor: boolean;
   readonly dumb: boolean;
 }
-type AnsiColor = "gray" | "green" | "yellow" | "red" | "blue" | "magenta";
+type AnsiColor =
+  | "black" | "gray" | "white"
+  | "green" | "yellow" | "red" | "blue" | "magenta"
+  | "brightGreen" | "brightYellow" | "brightRed" | "brightBlue" | "brightMagenta";
 type Color = `#${string}` | number | AnsiColor;
 export interface ToneStyle {
   readonly foreground?: Color;
@@ -50,8 +53,11 @@ const extended: Record<"light" | "dark", Pick<Palette,
     contextConversation: { foreground: 115 }, contextTools: { foreground: 215 },
   },
 };
-const ansi: Palette = {
-  text: {}, muted: { foreground: "gray" }, accent: { foreground: "green" },
+
+// With no trustworthy background, keep prose on the terminal's own foreground.
+// Decoration is separate so non-essential rules may still opt into ANSI gray.
+const structural: Palette = {
+  text: {}, muted: {}, decoration: { foreground: "gray" }, accent: { foreground: "green" },
   success: { foreground: "green" }, warning: { foreground: "yellow" }, error: { foreground: "red" },
   diffAdded: { foreground: "green" }, diffRemoved: { foreground: "red" },
   diffAddedWord: { foreground: "green", bold: true, inverse: true },
@@ -59,11 +65,27 @@ const ansi: Palette = {
   contextInstructions: { foreground: "blue" }, contextMemory: { foreground: "magenta" },
   contextConversation: { foreground: "green" }, contextTools: { foreground: "yellow" },
 };
+const ansi16: Record<"light" | "dark", Palette> = {
+  light: { ...structural,
+    muted: { foreground: "black" }, decoration: { foreground: "black" },
+  },
+  dark: { ...structural,
+    muted: { foreground: "white" }, decoration: { foreground: "white" },
+    accent: { foreground: "brightGreen" }, success: { foreground: "brightGreen" },
+    warning: { foreground: "brightYellow" }, error: { foreground: "brightRed" },
+    diffAdded: { foreground: "brightGreen" }, diffRemoved: { foreground: "brightRed" },
+    diffAddedWord: { foreground: "brightGreen", bold: true, inverse: true },
+    diffRemovedWord: { foreground: "brightRed", bold: true, inverse: true },
+    contextInstructions: { foreground: "brightBlue" }, contextMemory: { foreground: "brightMagenta" },
+    contextConversation: { foreground: "brightGreen" }, contextTools: { foreground: "brightYellow" },
+  },
+};
 const palettes = (variant: "light" | "dark", depth: number): Palette => {
   const colors = depth >= 24 ? semantic[variant] : indexed[variant];
-  return { ...ansi, ...extended[variant],
-    muted: { foreground: colors.muted }, accent: { foreground: colors.accent },
-    success: { foreground: colors.success }, warning: { foreground: colors.warning }, error: { foreground: colors.error },
+  return { ...ansi16[variant], ...extended[variant],
+    muted: { foreground: colors.muted }, decoration: { foreground: colors.muted },
+    accent: { foreground: colors.accent }, success: { foreground: colors.success },
+    warning: { foreground: colors.warning }, error: { foreground: colors.error },
   };
 };
 const light24 = palettes("light", 24), dark24 = palettes("dark", 24);
@@ -71,15 +93,19 @@ const light8 = palettes("light", 8), dark8 = palettes("dark", 8);
 
 export function resolvePalette(options: ResolveThemeOptions): ResolvedPalette {
   if (options.noColor || options.dumb || options.colorDepth < 4)
-    return { enabled: false, variant: "plain", styles: ansi };
+    return { enabled: false, variant: "plain", styles: structural };
   const background = options.setting === "system" ? options.background : options.setting;
-  if (background === "unknown") return { enabled: true, variant: "structural", styles: ansi };
-  const styles = options.colorDepth < 8 ? ansi : options.colorDepth >= 24
+  if (background === "unknown") return { enabled: true, variant: "structural", styles: structural };
+  const styles = options.colorDepth < 8 ? ansi16[background] : options.colorDepth >= 24
     ? background === "light" ? light24 : dark24 : background === "light" ? light8 : dark8;
   return { enabled: true, variant: background, styles };
 }
 
-const ansiCodes: Record<AnsiColor, number> = { gray: 90, green: 32, yellow: 33, red: 31, blue: 34, magenta: 35 };
+const ansiCodes: Record<AnsiColor, number> = {
+  black: 30, gray: 90, white: 37,
+  green: 32, yellow: 33, red: 31, blue: 34, magenta: 35,
+  brightGreen: 92, brightYellow: 93, brightRed: 91, brightBlue: 94, brightMagenta: 95,
+};
 function colorCode(color: Color, background: boolean): string {
   if (typeof color === "number") return `${background ? 48 : 38};5;${color}`;
   if (color.startsWith("#")) {

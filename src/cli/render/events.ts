@@ -2,6 +2,7 @@ import type { AgentEvent, ApprovalRequest, TaskPlan, ToolCall } from "../../shar
 import type { RenderUpdate, RichLine, RunStatus } from "../ui-contract";
 import { estimateTokens } from "../../shared/context-usage";
 import { MarkdownStream } from "./markdown";
+import { uiSymbols } from "../symbols";
 import { wrapRichLines } from "./rich";
 import { sanitizeText } from "./sanitize";
 import { REASONING_KEEP, reasoningLine as buildReasoningLine } from "./reasoning";
@@ -67,7 +68,7 @@ export const createEventRenderer = (
       parts.forEach((part, index) => {
         if (index > 0) appends.push([]);
         if (part) {
-          appends.push([{ text: `✻ ${part}`, tone: "muted" }]);
+          appends.push([{ text: `${uiSymbols().reasoning} ${part}`, tone: "muted" }]);
         }
       });
       return appends;
@@ -81,7 +82,7 @@ export const createEventRenderer = (
   const children = new Map<string, { model: string; status: string; activity: string }>();
   const settled = new Set<string>();
   const childLine = (id: string, child: { model: string; status: string; activity: string }): RichLine => [{
-    text: truncate(sanitizeText(`  │ Agent ${id.slice(0, 8)} · ${child.model} · ${child.status}${child.activity ? ` · ${child.activity}` : ""}`).replace(/\s+/g, " "), options.width?.() ?? 80),
+    text: truncate(sanitizeText(`  ${uiSymbols().vertical} Agent ${id.slice(0, 8)} ${uiSymbols().separator} ${child.model} ${uiSymbols().separator} ${child.status}${child.activity ? ` ${uiSymbols().separator} ${child.activity}` : ""}`).replace(/\s+/g, " "), options.width?.() ?? 80),
     tone: child.status === "failed" ? "error" : child.status === "completed" ? "success" : "muted",
   }];
   const stopChildren = (): RichLine[] => {
@@ -95,7 +96,7 @@ export const createEventRenderer = (
   const active = new Map<string, ToolCall>();
   const stopTools = (label = "interrupted"): RichLine[] => {
     const lines = [...active.values()].map((call) => compactToolLine(
-      call.function.name, toolTarget(call), ` · ${label}`, "warning", options.width?.() ?? 80,
+      call.function.name, toolTarget(call), ` ${uiSymbols().separator} ${label}`, "warning", options.width?.() ?? 80,
     ));
     active.clear();
     return [...lines, ...stopChildren()];

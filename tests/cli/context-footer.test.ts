@@ -41,7 +41,7 @@ describe("composer context footer", () => {
       { text: "─".repeat(8), tone: "contextMemory" },
       { text: "─".repeat(16), tone: "contextConversation" },
       { text: "─".repeat(8), tone: "contextTools" },
-      { text: "─".repeat(40), tone: "muted" },
+      { text: "─".repeat(40), tone: "decoration" },
     ]);
     expect(lines).toHaveLength(2);
     expect(lines.map(text).join("\n")).not.toMatch(/指令|记忆|对话|工具|分段≈|tokens≈/);
@@ -53,7 +53,7 @@ describe("composer context footer", () => {
     expect(text(known[0]!)).not.toMatch(/上下文|压缩|tokens|500|800/);
     expect(known).toHaveLength(2);
     expect(known[1]!.at(-1)).toEqual({ text: "─".repeat(20), tone: "error" });
-    expect(known[1]!.filter((span) => span.tone === "muted")).toEqual([{ text: "─".repeat(30), tone: "muted" }]);
+    expect(known[1]!.filter((span) => span.tone === "decoration")).toEqual([{ text: "─".repeat(30), tone: "decoration" }]);
     const unknown = contextFooter({ ...context, usage: { ...context.usage!, windowTokens: null, budgetChars: 100000 } }, 100);
     expect(text(unknown[0]!)).toMatch(/\?% · R0% · \?$/);
     expect(unknown[1]!.some((span) => span.tone === "error")).toBe(false);

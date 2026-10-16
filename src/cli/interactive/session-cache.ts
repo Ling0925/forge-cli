@@ -1,4 +1,5 @@
 import type { AgentEvent, SessionSnapshot } from "../../shared/schemas";
+import { uiSymbols } from "../symbols";
 
 export interface SessionCacheUsage {
   readonly promptTokens: number;
@@ -66,5 +67,5 @@ export function cacheRate(usage?: SessionCacheUsage): string {
   const cached = usage?.cachedPromptTokens ?? 0;
   const valid = Number.isFinite(prompt) && Number.isFinite(cached) && prompt > 0 && cached >= 0 && cached <= prompt;
   const rate = valid ? Number((cached / prompt * 100).toFixed(1)) : 0;
-  return `${usage?.partial ? "≈" : ""}${rate}%`;
+  return `${usage?.partial ? uiSymbols().approximate : ""}${rate}%`;
 }

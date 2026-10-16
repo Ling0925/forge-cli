@@ -40,6 +40,7 @@ import { autoApprovalLines } from "./render/auto-approval";
 import { plainLines, renderRichLine } from "./render/rich";
 import { ToolTranscript } from "./render/tool-transcript";
 import { createTheme } from "./theme";
+import { uiSymbols } from "./symbols";
 import type { RichLine, RunStatus } from "./ui-contract";
 
 export { terminalText };
@@ -430,7 +431,7 @@ export async function interactive(
       const inputCtrl = new AbortController();
       awaitingInput = inputCtrl;
       const inputSignal = AbortSignal.any([lifetime.signal, inputCtrl.signal]);
-      const prompt = io.isTTY ? "❯ " : "forge> ";
+      const prompt = io.isTTY ? `${uiSymbols().prompt} ` : "forge> ";
 
       try {
         const command = pendingCommands.shift();

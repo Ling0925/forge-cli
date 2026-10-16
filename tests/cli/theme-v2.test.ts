@@ -89,7 +89,7 @@ describe("resolveTheme", () => {
       dumb: false,
     });
     expect(theme.variant).toBe("structural");
-    expect(theme.dim("context")).toContain("\u001b[90m");
+    expect(theme.dim("context")).toBe("context");
     expect(theme.bold("Forge")).toContain("\u001b[1m");
     expect(theme.cyan("accent")).toContain("\u001b[32m");
     expect(theme.red("error")).toContain("\u001b[31m");

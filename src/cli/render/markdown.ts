@@ -5,6 +5,7 @@ import type { RichLine, Span } from "../ui-contract";
 import { ControlFilter, sanitizeText } from "./sanitize";
 import { plainLines, wrapRichLines } from "./rich";
 import { visibleWidth } from "../theme";
+import { uiSymbols } from "../symbols";
 import { MarkdownCache } from "./markdown-cache";
 
 const completedCache = new MarkdownCache();
@@ -58,7 +59,8 @@ export function markdownLines(source: string, columns = 80, cache = true): RichL
   const clean = sanitizeText(source);
   const width = Math.max(1, Math.min(500, Math.floor(columns) || 80));
   if (clean.length > PARSE_LIMIT) return [...plainLines(clean)];
-  const key = `${width}:${clean}`;
+  const symbols = uiSymbols();
+  const key = `${symbols.horizontal}:${symbols.ellipsis}:${width}:${clean}`;
   const hit = cache ? completedCache.get(key) : undefined;
   if (hit) return hit;
   // @types/marked-terminal describes the older renderer class return type;
@@ -84,7 +86,9 @@ export function markdownLines(source: string, columns = 80, cache = true): RichL
       const rows = token.rows.map(row => row.map(cell => this.parser.parseInline(cell.tokens)));
       const tooTall = [...headers, ...rows.flat()].some(cell =>
         sanitizeText(cell).split("\n").reduce((n, line) => n + Math.max(1, Math.ceil(visibleWidth(line) / cellWidth)), 0) > 4);
-      if (width < count * 8 + 5 || tooTall) {
+      // The library's table borders/truncation glyphs require Unicode. Reuse
+      // the lossless labeled-row layout in ASCII mode instead of rewriting cells.
+      if (symbols.horizontal === "-" || width < count * 8 + 5 || tooTall) {
         if (!rows.length) return `${headers.join("\n")}\n`;
         return rows.map((row, index) => `Row ${index + 1}\n${headers.map((header, column) =>
           `  ${header || `Column ${column + 1}`}: ${row[column] ?? ""}`).join("\n")}`).join("\n\n") + "\n\n";
@@ -104,7 +108,8 @@ export function markdownLines(source: string, columns = 80, cache = true): RichL
           } });
         } catch { /* Unknown language remains lossless plain code. */ }
       }
-      return `\n${style(90, 39)(`── ${language.slice(0, 40)} ──`)}\n${code.split("\n").map(line => `  ${line}`).join("\n")}\n\n`;
+      const rule = symbols.horizontal.repeat(2);
+      return `\n${style(90, 39)(`${rule} ${language.slice(0, 40)} ${rule}`)}\n${code.split("\n").map(line => `  ${line}`).join("\n")}\n\n`;
     },
     // Do not emit OSC8, fetch images or interpret raw HTML. Links remain useful
     // as visible text regardless of terminal hyperlink detection/environment.
@@ -120,7 +125,7 @@ export function markdownLines(source: string, columns = 80, cache = true): RichL
     },
     image(token) { return `[image: ${sanitizeText(token.text)}]`; },
     html(token) { return sanitizeText(token.text); },
-    hr() { return `${"─".repeat(Math.min(width, 40))}\n\n`; },
+    hr() { return `${symbols.horizontal.repeat(Math.min(width, 40))}\n\n`; },
   } });
   try {
     const rendered = parser.parse(clean, { async: false });

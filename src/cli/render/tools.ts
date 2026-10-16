@@ -1,4 +1,5 @@
 import type { ToolCall, ToolResult } from "../../shared/schemas";
+import { uiSymbols } from "../symbols";
 import type { RichLine, Span, Tone } from "../ui-contract";
 import { diffLines, diffStats } from "./diff";
 import { envelope, textLines } from "./envelope";
@@ -75,12 +76,13 @@ const commandLayout = (
   if (fits) return { headerTarget: target, branch: [] };
   const rows = wrapCommand(target, Math.max(1, limit - 4));
   const shown = rows.slice(0, COMMAND_ROWS);
+  const symbols = uiSymbols();
   return {
     headerTarget: "",
     branch: [
       ...shown,
       ...(rows.length > shown.length
-        ? [`… ${rows.length - shown.length} more command lines`]
+        ? [`${symbols.ellipsis} ${rows.length - shown.length} more command lines`]
         : []),
     ],
   };
@@ -134,10 +136,10 @@ export const compactToolLine = (
   const nameFits = stringWidth(safeName) + suffixWidth <= limit;
   const shownName = nameFits
     ? safeName
-    : truncate(safeName, limit - suffixWidth);
+    : truncate(safeName, limit - suffixWidth, uiSymbols().ellipsis);
   const gap = safeTarget && shownName ? " " : "";
   const room = limit - stringWidth(shownName) - stringWidth(gap) - suffixWidth;
-  const shown = room > 0 ? truncate(safeTarget, room) : "";
+  const shown = room > 0 ? truncate(safeTarget, room, uiSymbols().ellipsis) : "";
   return line(
     span(shownName, "accent"),
     span(shown ? `${gap}${shown}` : ""),
@@ -148,25 +150,31 @@ export const compactToolLine = (
 export const toolStartLine = (
   call: ToolCall,
   width = DEFAULT_WIDTH,
-): RichLine =>
-  compactToolLine(
+): RichLine => {
+  const symbols = uiSymbols();
+  return compactToolLine(
     call.function.name,
     toolTarget(call),
-    " · running",
+    ` ${symbols.separator} running`,
     "muted",
     width,
   );
+};
 
 /** Animated only by the terminal; never committed as a completed record. */
-export const toolRunningLine = (call: ToolCall, width = DEFAULT_WIDTH): RichLine => [
-  { text: "⠋", tone: "muted", animation: "spinner" },
-  span(" "),
-  ...toolStartLine(call, Math.max(1, width - 2)),
-];
+export const toolRunningLine = (call: ToolCall, width = DEFAULT_WIDTH): RichLine => {
+  const symbols = uiSymbols();
+  return [
+    { text: symbols.spinnerFrames[0] ?? symbols.active, tone: "muted", animation: "spinner" },
+    span(" "),
+    ...toolStartLine(call, Math.max(1, width - 2)),
+  ];
+};
 
 export const toolArgumentLines = (call: ToolCall, width = DEFAULT_WIDTH, expanded = false): RichLine[] => {
   const args = readObject(call.function.arguments);
   if (!args) return [];
+  const symbols = uiSymbols();
   const rows: RichLine[] = [];
   for (const [key, value] of Object.entries(args)) {
     const text = typeof value === "string" ? value : JSON.stringify(value);
@@ -176,10 +184,10 @@ export const toolArgumentLines = (call: ToolCall, width = DEFAULT_WIDTH, expande
     rows.push(...parts.slice(0, limit).map((part, index) =>
       [span(`  ${index ? "  " : `${key}: `}${part}`, "muted")],
     ));
-    if (parts.length > limit) rows.push([span(`  … ${parts.length - limit} more ${key} lines`, "muted")]);
+    if (parts.length > limit) rows.push([span(`  ${symbols.ellipsis} ${parts.length - limit} more ${key} lines`, "muted")]);
   }
   const clipped = clipRows(rows, width, expanded ? 120 : 6);
-  return clipped.hidden ? [...clipped.shown, [span(`  … ${clipped.hidden} more arguments`, "muted")]] : clipped.shown;
+  return clipped.hidden ? [...clipped.shown, [span(`  ${symbols.ellipsis} ${clipped.hidden} more arguments`, "muted")]] : clipped.shown;
 };
 
 const clipRows = (
@@ -219,7 +227,8 @@ export const toolSummaryLines = (
   const parsed = toolPresentation(call?.function.name ?? "", result);
   const failed = parsed.failed;
   const label = failed ? "failed" : "done";
-  const exit = parsed.exitCode === null ? "" : ` · exit ${parsed.exitCode}`;
+  const symbols = uiSymbols();
+  const exit = parsed.exitCode === null ? "" : ` ${symbols.separator} exit ${parsed.exitCode}`;
   const changes = call && ["edit_file", "write_file"].includes(call.function.name) ? result.changes ?? [] : [];
   let statBadge = "";
   if (changes.length > 0) {
@@ -237,25 +246,25 @@ export const toolSummaryLines = (
   }
   const name = call?.function.name ?? "tool";
   const target = call ? `${toolTarget(call)}${statBadge}` : "";
-  const suffix = ` · ${label}${exit}${durationSuffix(call?.function.name, result, elapsed)}${index === undefined ? "" : ` · #${index}`}`;
+  const suffix = ` ${symbols.separator} ${label}${exit}${durationSuffix(call?.function.name, result, elapsed)}${index === undefined ? "" : ` ${symbols.separator} #${index}`}`;
   const statusTone: Tone = failed ? "error" : "success";
   const { headerTarget, branch } = commandLayout(name, target, suffix, width);
   const header = compactToolLine(name, headerTarget, suffix, statusTone, width);
   const safeWidth = Math.max(1, width);
   const fit = (value: string, tone: Tone, prefix = ""): RichLine => [
-    span(truncate(`${prefix}${sanitizeText(value).replace(/\s+/g, " ").trim()}`, safeWidth), tone),
+    span(truncate(`${prefix}${sanitizeText(value).replace(/\s+/g, " ").trim()}`, safeWidth, symbols.ellipsis), tone),
   ];
   // diffLines owns physical wrapping and preserves source order and whitespace.
   const shownDiff = changes.slice(0, 1).flatMap(change => [...diffLines(change, { width: safeWidth, maxRows: 20 })]);
-  // Branch rows share one prefix convention: intermediate rows use │, the final
-  // row closes with ╰. Command rows (run_command) precede the detail/warning.
+  // Branch rows share one prefix convention: intermediate rows use the vertical
+  // glyph, while the final row closes with the selected branch glyph.
   const branchItems: { value: string; tone: Tone }[] = [
     ...branch.map((value): { value: string; tone: Tone } => ({ value, tone: "muted" })),
     { value: parsed.detail, tone: failed ? "error" : "muted" },
     ...(parsed.warning ? [{ value: parsed.warning, tone: "warning" as Tone }] : []),
   ];
   const branchRows = branchItems.map((item, position) =>
-    fit(item.value, item.tone, position === branchItems.length - 1 ? "  ╰ " : "  │ "),
+    fit(item.value, item.tone, position === branchItems.length - 1 ? `  ${symbols.endBranch} ` : `  ${symbols.vertical} `),
   );
   return [
     // Preserve semantic hierarchy: accent tool name, neutral target, success/error
@@ -264,9 +273,9 @@ export const toolSummaryLines = (
       ? header : fit(header.map(part => part.text).join(""), failed ? "error" : "accent"),
     ...branchRows,
     ...shownDiff,
-    ...(changes.length > 1 ? [fit("… more file changes", "muted")] : []),
+    ...(changes.length > 1 ? [fit(`${symbols.ellipsis} more file changes`, "muted")] : []),
     ...(index !== undefined && shownDiff.some(row => row.some(part => part.text.includes("omitted")))
-      ? [fit(`/tools ${index} · more diff details`, "muted")] : []),
+      ? [fit(`/tools ${index} ${symbols.separator} more diff details`, "muted")] : []),
   ];
 };
 
@@ -284,11 +293,12 @@ export const toolFinishLines = (
     || (!call && parsed.exitCode !== null && parsed.exitCode !== 0);
   const status: Tone = failed ? "error" : "success";
   const label = failed ? "failed" : "done";
-  const exit = parsed.exitCode === null ? "" : ` · exit ${parsed.exitCode}`;
+  const symbols = uiSymbols();
+  const exit = parsed.exitCode === null ? "" : ` ${symbols.separator} exit ${parsed.exitCode}`;
   const header = compactToolLine(
     name,
     target,
-    ` · ${label}${exit}${durationSuffix(call?.function.name, result, elapsed)}`,
+    ` ${symbols.separator} ${label}${exit}${durationSuffix(call?.function.name, result, elapsed)}`,
     status,
     width,
   );
@@ -303,19 +313,19 @@ export const toolFinishLines = (
     logical.push([span(parsed.body ? item : `stdout ${item}`, "muted")]);
   if (stdoutAll.length > stdout.length) {
     logical.push([
-      span(`… ${stdoutAll.length - stdout.length} more lines`, "muted"),
+      span(`${symbols.ellipsis} ${stdoutAll.length - stdout.length} more lines`, "muted"),
     ]);
   }
   const stderrAll = textLines(parsed.stderr);
   const stderr = stderrAll.slice(0, expanded ? 40 : 2);
   for (const item of stderr) logical.push([span(`stderr ${item}`, "error")]);
   if (stderrAll.length > stderr.length) {
-    logical.push([span("… more stderr", "muted")]);
+    logical.push([span(`${symbols.ellipsis} more stderr`, "muted")]);
   }
   const clipped = clipRows(logical, width, expanded ? 180 : PREVIEW_ROWS);
   const rows: RichLine[] = [header, ...clipped.shown];
   if (clipped.hidden > 0) {
-    rows.push([span(`… ${clipped.hidden} more preview lines`, "muted")]);
+    rows.push([span(`${symbols.ellipsis} ${clipped.hidden} more preview lines`, "muted")]);
   }
   const changes = result.changes ?? [];
   let remaining = expanded ? 200 : 24;
@@ -327,6 +337,6 @@ export const toolFinishLines = (
     remaining -= preview.length;
     displayed += 1;
   }
-  if (changes.length > displayed) rows.push([span(truncate("… more file changes", Math.max(1, width)), "muted")]);
+  if (changes.length > displayed) rows.push([span(truncate(`${symbols.ellipsis} more file changes`, Math.max(1, width), symbols.ellipsis), "muted")]);
   return rows;
 };

@@ -4,10 +4,11 @@ import type { SlashMenuState } from "../slash-menu";
 import { wrapRichLines } from "../render/rich";
 import { sanitizeText } from "../render/sanitize";
 import { graphemes } from "../render/width";
+import { spinnerFrame, uiSymbols } from "../symbols";
 import type { RichLine, Tone } from "../ui-contract";
 import type { InputEditor } from "./input-editor";
 import { pickerItems, type InputFocus } from "./input-state";
-import { line, RichRow, single, spinner, type Appearance } from "./rich-row";
+import { line, RichRow, single, type Appearance } from "./rich-row";
 
 interface EditorProps {
   readonly editor: Pick<InputEditor, "text" | "cursor">;
@@ -30,7 +31,7 @@ export function editorRows({ editor, prefix, hint, tone, width, maxLines, appear
   const rest = next && next !== "\n" ? after.slice(next.length) : after;
   const spans: RichLine = [
     { text: single(prefix), tone }, { text: before },
-    { text: appearance.noColor ? "▏" : cursorChar, inverse: !appearance.noColor },
+    { text: appearance.noColor ? uiSymbols().cursor : cursorChar, inverse: !appearance.noColor },
     { text: appearance.noColor ? after : rest },
     ...(!editor.text && hint ? [{ text: single(hint), tone: "muted" as const }] : []),
   ];
@@ -52,6 +53,7 @@ export function Picker({ focus, width, limit, appearance }: {
   focus: Extract<InputFocus, { kind: "picker" }>; width: number; limit: number; appearance: Appearance;
 }): ReactElement | null {
   if (limit <= 0) return null;
+  const symbols = uiSymbols();
   const items = pickerItems(focus);
   const titleRows = Number(limit >= 4);
   const room = Math.max(0, limit - titleRows - 1);
@@ -63,19 +65,19 @@ export function Picker({ focus, width, limit, appearance }: {
   const cue = items.length > optionRoom && optionRoom >= 2;
   const count = Math.min(items.length, optionRoom - Number(cue));
   const first = windowStart(selected, count, items.length);
-  const frame = spinner[Math.floor(appearance.now / 80) % spinner.length] ?? "⠋";
+  const frame = spinnerFrame(appearance.now);
   const rows: RichLine[] = items.slice(first, first + count).map((item, i) => [
-    { text: first + i === selected ? "❯ " : "  ", tone: "accent", inverse: first + i === selected },
+    { text: first + i === selected ? `${symbols.prompt} ` : "  ", tone: "accent", inverse: first + i === selected },
     { text: `${item.active ? `${frame} ` : ""}${single(item.label)}`, inverse: first + i === selected },
   ]);
-  if (cue) rows.push(line(`${first + 1}–${first + count}/${items.length} matches · ↑↓ move`, "muted"));
+  if (cue) rows.push(line(`${first + 1}${symbols.range}${first + count}/${items.length} matches ${symbols.separator} ${symbols.move} move`, "muted"));
   if (!items.length && optionRoom) rows.push(line(single(focus.spec.emptyLabel ?? "No matches"), "muted"));
   for (const detail of details.slice(0, detailCount)) rows.push(line(single(detail), "muted"));
-  if (help) rows.push(line(focus.spec.confirmation ? "Enter confirm · Esc cancel · ↑↓ move" : "Enter select · Esc back · ↑↓ move", "muted"));
+  if (help) rows.push(line(`Enter ${focus.spec.confirmation ? "confirm" : "select"} ${symbols.separator} Esc ${focus.spec.confirmation ? "cancel" : "back"} ${symbols.separator} ${symbols.move} move`, "muted"));
   return <Box flexDirection="column">
     {!!titleRows && <RichRow spans={line(single(focus.spec.title), "accent")} width={width} appearance={appearance} />}
-    <Composer editor={focus.editor} prefix={width >= 3 ? "❯ " : ""}
-      hint={focus.spec.placeholder ?? (focus.spec.confirmation ? "Choose an action…" : "Type to filter…")}
+    <Composer editor={focus.editor} prefix={width >= 3 ? `${symbols.prompt} ` : ""}
+      hint={focus.spec.placeholder ?? `${focus.spec.confirmation ? "Choose an action" : "Type to filter"}${symbols.ellipsis}`}
       tone="accent" width={width} maxLines={1} appearance={appearance} />
     {rows.map((spans, index) => <RichRow key={index} spans={wrapRichLines([spans], width)[0] ?? []} width={width} appearance={appearance} />)}
   </Box>;
@@ -83,15 +85,16 @@ export function Picker({ focus, width, limit, appearance }: {
 export function menuRows(menu: SlashMenuState, limit: number): readonly RichLine[] {
   const items = menu.items;
   if (!menu.active || !items.length || limit <= 0) return [];
+  const symbols = uiSymbols();
   const cue = items.length > Math.min(8, limit) && limit > 1;
   const count = Math.min(items.length, 8, limit - Number(cue));
   const first = windowStart(Math.max(0, Math.min(menu.selectedIndex, items.length - 1)), count, items.length);
   const rows: RichLine[] = items.slice(first, first + count).map((item, i) => [
-    { text: first + i === menu.selectedIndex ? "❯ " : "  ", tone: "accent", inverse: first + i === menu.selectedIndex },
+    { text: first + i === menu.selectedIndex ? `${symbols.prompt} ` : "  ", tone: "accent", inverse: first + i === menu.selectedIndex },
     { text: `${single(item.name)}  `, tone: "accent", inverse: first + i === menu.selectedIndex },
     { text: single(item.description), tone: "muted", inverse: first + i === menu.selectedIndex },
   ]);
-  if (cue) rows.push(line(`${first + 1}–${first + count}/${items.length} · ↑↓ move · type to filter`, "muted"));
+  if (cue) rows.push(line(`${first + 1}${symbols.range}${first + count}/${items.length} ${symbols.separator} ${symbols.move} move ${symbols.separator} type to filter`, "muted"));
   return rows;
 }
 export function SlashSuggestions({ menu, limit, width, appearance }: {

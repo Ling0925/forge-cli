@@ -1,4 +1,5 @@
 import { terminalText } from "../format";
+import { uiSymbols } from "../symbols";
 import type { InputEvent } from "../terminal/decoder";
 import type { PickerSpec } from "../ui-contract";
 import { clearEditor, emptyEditor, loadHistory } from "./input-editor";
@@ -54,7 +55,7 @@ export class InputStore {
       focus: fresh ? { kind: "approval", editor: emptyEditor() } : this.state.focus.kind === "approval" ? { kind: "composer" } : this.state.focus });
   }
   end(): void {
-    this.commit({ ...this.state, prompt: "❯ ", menu: closedMenu(),
+    this.commit({ ...this.state, prompt: `${uiSymbols().prompt} `, menu: closedMenu(),
       focus: this.fresh ? { kind: "composer" } : this.state.focus });
   }
   loadHistory(entries: readonly string[]): void {

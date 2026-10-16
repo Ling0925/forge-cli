@@ -1,4 +1,5 @@
 import type { SessionSnapshot } from "../../shared/schemas";
+import { uiSymbols } from "../symbols";
 import type { RichLine } from "../ui-contract";
 import { markdownLines } from "./markdown";
 import { reasoningLine } from "./reasoning";
@@ -12,6 +13,7 @@ import { savedToolResult } from "./tool-presentation";
  * text_delta events, and a tool result is persisted as a message even after a crash. */
 export const historyLines = (session: SessionSnapshot, width: number, tools = new ToolTranscript()): readonly RichLine[] => {
   const lines: RichLine[] = [];
+  const symbols = uiSymbols();
   const starts = new Map<string, number>();
   const finishes = new Map<string, number>();
   for (const event of session.events) {
@@ -23,10 +25,10 @@ export const historyLines = (session: SessionSnapshot, width: number, tools = ne
   const messages = session.messages.filter((message) => message.role !== "system");
   const completed = new Set(messages.filter((message) => message.role === "tool").map((message) => message.tool_call_id));
   if (!messages.length) return lines;
-  lines.push([{ text: `History · ${sanitizeText(session.title)}`, tone: "accent" }]);
+  lines.push([{ text: `History ${symbols.separator} ${sanitizeText(session.title)}`, tone: "accent" }]);
   for (const message of messages) {
     if (message.role === "user") {
-      lines.push([{ text: message.origin === "agent_reconciliation" ? "↳ Agent results" : "❯ You", tone: "accent" }]);
+      lines.push([{ text: message.origin === "agent_reconciliation" ? `${symbols.branch} Agent results` : `${symbols.prompt} You`, tone: "accent" }]);
       if (message.origin === "agent_reconciliation") lines.push([{ text: "  Child results retained in session; details omitted from main history.", tone: "muted" }]);
       else lines.push(...markdownLines(message.content, width));
     } else if (message.role === "assistant") {

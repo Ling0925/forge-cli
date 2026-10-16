@@ -1,4 +1,5 @@
 import { type SlashCommand, matchSlashCommands } from "./commands";
+import { uiSymbols } from "./symbols";
 import {
   type Theme,
   defaultTheme,
@@ -123,7 +124,7 @@ export class SlashMenu {
       const descText = truncate(item.description, descColWidth);
 
       if (isSelected) {
-        const row = `❯ ${cmdText} ${descText}`;
+        const row = `${uiSymbols().prompt} ${cmdText} ${descText}`;
         lines.push(theme.inverse(` ${truncate(row, termWidth - 4)} `));
       } else {
         const row = `  ${theme.cyan(cmdText)} ${theme.dim(descText)}`;
@@ -133,7 +134,7 @@ export class SlashMenu {
 
     if (total > windowSize) {
       lines.push(
-        theme.dim(`   (${total - windowSize} more commands, ↑/↓ to navigate)`),
+        theme.dim(`   (${total - windowSize} more commands, ${uiSymbols().move} to navigate)`),
       );
     }
 

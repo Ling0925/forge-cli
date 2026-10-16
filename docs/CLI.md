@@ -109,6 +109,14 @@ forge config set --reasoning-effort default
 
 主题有 system/light/dark；system 根据终端背景信息解析。实时界面、历史、选择器和审批共用同一配色源：亮色鼠尾草 `#55684d`、暗色 `#8fad82`，配合灰阶元数据、绿/黄/红状态色及原有 diff 增删底色。按实际 UI 输出流能力降级为 256/16 色；背景未识别时保留终端原生语义色，不把界面退成黑白，也不猜测背景或改写终端画布。`NO_COLOR` 禁止 SGR 但允许必要的光标控制；TERM=dumb 与非 TTY 使用 plain 输出。Markdown、工具输出和外部文本先清洗，只有受信任的主题 token 能生成颜色控制序列。
 
+### 终端颜色与字体兼容
+
+- 未识别背景时，提示、耗时、缓存率等辅助文字使用终端默认前景，不再强制 ANSI bright-black（90）；16 色按亮/暗背景分别降级。装饰线条与辅助文字分开配色，不使用 faint/dim（SGR 2）降低可读性。256 色与真彩色仍保留鼠尾草主题。
+- `FORGE_SYMBOLS=auto`（默认）根据终端和 locale 提示选择界面符号：`TERM=dumb/linux`、非 UTF-8 locale、旧 Windows 控制台使用 ASCII；未知环境不等同于缺字。`LC_ALL`、`LC_CTYPE`、`LANG` 按优先级判断。
+- 字体缺少箭头、盲文动画或线条时，用 **`FORGE_SYMBOLS=ascii forge`**：常用输入/选择标记、spinner、计划/工具状态、上下文线条和 Markdown 装饰回退为 ASCII。`FORGE_SYMBOLS=unicode forge` 可强制原符号集。Markdown 表格在 ASCII 模式下改为带列名的逐行展示。此开关不是全文 ASCII 转码：只控制这些界面生成的符号，不转写中文、代码、路径或模型原文，也不依赖 `NO_COLOR`。
+- 颜色仍难辨认时可用 `NO_COLOR=1 FORGE_SYMBOLS=ascii forge`；如需紧凑行内模式可另设 `INK_SCREEN_READER=true`。`NO_COLOR` 本身不关闭全屏布局。
+- 预换行和截断采用与当前 Ink 相同版本的 `string-width`，保留完整字素。环境探测无法得知字体是否缺字，终端对 emoji/模糊宽度的规则也可能不同；特殊字体仍需实际终端确认。
+
 ## 命令与边界
 
 `/help` 提供当前完整命令列表，包括 mode、plan、model、permission、sessions、resume、new、fork、rename、archive、compact、diagnostics、context、skills、checkpoints、mcp、export、quit。Slash 参数按空白切分，不支持 shell 式引号分组；含空格的路径或参数使用直接命令。shell 对直接命令负责引号分组，MCP 的 `--` 分隔后续服务器参数。

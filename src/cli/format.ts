@@ -4,6 +4,7 @@ import type {
   TaskPlan,
 } from "../shared/schemas";
 import { SLASH_COMMANDS } from "./commands";
+import { uiSymbols } from "./symbols";
 import { MarkdownStream } from "./render/markdown";
 import { renderRichLine, wrapRichLines } from "./render/rich";
 import { sanitizeText } from "./render/sanitize";
@@ -158,10 +159,10 @@ const planStatus = (
   status: TaskPlan["steps"][number]["status"],
 ): { mark: string; label: string; tone: Tone } =>
   status === "completed"
-    ? { mark: "✔", label: "[done]", tone: "success" }
+    ? { mark: uiSymbols().success, label: "[done]", tone: "success" }
     : status === "in_progress"
-      ? { mark: "●", label: "[active]", tone: "warning" }
-      : { mark: "○", label: "[pending]", tone: "muted" };
+      ? { mark: uiSymbols().active, label: "[active]", tone: "warning" }
+      : { mark: uiSymbols().pending, label: "[pending]", tone: "muted" };
 
 export const planLines = (
   plan: TaskPlan | null,
@@ -278,7 +279,7 @@ export const formatSessions = (
   const width = getTerminalWidth();
   const lines: RichLine[] = [[span(`会话 (${sessions.length})`, "accent")]];
   for (const session of sessions.slice(0, 30)) {
-    const marker = session.id === activeId ? "•" : " ";
+    const marker = session.id === activeId ? uiSymbols().bullet : " ";
     lines.push([
       span(
         truncate(

@@ -39,8 +39,8 @@ describe("shared CLI palette", () => {
     for (const setting of ["light", "dark", "system"] as const) {
       const palette = resolvePalette({ ...options, setting, colorDepth: 4 });
       for (const tone of tones) expect(paintTone("x", palette, tone)).not.toMatch(/(?:38|48);(?:2|5);/);
-      expect(paintTone("accent", palette, "accent")).toContain("\x1b[32m");
-      expect(paintTone("failed", palette, "error")).toContain("\x1b[31m");
+      expect(paintTone("accent", palette, "accent")).toContain(setting === "dark" ? "\x1b[92m" : "\x1b[32m");
+      expect(paintTone("failed", palette, "error")).toContain(setting === "dark" ? "\x1b[91m" : "\x1b[31m");
       expect(paintTone("word", palette, "diffAddedWord")).toContain("\x1b[7m");
     }
     const unknown = resolvePalette({ ...options, setting: "system" });

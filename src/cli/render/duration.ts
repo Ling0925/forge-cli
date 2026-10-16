@@ -1,4 +1,5 @@
 import type { ToolResult } from "../../shared/schemas";
+import { uiSymbols } from "../symbols";
 
 /** Floor fractional display values to avoid showing 60s before the m boundary. */
 export function formatDuration(milliseconds: number): string {
@@ -24,5 +25,5 @@ export function toolDuration(name: string | undefined, result: ToolResult, elaps
 
 export function durationSuffix(name: string | undefined, result: ToolResult, elapsed?: number): string {
   const duration = toolDuration(name, result, elapsed);
-  return duration === undefined ? "" : ` · ${formatDuration(duration)}`;
+  return duration === undefined ? "" : ` ${uiSymbols().separator} ${formatDuration(duration)}`;
 }

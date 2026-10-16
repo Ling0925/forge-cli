@@ -1,6 +1,7 @@
 import { compactTokens } from "../render/token-count";
 import { cacheRate } from "../interactive/session-cache";
 import { sanitizeText } from "../render/sanitize";
+import { uiSymbols } from "../symbols";
 import { truncate, visibleWidth } from "../theme";
 import type { ComposerContext, RichLine, Span, Tone } from "../ui-contract";
 
@@ -49,24 +50,25 @@ function formatIdentitySpans(context: ComposerContext, room: number): Span[] {
   const remaining = room - used;
   // Model/effort and the right-hand usage summary retain priority on narrow screens.
   if (title && remaining > 3) {
-    spans.push({ text: ` · ${truncate(title, remaining - 3)}`, tone: "muted" });
+    spans.push({ text: ` ${uiSymbols().separator} ${truncate(title, remaining - 3)}`, tone: "muted" });
   }
   return spans;
 }
 
 /** Full-width track; the red right-hand segment marks compression headroom. */
 export function contextFooter(context: ComposerContext, columns: number, compact = false): readonly RichLine[] {
+  const symbols = uiSymbols();
   const width = Math.max(1, Math.floor(columns));
   const usage = context.usage;
   const ratio = usage?.windowTokens ? usage.usedTokens / usage.windowTokens : 0;
-  const percentage = usage?.windowTokens ? `${usage.estimated ? "≈" : ""}${(ratio * 100).toFixed(1)}%` : "?%";
+  const percentage = usage?.windowTokens ? `${usage.estimated ? symbols.approximate : ""}${(ratio * 100).toFixed(1)}%` : "?%";
   const count = usage?.windowTokens ? compactTokens(usage.windowTokens) : "?";
-  const summaryText = `${percentage} · R${cacheRate(context.sessionCache)} · ${count}`;
+  const summaryText = `${percentage} ${symbols.separator} R${cacheRate(context.sessionCache)} ${symbols.separator} ${count}`;
   if (compact) {
     // Decorative meter yields to model/effort on narrow terminals.
     const miniWidth = width >= 72 ? 6 : 0;
     const filled = Math.round(Math.min(1, Math.max(0, ratio)) * miniWidth);
-    const mini = miniWidth ? ` [${"━".repeat(filled)}${"·".repeat(miniWidth - filled)}]` : "";
+    const mini = miniWidth ? ` [${symbols.heavyHorizontal.repeat(filled)}${symbols.separator.repeat(miniWidth - filled)}]` : "";
     const summary = truncate(`${summaryText}${mini}`, width);
     const room = Math.max(0, width - visibleWidth(summary) - 1);
     const modelSpans = formatIdentitySpans(context, room);
@@ -107,10 +109,10 @@ export function contextFooter(context: ComposerContext, columns: number, compact
   for (const item of allocations) {
     // Keep the full-window scale; reserved cells take precedence over usage color.
     const count = Math.min(item.count, Math.max(0, reserveStart - used));
-    if (count) bar.push({ text: "─".repeat(count), tone: item.tone });
+    if (count) bar.push({ text: symbols.horizontal.repeat(count), tone: item.tone });
     used += count;
   }
-  if (used < reserveStart) bar.push({ text: "─".repeat(reserveStart - used), tone: "muted" });
-  if (reserveStart < width) bar.push({ text: "─".repeat(width - reserveStart), tone: "error" });
+  if (used < reserveStart) bar.push({ text: symbols.horizontal.repeat(reserveStart - used), tone: "decoration" });
+  if (reserveStart < width) bar.push({ text: symbols.horizontal.repeat(width - reserveStart), tone: "error" });
   return [info, bar];
 }

@@ -1,10 +1,10 @@
+import { uiSymbols } from "../symbols";
 import type { RichLine } from "../ui-contract";
 import { sanitizeText } from "./sanitize";
 import { truncate } from "./width";
 
 /** Keeps only the trailing bytes needed for the current wrapped line. */
 export const REASONING_KEEP = 8 * 1024;
-export const REASONING_PREFIX = "✻ ";
 
 const isBreak = (char: string): boolean => char === "\n" || char === "\r";
 
@@ -25,11 +25,14 @@ export const reasoningLine = (
 ): RichLine | undefined => {
   const current = lastReasoningLine(text);
   if (!current) return undefined;
+  const symbols = uiSymbols();
+  const marker = animated ? symbols.spinnerFrames[0] ?? symbols.active : symbols.reasoning;
+  const prefix = `${marker} `;
   const room = Math.max(0, Math.floor(width) - 2);
   return [
     animated
-      ? { text: "⠋ ", tone: "accent", animation: "spinner" }
-      : { text: REASONING_PREFIX, tone: "muted" },
-    { text: truncate(current, room), tone: "muted" },
+      ? { text: prefix, tone: "accent", animation: "spinner" }
+      : { text: prefix, tone: "muted" },
+    { text: truncate(current, room, symbols.ellipsis), tone: "muted" },
   ];
 };

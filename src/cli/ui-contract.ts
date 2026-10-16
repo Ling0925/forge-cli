@@ -13,6 +13,7 @@ import type { ApprovalRequest, ContextUsage, TaskPlan } from "../shared/schemas"
 export type Tone =
   | "text"
   | "muted"
+  | "decoration"
   | "accent"
   | "success"
   | "warning"

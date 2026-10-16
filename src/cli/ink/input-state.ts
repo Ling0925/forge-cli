@@ -1,4 +1,5 @@
 import { matchSlashCommands } from "../commands";
+import { uiSymbols } from "../symbols";
 import type { SlashMenuState } from "../slash-menu";
 import type { InputEvent } from "../terminal/decoder";
 import type { PickerSpec } from "../ui-contract";
@@ -22,7 +23,7 @@ export type InputEffect =
   | { readonly type: "interrupt" | "toggle-mode" };
 export interface InputTransition { readonly state: InputState; readonly effects: readonly InputEffect[] }
 export const closedMenu = (): SlashMenuState => ({ active: false, items: [], query: "", selectedIndex: 0 });
-export const initialInput = (): InputState => ({ composer: emptyEditor(), focus: { kind: "composer" }, prompt: "❯ ", menu: closedMenu(), dismissed: false });
+export const initialInput = (): InputState => ({ composer: emptyEditor(), focus: { kind: "composer" }, prompt: `${uiSymbols().prompt} `, menu: closedMenu(), dismissed: false });
 export const focusedEditor = (state: InputState): InputEditor => state.focus.kind === "composer" ? state.composer : state.focus.editor;
 export const pickerItems = (focus: Extract<InputFocus, { kind: "picker" }>) => {
   const query = focus.editor.text.toLocaleLowerCase();

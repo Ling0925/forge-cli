@@ -71,9 +71,12 @@ it("renders the original palette identically in live and committed xterm cells",
         expect(live[7]!.bg).not.toBe(live[5]!.bg);
         expect(live[9]!.fg).toBe(theme === "light" ? 25 : 75);
       } else {
-        expect(live[0]!.fg).toBe(2);
-        expect(live[3]!.fg).toBe(3);
-        expect(live[4]!.fg).toBe(1);
+        const bright = theme === "dark" ? 8 : 0;
+        expect(live[0]!.fg).toBe(2 + bright);
+        expect(live[3]!.fg).toBe(3 + bright);
+        expect(live[4]!.fg).toBe(1 + bright);
+        if (theme === "system") expect(live[1]!.fgMode).toBe(0);
+        else expect(live[1]!.fg).toBe(theme === "light" ? 0 : 7);
       }
     }
     const selected = await cells(renderRow("dark", 24, false, [{ text: "A", tone: "accent", inverse: true, bold: true }]));

@@ -2,11 +2,12 @@ import { Box } from "ink";
 import { useMemo, type ReactElement } from "react";
 import { compactTokens } from "../render/token-count";
 import { wrapRichLines } from "../render/rich";
+import { spinnerFrame, uiSymbols } from "../symbols";
 import { contextFooter } from "../terminal/context-footer";
 import type { RichLine } from "../ui-contract";
 import { ApprovalInput, Composer, editorRows, Picker, SlashSuggestions } from "./input-components";
 import { focusedEditor, type InputState } from "./input-state";
-import { line, RichRow, single, spinner, type Appearance } from "./rich-row";
+import { line, RichRow, single, type Appearance } from "./rich-row";
 import { dockLayout } from "./layout";
 import { Committed } from "./output";
 import type { InkViewState } from "./types";
@@ -14,24 +15,27 @@ import type { InkViewState } from "./types";
 function statusLine(state: InkViewState): RichLine | null {
   const status = state.status;
   if (!status) return null;
-  const frame = state.screenReader ? "" : spinner[Math.floor(state.now / 80) % spinner.length] ?? "⠋";
-  const tokens = status.tokens === undefined ? "?" : `${status.tokensEstimated ? "≈" : ""}${compactTokens(status.tokens)}`;
+  const symbols = uiSymbols();
+  const frame = state.screenReader ? "" : spinnerFrame(state.now);
+  const tokens = status.tokens === undefined ? "?" : `${status.tokensEstimated ? symbols.approximate : ""}${compactTokens(status.tokens)}`;
   const seconds = Math.max(0, Math.floor((state.now - status.startedAt) / 1000));
   const activity = `${single(status.label)}${frame && (status.observing || status.cancellable) ? ` ${frame}` : ""}`;
   if (status.observing || state.screenReader) return line(activity, "muted");
-  return line(`${activity} · ${tokens} tokens · ${seconds}s · ${status.toolCount} tools${status.cancellable ? " · Ctrl+C cancel" : ""}`, "muted");
+  return line(`${activity} ${symbols.separator} ${tokens} tokens ${symbols.separator} ${seconds}s ${symbols.separator} ${status.toolCount} tools${status.cancellable ? ` ${symbols.separator} Ctrl+C cancel` : ""}`, "muted");
 }
 function planLine(state: InkViewState): RichLine | null {
   if (!state.plan) return null;
+  const symbols = uiSymbols();
   const steps = state.plan.steps;
   const current = steps.find(step => step.status === "in_progress") ?? steps.find(step => step.status === "pending");
   const done = steps.filter(step => step.status === "completed").length;
-  return line(`Plan ${done}/${steps.length} · ${current ? `${current.status === "in_progress" ? "●" : "○"} ${single(current.step)}` : "✔ done"} · /plan`,
+  return line(`Plan ${done}/${steps.length} ${symbols.separator} ${current ? `${current.status === "in_progress" ? symbols.active : symbols.pending} ${single(current.step)}` : `${symbols.success} done`} ${symbols.separator} /plan`,
     current?.status === "in_progress" ? "warning" : "muted");
 }
 
 /** Ink/Yoga owns a fullscreen viewport and a non-shrinking bottom dock. */
 export function InkView({ state, input }: { state: InkViewState; input: InputState }): ReactElement {
+  const symbols = uiSymbols();
   const width = Math.max(1, Math.floor(state.columns) - 1);
   const limit = Math.max(0, Math.floor(state.rows) - 1);
   const appearance: Appearance = { theme: state.theme, noColor: state.noColor || (state.colorDepth ?? 8) < 4,
@@ -42,12 +46,12 @@ export function InkView({ state, input }: { state: InkViewState; input: InputSta
   const editorRoom = Math.max(1, Math.min(6, Math.floor(limit / 3) || 1));
   const editorProps = {
     editor, prefix: input.prompt,
-    hint: fresh ? null : state.inputHint ?? "Ask anything · / commands · PgUp read",
+    hint: fresh ? null : state.inputHint ?? `Ask anything ${symbols.separator} / commands ${symbols.separator} PgUp read`,
     tone: fresh || state.mode === "plan" ? "warning" as const : "accent" as const,
     width, maxLines: limit ? editorRoom : 0, appearance,
   };
   const preparedEditor = useMemo(() => editorRows(editorProps),
-    [editor, input.prompt, editorProps.hint, editorProps.tone, width, editorProps.maxLines, appearance.noColor]);
+    [editor, input.prompt, editorProps.hint, editorProps.tone, width, editorProps.maxLines, appearance.noColor, symbols]);
   const wrappedTail = useMemo(() => wrapRichLines(state.tail, width), [state.tail, width]);
   const extras: RichLine[] = [];
   const status = statusLine(state);
@@ -62,7 +66,7 @@ export function InkView({ state, input }: { state: InkViewState; input: InputSta
   let visibleTail = wrappedTail.slice(-geometry.tail);
   if (!geometry.tail) visibleTail = [];
   else if (wrappedTail.length > geometry.tail && geometry.tail >= 2)
-    visibleTail = [line(`↑ ${wrappedTail.length - geometry.tail + 1} earlier lines · PgUp read`, "muted"), ...wrappedTail.slice(-(geometry.tail - 1))];
+    visibleTail = [line(`${symbols.up} ${wrappedTail.length - geometry.tail + 1} earlier lines ${symbols.separator} PgUp read`, "muted"), ...wrappedTail.slice(-(geometry.tail - 1))];
   const reading = state.reading;
   const readRows = Math.max(0, limit - 1);
   const readingRows = reading ? reading.lines.slice(Math.max(0, reading.end - readRows), reading.end) : [];
@@ -70,16 +74,18 @@ export function InkView({ state, input }: { state: InkViewState; input: InputSta
   const history = historyRoom ? (state.visibleHistory ?? []).slice(-historyRoom) : [];
   // One spare physical row prevents Ink's terminal-bottom wrap/scroll edge.
   // Accessible output deliberately remains inline rather than reading blank padding.
+  // RichRow already bounds horizontal cells. Clip only vertically: Ink's horizontal
+  // slice-ansi path can split ZWJ clusters even when the row already fits.
   return <>
     {state.screenReader && <Committed output={state.output} />}
     <Box flexDirection="column" width={width} {...(!state.screenReader ? { height: limit } : {})}>
       {reading ? <>
-        <Box flexDirection="column" flexGrow={1} flexShrink={1} overflow="hidden">
+        <Box flexDirection="column" flexGrow={1} flexShrink={1} overflowY="hidden">
           {readingRows.map((spans, index) => <RichRow key={`read-${index}`} spans={spans} appearance={{ ...appearance, now: 0 }} width={width} />)}
         </Box>
-        {limit > 0 && <RichRow spans={line(`Reading ${Math.max(1, reading.end - readRows + 1)}–${reading.end}/${reading.lines.length} · PgUp/PgDn · End/Esc live`, "muted")} appearance={appearance} width={width} />}
+        {limit > 0 && <RichRow spans={line(`Reading ${Math.max(1, reading.end - readRows + 1)}${symbols.range}${reading.end}/${reading.lines.length} ${symbols.separator} PgUp/PgDn ${symbols.separator} End/Esc live`, "muted")} appearance={appearance} width={width} />}
       </> : <>
-        <Box flexDirection="column" flexGrow={1} flexShrink={1} overflow="hidden">
+        <Box flexDirection="column" flexGrow={1} flexShrink={1} overflowY="hidden">
           {history.map((spans, index) => <RichRow key={`history-${index}`} spans={spans} appearance={appearance} width={width} />)}
           {visibleTail.map((spans, index) => <RichRow key={`tail-${index}`} spans={spans} appearance={appearance} width={width} />)}
         </Box>
