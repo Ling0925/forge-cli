@@ -123,6 +123,14 @@ forge config set --reasoning-effort default
 
 `forge config show` 只显示公共配置；`forge config set --api-key-stdin` 避免把 key 放在 argv。不要分享私有配置。`/export` 导出对话，分享前检查。checkpoint restore 会修改文件，先 list/diff。非交互自动审批仅限明确的 unrestricted 权限与 `--yes`；workspace 权限不能自动授权。
 
+### 模型请求超时
+
+- `requestTimeoutMs`（`forge config set --timeout-ms NUMBER`，默认 60000，范围 1000–600000）对 Chat Completions / Responses 生成请求表示**连续无网络数据的等待上限**，不再是整个生成过程的总时限。
+- 请求开始等待响应头也受该上限约束；收到响应头、非空响应体数据后重新计时。正文、思考、工具参数、SSE 注释心跳和未拼完的事件数据均算网络活动；界面 Thinking 动画本身不算。
+- 持续有数据的慢模型可以运行超过该时间；断流则报 `idle timeout` 并取消读取，用户 Ctrl+C 仍能取消。每个并发请求独立计时，模型目录查询保留原有总时限，工具执行超时不受此改动影响。
+- 如果模型首包慢、网关缓冲输出，或长时间思考但不发送任何数据，客户端仍无法知道远端是否活跃，可显式增大等待值，例如 `forge config set --timeout-ms 180000`。心跳只证明连接活动，不保证生成进展；持续心跳的请求不会仅因总耗时而终止，可手动取消。HTTP 网关自身的超时仍可能发生。
+- 超时/取消不会自动重试生成请求或重放工具；响应字节、事件大小和内容长度的安全上限保持不变。
+
 ### 长时间运行与内存
 
 - Ink 6.6.0 原有的文字测量/换行缓存无淘汰上限。本仓库通过 `pnpm-workspace.yaml` 的 `patchedDependencies` 固定应用 `patches/ink@6.6.0.patch`：两个缓存分别限制为 2048 项、2 MiB 估算成本，LRU 淘汰；超大文本正常计算但不缓存。该预算不是进程总内存上限。
