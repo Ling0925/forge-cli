@@ -59,7 +59,7 @@ it("preserves whole effort labels ahead of the decorative meter on narrow footer
   const context = { model: "provider/very-long-model-name", reasoningEffort: "high", usage: null };
   for (const compact of [true, false]) {
     const row = text(contextFooter(context, 40, compact)[0]!);
-    expect(row).toContain("(high)"); expect(row).toContain("R—");
+    expect(row).toContain("(high)"); expect(row).toContain("R0%");
     expect(row).not.toContain("[··"); expect(stringWidth(row)).toBeLessThanOrEqual(40);
     const narrow = text(contextFooter(context, 18, compact)[0]!);
     expect(narrow).not.toContain("(");

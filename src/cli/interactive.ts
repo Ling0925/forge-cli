@@ -33,6 +33,7 @@ import {
   pickSession,
 } from "./interactive/pickers";
 import { RunQueue } from "./interactive/run-queue";
+import { SessionCache } from "./interactive/session-cache";
 import { LiveRun } from "./live-run";
 import { historyLines } from "./render/history";
 import { autoApprovalLines } from "./render/auto-approval";
@@ -69,6 +70,7 @@ export async function interactive(
   let session = sessionId
     ? await service.getSession(parseSessionId(sessionId))
     : undefined;
+  const sessionCache = new SessionCache(session);
   const requireSession = () => {
     if (!session) throw new ForgeError("invalid_input", "No active session. Send a message, use /new, or /resume first.");
     return session;
@@ -98,6 +100,7 @@ export async function interactive(
   const windows = new Map<string, number | null>();
   const loadingWindows = new Set<string>();
   const refreshContext = (): void => {
+    sessionCache.ensureSession(session);
     if (usageModel !== model) { contextUsage = null; usageModel = model; }
     const windowTokens = resolveContextWindow(model, settings, windows.get(model));
     const resolvedWindow = settings.modelContextWindows?.[model] ?? windows.get(model) ?? contextUsage?.windowTokens ?? windowTokens;
@@ -107,6 +110,7 @@ export async function interactive(
       model,
       reasoningEffort: settings.reasoningEffort ?? "default",
       sessionTitle: session?.title ?? "新会话",
+      sessionCache: sessionCache.snapshot(),
       usage: { ...currentUsage, ...budgetUsage(resolveContextBudget(resolvedWindow, settings)) },
       estimated: true,
     });
@@ -209,6 +213,7 @@ export async function interactive(
     if (activeStatus === undefined) ui?.setStatus(resumedStatus());
     stopResumedWatch = watchResumedSession(session, service, lifetime.signal, latest => {
       session = latest;
+      sessionCache.restore(latest);
       refreshContext();
       ui?.setPlan?.(latest.plan ?? null);
       if (!isActiveSession(latest.status)) {
@@ -234,6 +239,7 @@ export async function interactive(
   };
   const resetSessionControls = (): void => {
     clearResumedWatch();
+    sessionCache.restore(session);
     contextUsage = null;
     ui?.setPlan?.(session?.plan ?? null);
     if (queue.length) safe.stdout("Pending input cleared on session change.\n");
@@ -735,9 +741,10 @@ export async function interactive(
             mode,
           }),
           (event) => {
-            if (event.type === "context_usage" && event.sessionId === requireSession().id) {
-              contextUsage = event.usage;
-              refreshContext();
+            sessionCache.push(event);
+            if (event.sessionId === requireSession().id) {
+              if (event.type === "context_usage") contextUsage = event.usage;
+              if (event.type === "context_usage" || event.type === "run_finished") refreshContext();
             }
             if (event.type === "plan_updated" && event.sessionId === requireSession().id) ui?.setPlan?.(event.plan);
             live?.event(event);

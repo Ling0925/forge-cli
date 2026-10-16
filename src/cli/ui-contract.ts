@@ -44,6 +44,8 @@ export type ComposerContext = Readonly<{
   reasoningEffort?: string;
   sessionTitle?: string;
   usage: ContextUsage | null;
+  /** Token-weighted cache usage across this session, independent of context projection. */
+  sessionCache?: import("./interactive/session-cache").SessionCacheUsage;
   /** Session estimate until a projected runtime request is available. */
   estimated?: boolean;
 }>;

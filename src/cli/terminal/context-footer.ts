@@ -1,4 +1,5 @@
 import { compactTokens } from "../render/token-count";
+import { cacheRate } from "../interactive/session-cache";
 import { sanitizeText } from "../render/sanitize";
 import { truncate, visibleWidth } from "../theme";
 import type { ComposerContext, RichLine, Span, Tone } from "../ui-contract";
@@ -60,12 +61,7 @@ export function contextFooter(context: ComposerContext, columns: number, compact
   const ratio = usage?.windowTokens ? usage.usedTokens / usage.windowTokens : 0;
   const percentage = usage?.windowTokens ? `${usage.estimated ? "≈" : ""}${(ratio * 100).toFixed(1)}%` : "?%";
   const count = usage?.windowTokens ? compactTokens(usage.windowTokens) : "?";
-  const cached = usage?.cachedPromptTokens;
-  const input = usage?.promptTokens;
-  const cacheRate = usage?.basis !== "projected" && input !== undefined && input > 0
-    && cached !== undefined && Number.isFinite(cached) && cached >= 0 && cached <= input
-    ? `${Number((cached / input * 100).toFixed(1))}%` : "—";
-  const summaryText = `${percentage} · R${cacheRate} · ${count}`;
+  const summaryText = `${percentage} · R${cacheRate(context.sessionCache)} · ${count}`;
   if (compact) {
     // Decorative meter yields to model/effort on narrow terminals.
     const miniWidth = width >= 72 ? 6 : 0;
