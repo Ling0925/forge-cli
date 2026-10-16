@@ -31,13 +31,29 @@ export const renderRichLine = (line: RichLine, theme: Theme): string =>
     )
     .join("");
 
+/** Recover logical lines before reflow; never infer breaks from text or styling. */
+function* logicalLines(lines: readonly RichLine[]): Generator<RichLine> {
+  let current: Span[] | undefined;
+  for (const line of lines) {
+    if (!line[0]?.softWrap && current) { yield current; current = undefined; }
+    current ??= [];
+    for (const span of line) {
+      if (span.softWrap) {
+        const { softWrap: _softWrap, ...rest } = span;
+        current.push(rest);
+      } else current.push(span);
+    }
+  }
+  if (current) yield current;
+}
+
 export const wrapRichLines = (
   lines: readonly RichLine[],
   columns: number,
 ): readonly RichLine[] => {
   const limit = Math.max(1, Math.floor(columns));
   const wrapped: RichLine[] = [];
-  for (const line of lines) {
+  for (const line of logicalLines(lines)) {
     if (line.some(item => item.preview === "reasoning")) {
       // Producers can use a wider width than Ink, and frozen/history rows are
       // reflowed again on resize. A collapsed thought must never become two rows.
@@ -56,10 +72,13 @@ export const wrapRichLines = (
     }
     let current: Span[] = [];
     let used = 0;
-    const flush = (): void => {
+    let continuation = false;
+    const flush = (soft = false): void => {
+      if (continuation && current[0]) current[0] = { ...current[0], softWrap: true };
       wrapped.push(current);
       current = [];
       used = 0;
+      continuation = soft;
     };
     for (const item of line) {
       const clean = sanitizeText(item.text).replace(/\t/g, "    ");
@@ -69,7 +88,7 @@ export const wrapRichLines = (
           continue;
         }
         const width = graphemeWidth(cluster);
-        if (used && used + width > limit) flush();
+        if (used && used + width > limit) flush(true);
         // A two-cell grapheme cannot fit a one-cell terminal: use a visible replacement.
         const text = width > limit ? "�" : cluster;
         const last = current.at(-1);

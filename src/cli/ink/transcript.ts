@@ -88,8 +88,9 @@ export class ReadingView {
   resize(width: number): void {
     if (!this.frozen) return;
     const before = wrapRichLines(this.frozen.slice(0, this.end), width);
-    const after = wrapRichLines(this.frozen.slice(this.end), width);
-    const all = [...before, ...after];
+    // Reflow the complete snapshot: splitting at the page cursor would turn a
+    // soft continuation there into a permanent newline when widening again.
+    const all = wrapRichLines(this.frozen, width);
     const trim = Math.max(0, all.length - HISTORY_LINES);
     this.frozen = all.slice(trim);
     this.end = Math.max(0, before.length - trim);

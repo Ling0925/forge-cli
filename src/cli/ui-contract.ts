@@ -37,6 +37,8 @@ export type Span = Readonly<{
   readonly animation?: "spinner";
   /** Collapsed preview stays one physical row, including after a viewport resize. */
   readonly preview?: "reasoning";
+  /** On a physical row's first span: generated wrap, not a source newline. */
+  readonly softWrap?: true;
 }>;
 
 /** A logical output line, rendered as a sequence of spans. */
