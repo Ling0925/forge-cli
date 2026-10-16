@@ -50,6 +50,31 @@ afterEach(() => {
 });
 
 describe("Ink terminal modes", () => {
+  it("enters fullscreen once and restores it even when paste cleanup fails", () => {
+    const f = fixture(); f.modes.configure("dark");
+    f.modes.enterFullscreen(); f.modes.enterFullscreen();
+    expect(f.writes.filter(value => value === "\x1b[?1049h")).toHaveLength(1);
+    f.output.write.mockImplementationOnce(() => { throw new Error("paste cleanup"); });
+    expect(() => f.modes.dispose()).toThrow("paste cleanup");
+    expect(f.writes).toContain("\x1b[?1049l");
+    expect(f.input.isRaw).toBe(false);
+    f.modes.dispose();
+    expect(f.writes.filter(value => value === "\x1b[?1049l")).toHaveLength(1);
+  });
+  it("does not switch buffers for screen readers or nonTTY output", () => {
+    vi.stubEnv("INK_SCREEN_READER", "true");
+    const f = fixture(); f.modes.configure("dark"); f.modes.enterFullscreen(); f.modes.dispose();
+    expect(f.writes.join("")).not.toContain("1049");
+    const plain = fixture(false, false); plain.modes.enterFullscreen(); plain.modes.dispose();
+    expect(plain.writes).toEqual([]);
+  });
+  it("restores the buffer if entering fullscreen throws after writing", () => {
+    const f = fixture(); f.modes.configure("dark");
+    f.output.write.mockImplementationOnce(value => { f.writes.push(value); throw new Error("enter failed"); });
+    expect(() => f.modes.enterFullscreen()).toThrow("enter failed");
+    expect(f.writes).toContain("\x1b[?1049l");
+    expect(f.input.isRaw).toBe(false);
+  });
   it("enables paste and raw once, restores original mode on repeated disposal", () => {
     const f = fixture();
     f.modes.configure("dark");

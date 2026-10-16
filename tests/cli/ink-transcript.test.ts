@@ -54,6 +54,13 @@ describe("bounded transcript delivery and reading", () => {
     expect(view.snapshot()!.lines.flat().map(span => span.text).join("")).toBe("prefix-middle-suffix");
     expect(view.snapshot()!.end).toBe(4);
   });
+  it("discards inline delivery in fullscreen without losing retained history", () => {
+    const t = new Transcript();
+    t.append([line("fullscreen-only")]); t.discardPending();
+    expect(t.queuedBytes).toBe(0);
+    expect(t.drain(80, "system", true)).toEqual([]);
+    expect(t.recent(80)).toEqual([line("fullscreen-only")]);
+  });
   it("sanitizes control injection on committed output", () => {
     const t = new Transcript();
     t.append([line("safe\x1b]52;c;bad\x07\x1b[2J")]);

@@ -45,6 +45,8 @@ export class Transcript {
       this.wrapped = { width, revision: this.revision, lines: wrapRichLines(this.lines, width) };
     return this.wrapped.lines;
   }
+  /** Fullscreen paints retained history; only the accessible inline path drains output. */
+  discardPending(): void { this.pending = []; this.pendingBytes = 0; this.omitted = false; }
   drain(width: number, setting: UIOptions["theme"], noColor: boolean, colorDepth = 8): string[] {
     const batches = this.pending;
     this.pending = [];

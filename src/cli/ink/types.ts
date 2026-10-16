@@ -6,6 +6,8 @@ export interface InkViewState {
   readonly columns: number;
   readonly rows: number;
   readonly output?: import("./output").CommittedOutput | undefined;
+  /** Bounded completed rows for the fullscreen message viewport. */
+  readonly visibleHistory?: readonly RichLine[];
   readonly reading?: import("./transcript").ReadingSnapshot | null;
   readonly screenReader?: boolean;
   readonly tail: readonly RichLine[];

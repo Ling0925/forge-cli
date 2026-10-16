@@ -30,7 +30,7 @@ function planLine(state: InkViewState): RichLine | null {
     current?.status === "in_progress" ? "warning" : "muted");
 }
 
-/** Bounded live region; committed output is delivered through Ink's stdout context. */
+/** Ink/Yoga owns a fullscreen viewport and a non-shrinking bottom dock. */
 export function InkView({ state, input }: { state: InkViewState; input: InputState }): ReactElement {
   const width = Math.max(1, Math.floor(state.columns) - 1);
   const limit = Math.max(0, Math.floor(state.rows) - 1);
@@ -66,18 +66,29 @@ export function InkView({ state, input }: { state: InkViewState; input: InputSta
   const reading = state.reading;
   const readRows = Math.max(0, limit - 1);
   const readingRows = reading ? reading.lines.slice(Math.max(0, reading.end - readRows), reading.end) : [];
+  const historyRoom = Math.max(0, geometry.tail - visibleTail.length);
+  const history = historyRoom ? (state.visibleHistory ?? []).slice(-historyRoom) : [];
+  // One spare physical row prevents Ink's terminal-bottom wrap/scroll edge.
+  // Accessible output deliberately remains inline rather than reading blank padding.
   return <>
-    <Committed output={state.output} />
-    <Box flexDirection="column" width={width}>
+    {state.screenReader && <Committed output={state.output} />}
+    <Box flexDirection="column" width={width} {...(!state.screenReader ? { height: limit } : {})}>
       {reading ? <>
-        {readingRows.map((spans, index) => <RichRow key={`read-${index}`} spans={spans} appearance={{ ...appearance, now: 0 }} width={width} />)}
+        <Box flexDirection="column" flexGrow={1} flexShrink={1} overflow="hidden">
+          {readingRows.map((spans, index) => <RichRow key={`read-${index}`} spans={spans} appearance={{ ...appearance, now: 0 }} width={width} />)}
+        </Box>
         {limit > 0 && <RichRow spans={line(`Reading ${Math.max(1, reading.end - readRows + 1)}–${reading.end}/${reading.lines.length} · PgUp/PgDn · End/Esc live`, "muted")} appearance={appearance} width={width} />}
       </> : <>
-        {visibleTail.map((spans, index) => <RichRow key={`tail-${index}`} spans={spans} appearance={appearance} width={width} />)}
-        {input.focus.kind === "picker" ? <Picker focus={input.focus} width={width} limit={geometry.picker} appearance={appearance} />
-          : input.focus.kind === "approval" ? <ApprovalInput {...editorProps} rows={preparedEditor} /> : <Composer {...editorProps} rows={preparedEditor} />}
-        {!!geometry.menu && <SlashSuggestions menu={input.menu} limit={geometry.menu} width={width} appearance={appearance} />}
-        {!picking && extras.slice(0, geometry.extras).map((spans, index) => <RichRow key={`extra-${index}`} spans={spans} appearance={appearance} width={width} />)}
+        <Box flexDirection="column" flexGrow={1} flexShrink={1} overflow="hidden">
+          {history.map((spans, index) => <RichRow key={`history-${index}`} spans={spans} appearance={appearance} width={width} />)}
+          {visibleTail.map((spans, index) => <RichRow key={`tail-${index}`} spans={spans} appearance={appearance} width={width} />)}
+        </Box>
+        <Box flexDirection="column" flexShrink={0}>
+          {!!geometry.menu && <SlashSuggestions menu={input.menu} limit={geometry.menu} width={width} appearance={appearance} />}
+          {input.focus.kind === "picker" ? <Picker focus={input.focus} width={width} limit={geometry.picker} appearance={appearance} />
+            : input.focus.kind === "approval" ? <ApprovalInput {...editorProps} rows={preparedEditor} /> : <Composer {...editorProps} rows={preparedEditor} />}
+          {!picking && extras.slice(0, geometry.extras).map((spans, index) => <RichRow key={`extra-${index}`} spans={spans} appearance={appearance} width={width} />)}
+        </Box>
       </>}
     </Box>
   </>;

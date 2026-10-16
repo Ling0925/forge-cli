@@ -101,9 +101,9 @@ forge config set --reasoning-effort default
 - 向当前运行插话使用 `/steer 内容` 加普通 Enter，或 **Alt+Enter**（macOS 通常为 Option+Enter，需终端发送 Esc/Meta）。支持 ESC+CR/LF、CSI-u 和 modifyOtherKeys 的 Alt+Enter 键码；Shift+Enter 保留为兼容别名。Command+Enter 未设为默认，因为终端可能截获、不发送键码；快捷键不可用时使用 `/steer`。插话在当前模型请求及整批工具交换结束后的安全边界进入当前运行，不强杀工具、不重放副作用，也不能保证模型一定遵从。
 - 输入区固定显示 Steer/Queue 数量和各自首条内容预览，不随会话输出滚走，输入草稿时也保留；窄/矮窗口会缩略，审批与选择器临时隐藏。`/queue` 查看更多内容。插话交给运行时有明确回执；未消费的插话在运行结束后保留为暂停队列，不悄悄附到后续运行。
 - Ctrl+C 在实时界面取消运行；空闲时先清除草稿，空草稿时退出。EOF、`/quit` 正常结束；SIGHUP/SIGTERM 会触发关闭通知并恢复终端模式。
-- Ink 使用主屏幕，不捕获鼠标。已完成内容进入终端原生 scrollback，滚动/选择/复制使用终端自身操作，不发送 OSC52。
+- 默认富终端使用 **Ink 全屏模式**：进入备用屏幕，上方消息视口可增长/分页，底部输入与上下文栏固定；Slash 建议在输入框上方展开。退出恢复原 Shell 屏幕与历史，不捕获鼠标、不发送 OSC52。复制使用终端原生选择与 Copy；全屏会话历史使用 PgUp/PgDn，而非依赖备用屏幕的原生 scrollback。
 - **PgUp** 打开近期历史和当前未完成输出的冻结阅读快照；PgUp/PgDn 翻页，**End/Esc** 回到实时界面。阅读中 Ctrl+C 只退出阅读；文本和 Enter 不提交。后台继续运行，审批/选择器会退出阅读保证可见。
-- 阅读缓存上限 2000 行 / 1 MB，冻结快照最多 2000 个物理行；待显示完成输出上限 2 MB，超限明确提示，持久化会话不裁剪。完整内容用 `/export`。详见 `TERMINAL_SELECTION.md`。
+- 全屏阅读缓存上限 2000 行 / 1 MB，冻结快照最多 2000 个物理行；后台新内容更新有界历史，返回实时后显示最新视口，持久化会话不裁剪。完整内容用 `/export`。`INK_SCREEN_READER=true` 仍使用紧凑行内输出，不进入备用屏幕。详见 `TERMINAL_SELECTION.md`。
 
 交互 `forge` / `forge chat` 默认 **full-access**：自动批准现有权限允许的工具请求（含 MCP、浏览器、子代理），启动时提示非沙箱风险，逐次回显自动批准并在每轮结束汇总数量。`/approval manual` 切到逐次询问，提示 `[Y/n]`：本次新鲜空回车或 `y/yes` + Enter 批准，`n/no`、其他非空输入、Esc、取消、EOF 拒绝。粘贴、预输入、历史回忆不是授权。命令不是 OS 沙箱，可访问工作区外文件与网络。`/approval auto` 仅自动批准符合条件的根会话 run_command，其余仍询问。`/approval ask` 是 manual 的兼容别名。CLI 标志 `--approval full-access|auto|manual` 可覆盖启动默认。选择仅本 CLI 进程有效，/new、/resume 保持当前选择，不会把 manual 偷偷切回 full-access；重启恢复默认。plan、readonly 与子代理权限上限优先，审核模式不提升权限。
 

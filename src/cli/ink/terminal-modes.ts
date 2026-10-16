@@ -25,9 +25,9 @@ function colorFgBg(value: string | undefined): "light" | "dark" | "unknown" {
 /**
  * Terminal-mode ownership only; the reader/decoder remains the sole input-stream owner.
  *
- * This class never subscribes to the input stream and never enables the mouse or the alternate
- * screen: it only flips raw mode and bracketed paste and, for a `system` setting without a usable
- * `COLORFGBG`, asks the terminal once for its background color.
+ * This class never subscribes to input or captures the mouse. It owns raw/paste,
+ * the fullscreen alternate-buffer lifecycle, and the one-shot background probe.
+ * Ink alone owns screen drawing; screen-reader mode stays inline.
  */
 export class TerminalModes {
   private setting: ThemeSetting = "system";
@@ -35,6 +35,14 @@ export class TerminalModes {
   private rawAttempted = false;
   private previousRaw = false;
   private pasteAttempted = false;
+  private alternateAttempted = false;
+  /** Fullscreen is opt-in at the render boundary, never for a standalone approval. */
+  enterFullscreen(): void {
+    if (this.disposed || this.screenReader || this.alternateAttempted || !this.input.isTTY || !this.output.isTTY || process.env.TERM === "dumb") return;
+    this.alternateAttempted = true;
+    try { this.output.write("\x1b[?1049h"); }
+    catch (error) { try { this.dispose(); } catch {} throw error; }
+  }
   private queried = false;
   private deadline = 0;
   private queryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -166,6 +174,10 @@ export class TerminalModes {
       } catch (error) {
         failure = error;
       }
+    }
+    if (this.alternateAttempted) {
+      this.alternateAttempted = false;
+      try { this.output.write("\x1b[?1049l"); } catch (error) { failure ??= error; }
     }
     if (this.rawAttempted) {
       this.rawAttempted = false;

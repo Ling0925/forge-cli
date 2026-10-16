@@ -26,6 +26,21 @@ function frame(patch: Partial<InkViewState>, input: InputState = initialInput())
 }
 
 describe("Ink view components", () => {
+  it("anchors the complete composer/footer dock regardless of message height", () => {
+    const context = { model: "exact-model", usage: measureContext([], 10000) };
+    const positions = [0, 1, 100].map(count => {
+      const rows = frame({ context, tail: Array.from({ length: count }, (_, i) => [{ text: `line-${i}` }]) }).replace(/\n$/, "").split("\n");
+      expect(rows).toHaveLength(23);
+      expect(rows[22]).toMatch(/─/);
+      return rows.findIndex(row => row.includes("▏"));
+    });
+    expect(new Set(positions).size).toBe(1);
+    expect(positions[0]).toBe(20);
+  });
+  it("leaves accessible mode compact rather than padding a full screen", () => {
+    const rows = frame({ screenReader: true }).replace(/\n$/, "").split("\n");
+    expect(rows.length).toBeLessThan(4);
+  });
   it.each([[80, 24], [24, 8], [8, 4], [2, 2]])("bounds live output at %sx%s without losing the insertion point", (columns, rows) => {
     const output = frame({ columns, rows,
       tail: Array.from({ length: 100 }, (_, i) => [{ text: `tail-${i}` }]), pendingInput: ["queued message"],

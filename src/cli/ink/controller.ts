@@ -76,6 +76,7 @@ export class InkController implements TerminalController {
     try {
       const [{ render }, { createElement }, { InkApp }] = await Promise.all([import("ink"), import("react"), import("./app")]);
       if (this.disposed) return;
+      this.modes.enterFullscreen();
       this.renderView = () => createElement(InkApp, { state: this.snapshot(), input: this.input });
       this.prepareOutput();
       this.instance = render(this.renderView(), {
@@ -96,6 +97,7 @@ export class InkController implements TerminalController {
     } catch (error) { this.dispose(); throw error; }
   }
   private prepareOutput(): void {
+    if (!this.modes.screenReader) { this.transcript.discardPending(); return; }
     if (this.reading.active) return;
     const depth = terminalColorDepth(this.options.output);
     const chunks = this.transcript.drain(Math.max(1, this.columns - 1), this.modes.theme, process.env.NO_COLOR !== undefined, depth);
@@ -105,6 +107,7 @@ export class InkController implements TerminalController {
     return {
       columns: this.columns, rows: this.rows, output: this.output, tail: this.modes.screenReader ? [] : this.tail,
       reading: this.reading.snapshot(), screenReader: this.modes.screenReader,
+      visibleHistory: this.modes.screenReader ? [] : this.transcript.recent(Math.max(1, this.columns - 1)),
       status: this.status, context: this.context, plan: this.plan, mode: this.mode,
       theme: this.modes.theme, noColor: process.env.NO_COLOR !== undefined,
       colorDepth: terminalColorDepth(this.options.output),
@@ -120,6 +123,7 @@ export class InkController implements TerminalController {
   resize(): void { this.reading.resize(Math.max(1, this.columns - 1)); this.draw(); }
   append(lines: readonly RichLine[]): void {
     this.transcript.append(lines, this.reading.active);
+    if (!this.modes.screenReader) this.transcript.discardPending();
     if (this.reading.active) { this.reading.changed(); return; }
     this.draw();
   }
@@ -141,6 +145,7 @@ export class InkController implements TerminalController {
     this.batch = true;
     try {
       this.transcript.append(update.append, this.reading.active);
+      if (!this.modes.screenReader) this.transcript.discardPending();
       this.tail = update.tail;
       if ("status" in update) this.status = update.status ?? null;
     } finally { this.batch = previous; }
