@@ -1,4 +1,5 @@
 import type { ToolCall, ToolResult } from "../../shared/schemas";
+import { toolActivity } from "../../shared/tool-activity";
 import { uiSymbols } from "../symbols";
 import type { RichLine, Span, Tone } from "../ui-contract";
 import { diffLines, diffStats } from "./diff";
@@ -105,16 +106,12 @@ const readObject = (raw: string): Record<string, unknown> | null => {
 };
 
 export const toolTarget = (call: ToolCall): string => {
-  const args = readObject(call.function.arguments);
-  if (!args) return "(arguments unavailable)";
-  for (const key of ["path", "argv", "command", "query", "url", "id", "cwd"]) {
-    const field = args[key];
-    if (typeof field === "string" && field) return field;
-    if (Array.isArray(field)) {
-      return field.filter((item) => typeof item === "string").join(" ");
-    }
-  }
-  return call.function.name;
+  // Shared extraction, including name-based command redaction, so the CLI line
+  // and the desktop row describe the same thing. Falls back to the name when no
+  // scalar target exists, and flags malformed arguments explicitly.
+  const { target } = toolActivity(call);
+  if (target) return target;
+  return readObject(call.function.arguments) ? call.function.name : "(arguments unavailable)";
 };
 
 /**
