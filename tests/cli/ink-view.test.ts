@@ -78,6 +78,20 @@ describe("Ink view components", () => {
     expect(observing).not.toMatch(/tokens|tools|cancel/);
   });
 
+  it.each([[80, 24], [40, 12], [24, 8]])("orders the dock as plan, thinking, composer, model at %sx%s", (columns, height) => {
+    const output = frame({ columns, rows: height,
+      plan: { explanation: "", steps: [{ step: "Implement", status: "in_progress" }] },
+      status: { label: "Thinking", startedAt: 0, toolCount: 1, cancellable: true },
+      context: { model: "model-id", usage: null },
+    }, { ...initialInput(), composer: setText(emptyEditor(), "draft") });
+    const rows = output.replace(/\n$/, "").split("\n");
+    const positions = ["Plan 0/1", "Thinking", "draft", "model-id"].map(label => rows.findIndex(row => row.includes(label)));
+    expect(positions.every(position => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(new Set(positions).size).toBe(4);
+    expect(rows.length).toBeLessThanOrEqual(height - 1);
+  });
+
   it("mounts only fresh approval, not the saved composer or suggestions", () => {
     const input: InputState = { ...initialInput(), composer: setText(emptyEditor(), "saved secret draft"),
       prompt: "Approve? [Y/n] ", focus: { kind: "approval", editor: emptyEditor() } };

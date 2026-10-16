@@ -53,16 +53,21 @@ export function InkView({ state, input }: { state: InkViewState; input: InputSta
   const preparedEditor = useMemo(() => editorRows(editorProps),
     [editor, input.prompt, editorProps.hint, editorProps.tone, width, editorProps.maxLines, appearance.noColor, symbols]);
   const wrappedTail = useMemo(() => wrapRichLines(state.tail, width), [state.tail, width]);
+  // Keep the dock's hierarchy explicit: plan, activity, suggestions, editor,
+  // then queued input and model/context. All auxiliary rows share one budget.
+  const aboveEditor: RichLine[] = [];
   const extras: RichLine[] = [];
-  const status = statusLine(state);
-  if (status) extras.push(status);
   if (!fresh && !input.menu.active) {
     const plan = planLine(state);
-    if (plan) extras.push(plan);
+    if (plan) aboveEditor.push(plan);
     extras.push(...state.pendingInput.slice(0, 2).map(pending => line(single(pending), "accent")));
     if (state.context) extras.push(...contextFooter(state.context, width, state.rows <= 20));
   }
-  const geometry = dockLayout(state.rows, preparedEditor.length, extras.length, input.menu.active && !fresh, picking, wrappedTail.length > 0);
+  const status = statusLine(state);
+  if (status) aboveEditor.push(status);
+  const geometry = dockLayout(state.rows, preparedEditor.length, aboveEditor.length + extras.length, input.menu.active && !fresh, picking, wrappedTail.length > 0);
+  const visibleAbove = aboveEditor.slice(0, geometry.extras);
+  const visibleExtras = extras.slice(0, Math.max(0, geometry.extras - visibleAbove.length));
   let visibleTail = wrappedTail.slice(-geometry.tail);
   if (!geometry.tail) visibleTail = [];
   else if (wrappedTail.length > geometry.tail && geometry.tail >= 2)
@@ -90,10 +95,11 @@ export function InkView({ state, input }: { state: InkViewState; input: InputSta
           {visibleTail.map((spans, index) => <RichRow key={`tail-${index}`} spans={spans} appearance={appearance} width={width} />)}
         </Box>
         <Box flexDirection="column" flexShrink={0}>
+          {!picking && visibleAbove.map((spans, index) => <RichRow key={`above-${index}`} spans={spans} appearance={appearance} width={width} />)}
           {!!geometry.menu && <SlashSuggestions menu={input.menu} limit={geometry.menu} width={width} appearance={appearance} />}
           {input.focus.kind === "picker" ? <Picker focus={input.focus} width={width} limit={geometry.picker} appearance={appearance} />
             : input.focus.kind === "approval" ? <ApprovalInput {...editorProps} rows={preparedEditor} /> : <Composer {...editorProps} rows={preparedEditor} />}
-          {!picking && extras.slice(0, geometry.extras).map((spans, index) => <RichRow key={`extra-${index}`} spans={spans} appearance={appearance} width={width} />)}
+          {!picking && visibleExtras.map((spans, index) => <RichRow key={`extra-${index}`} spans={spans} appearance={appearance} width={width} />)}
         </Box>
       </>}
     </Box>
