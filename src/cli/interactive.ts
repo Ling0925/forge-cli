@@ -105,9 +105,11 @@ export async function interactive(
   const refreshContext = (): void => {
     sessionCache.ensureSession(session);
     if (usageModel !== model) { contextDisplay = emptyContextDisplay(); usageModel = model; }
+    const sourceId = session?.providerSourceId ?? settings.activeSourceId;
+    const windowKey = JSON.stringify([sourceId ?? "legacy", model]);
     const contextUsage = contextDisplay.context;
-    const windowTokens = resolveContextWindow(model, settings, windows.get(model));
-    const resolvedWindow = settings.modelContextWindows?.[model] ?? windows.get(model) ?? contextUsage?.windowTokens ?? windowTokens;
+    const windowTokens = resolveContextWindow(model, settings, windows.get(windowKey));
+    const resolvedWindow = settings.modelContextWindows?.[model] ?? windows.get(windowKey) ?? contextUsage?.windowTokens ?? windowTokens;
     const measured = contextUsage ? { ...contextUsage, windowTokens: resolvedWindow } : measureContext(session ? projectSummary(session) : [], resolvedWindow);
     const { budgetTokens: _oldTokens, budgetChars: _oldChars, ...currentUsage } = measured;
     ui?.setContext?.({
@@ -121,13 +123,13 @@ export async function interactive(
       ...(currentUsage.basis === "request" && contextDisplay.projected ? { projectedTokens: contextDisplay.projected.usedTokens } : {}),
       estimated: currentUsage.estimated,
     });
-    if (ui && !settings.modelContextWindows?.[model] && !windows.has(model) && !loadingWindows.has(model) && service.getModelContextWindow) {
+    if (ui && !settings.modelContextWindows?.[model] && !windows.has(windowKey) && !loadingWindows.has(windowKey) && service.getModelContextWindow) {
       const requestedModel = model;
-      loadingWindows.add(requestedModel);
-      void service.getModelContextWindow(requestedModel, lifetime.signal).then(value => {
-        windows.set(requestedModel, value);
+      loadingWindows.add(windowKey);
+      void service.getModelContextWindow(requestedModel, lifetime.signal, sourceId).then(value => {
+        windows.set(windowKey, value);
         if (!lifetime.signal.aborted && model === requestedModel) refreshContext();
-      }).catch(() => windows.set(requestedModel, null)).finally(() => loadingWindows.delete(requestedModel));
+      }).catch(() => windows.set(windowKey, null)).finally(() => loadingWindows.delete(windowKey));
     }
   };
   const refreshAutoTitle = (): void => {
@@ -496,6 +498,7 @@ export async function interactive(
                     safe,
                     model,
                     active.signal,
+                    session?.providerSourceId,
                   );
                   if (chosen !== null && !active.signal.aborted) {
                     model = chosen;

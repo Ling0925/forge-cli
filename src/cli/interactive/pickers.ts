@@ -33,8 +33,9 @@ export async function pickModel(
   io: CliIO,
   selected: string,
   signal: AbortSignal,
+  sourceId?: string,
 ): Promise<string | null> {
-  const models = await abortable(service.listModels(signal), signal);
+  const models = await abortable(sourceId === undefined ? service.listModels(signal) : service.listModels(signal, sourceId), signal);
   return choose(
     io,
     {
