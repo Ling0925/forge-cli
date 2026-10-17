@@ -1,5 +1,6 @@
 import { projectSummary } from "../core/context";
-import { mcpRegisterInputSchema } from "../mcp/types";
+import { createSlashActions } from "../shared/slash-actions";
+import { parseSlashCommand } from "../shared/slash-commands";
 import type { HarnessService } from "../shared/contracts";
 import { budgetUsage, measureContext, resolveContextBudget, resolveContextWindow } from "../shared/context-usage";
 import { ForgeError, toErrorInfo } from "../shared/errors";
@@ -457,8 +458,8 @@ export async function interactive(
 
       try {
         if (!fromQueue && line.startsWith("/")) {
-          const [command, ...words] = line.trim().split(/\s+/);
-          const value = words.join(" ");
+          const { command, words, value } = parseSlashCommand(line);
+          const actions = createSlashActions(service);
           switch (command) {
             case "/quit":
             case "/exit":
@@ -548,15 +549,14 @@ export async function interactive(
               } else safe.stdout(`Mode: ${mode}\n`);
               break;
             case "/plan": {
-              const currentPlan =
-                (await service.getSession(requireSession().id)).plan ?? null;
+              const currentPlan = await actions.plan(requireSession().id);
               ui?.setPlan?.(currentPlan);
               if (ui) ui.append(planLines(currentPlan, ui.columns));
               else styled(`${formatPlan(currentPlan, theme)}\n`);
               break;
             }
             case "/sessions": {
-              const sessions = await service.listSessions();
+              const sessions = await actions.sessions();
               styled(`${formatSessions(sessions, session?.id, theme)}\n`);
               break;
             }
@@ -595,21 +595,13 @@ export async function interactive(
               break;
             }
             case "/new":
-              session = await service.createSession(
-                createSessionInputSchema.parse({
-                  workspace: session?.workspace ?? workspace,
-                  model,
-                }),
-              );
+              session = await actions.newSession(session?.workspace ?? workspace, model);
               tools = new ToolTranscript();
               resetSessionControls();
               safe.stdout("已创建新会话。\n");
               break;
             case "/fork":
-              session = await service.forkSession(
-                requireSession().id,
-                value ? Number(value) : undefined,
-              );
+              session = await actions.fork(requireSession().id, value);
               tools = new ToolTranscript();
               resetSessionControls();
               showHistory();
@@ -617,11 +609,11 @@ export async function interactive(
               safe.stdout("已分支会话。\n");
               break;
             case "/rename":
-              session = await service.renameSession(requireSession().id, value);
+              session = await actions.rename(requireSession().id, value);
               safe.stdout("已重命名会话。\n");
               break;
             case "/archive":
-              session = await service.archiveSession(requireSession().id, true);
+              session = await actions.archive(requireSession().id);
               safe.stdout("已归档会话。\n");
               break;
             case "/compact": {
@@ -638,7 +630,7 @@ export async function interactive(
               });
               try {
                 session = await Promise.race([
-                  service.compactSession(requireSession().id, signal),
+                  actions.compact(requireSession().id, signal),
                   aborted,
                 ]);
               } finally {
@@ -650,66 +642,28 @@ export async function interactive(
               break;
             }
             case "/diagnostics":
-              safe.stdout(
-                `${JSON.stringify(await service.getDiagnostics(requireSession().id), null, 2)}\n`,
-              );
+              safe.stdout(`${JSON.stringify(await actions.diagnostics(requireSession().id), null, 2)}\n`);
               break;
             case "/context":
-              safe.stdout(
-                `${JSON.stringify(await service.getProjectContext(requireSession().id), null, 2)}\n`,
-              );
+              safe.stdout(`${JSON.stringify(await actions.context(requireSession().id), null, 2)}\n`);
               break;
             case "/skills":
-              safe.stdout(
-                `${JSON.stringify((await service.getProjectContext(requireSession().id)).skills, null, 2)}\n`,
-              );
+              safe.stdout(`${JSON.stringify(await actions.skills(requireSession().id), null, 2)}\n`);
               break;
             case "/checkpoints": {
-              const action = words[0] ?? "list";
-              if (action === "list")
-                safe.stdout(
-                  `${JSON.stringify(await service.listCheckpoints(requireSession().id), null, 2)}\n`,
-                );
-              else if (action === "diff" && words[1] && words.length === 2)
-                safe.stdout(
-                  `${await service.getCheckpointDiff(requireSession().id, words[1])}\n`,
-                );
-              else if (action === "restore" && words[1] && words.length === 2) {
-                session = await service.restoreCheckpoint(requireSession().id, words[1]);
+              const result = await actions.checkpoints(requireSession().id, words);
+              if (result.kind === "snapshot") {
+                session = result.snapshot;
                 safe.stdout(`Restored ${requireSession().id}\n`);
-              } else
-                throw Error("Expected /checkpoints [list|diff ID|restore ID].");
+              } else safe.stdout(`${result.kind === "text" ? result.text : JSON.stringify(result.data, null, 2)}\n`);
               break;
             }
-            case "/mcp": {
-              const [action, id, ...extra] = words;
-              let result: unknown;
-              if (action === "list") result = await service.listMcpServers();
-              else if (action === "register" && id && extra.length >= 2)
-                result = await service.registerMcpServer(
-                  mcpRegisterInputSchema.parse({
-                    id,
-                    label: extra[0],
-                    command: extra[1],
-                    args: extra.slice(2),
-                  }),
-                );
-              else if (id && (action === "enable" || action === "disable"))
-                result = await service.setMcpEnabled(id, action === "enable");
-              else if (id && action === "remove")
-                result = await service.removeMcpServer(id);
-              else if (id && action === "health")
-                result = await service.getMcpHealth(id);
-              else
-                throw Error(
-                  "Expected /mcp list|register|enable|disable|remove|health.",
-                );
-              safe.stdout(`${JSON.stringify(result ?? null, null, 2)}\n`);
+            case "/mcp":
+              safe.stdout(`${JSON.stringify(await actions.mcp(words) ?? null, null, 2)}\n`);
               break;
-            }
             case "/export":
               safe.stdout(
-                `${JSON.stringify(await service.getSession(requireSession().id), null, 2)}\n`,
+                `${JSON.stringify(await actions.export(requireSession().id), null, 2)}\n`,
               );
               break;
             default:
