@@ -140,6 +140,15 @@ export const createEventRenderer = (
   return {
     push(event): RenderUpdate {
       switch (event.type) {
+        case "retry_reset":
+          markdown.finish();
+          streamedText = "";
+          reasoningLine = undefined;
+          reasoningAccumulator = "";
+          reasoningStreamed = "";
+          return update([], [], live("retrying"));
+        case "provider_retry":
+          return update([], [], live(`重试 ${event.attempt}/${event.maxAttempts}`));
         case "run_started":
           startedAt = now();
           toolCount = 0;

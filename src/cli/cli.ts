@@ -203,6 +203,12 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
     stderr: (text: string) => output.stderr(terminalText(text)),
   };
   switch (event.type) {
+    case "retry_reset":
+      io.stdout("\n本次响应未完成，已丢弃；正在重试。\n");
+      return;
+    case "provider_retry":
+      io.stdout(`重试 ${event.attempt}/${event.maxAttempts} (${event.reason})\n`);
+      return;
     case "text_delta":
       io.stdout(event.text);
       return;

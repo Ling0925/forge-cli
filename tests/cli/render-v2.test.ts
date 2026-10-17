@@ -30,6 +30,20 @@ import type {
 } from "../../src/shared/schemas";
 import { parseSessionId } from "../../src/shared/schemas";
 
+it("discards a failed generation tail before displaying its replacement and retry count", () => {
+  const renderer = createEventRenderer();
+  const base = { sessionId: parseSessionId("10000000-0000-4000-8000-000000000001"), timestamp: "2026-01-01T00:00:00.000Z" };
+  renderer.push({ ...base, type: "text_delta", text: "discarded draft" });
+  renderer.push({ ...base, type: "reasoning_delta", text: "discarded reasoning" });
+  const reset = renderer.push({ ...base, type: "retry_reset" });
+  expect(reset.append).toEqual([]);
+  expect(reset.tail).toEqual([]);
+  expect(renderer.push({ ...base, type: "provider_retry", attempt: 3, maxAttempts: 5, reason: "protocol" }).status?.label).toBe("重试 3/5");
+  const replacement = renderer.push({ ...base, type: "text_delta", text: "replacement" });
+  expect(replacement.tail.map(line => line.map(span => span.text).join("")).join("\n")).toBe("replacement");
+  expect(renderer.finish().append.map(line => line.map(span => span.text).join("")).join("\n")).toContain("replacement");
+});
+
 const theme = resolveTheme({
   setting: "dark",
   background: "dark",
