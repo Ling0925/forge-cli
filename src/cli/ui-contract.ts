@@ -49,6 +49,10 @@ export type ComposerContext = Readonly<{
   reasoningEffort?: string;
   sessionTitle?: string;
   usage: ContextUsage | null;
+  /** Projection after a real compaction, awaiting the next input report. */
+  compacted?: boolean;
+  /** Latest local estimate, never substituted for a confirmed input report. */
+  projectedTokens?: number;
   /** Token-weighted cache usage across this session, independent of context projection. */
   sessionCache?: import("./interactive/session-cache").SessionCacheUsage;
   /** Session estimate until a projected runtime request is available. */

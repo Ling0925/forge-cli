@@ -63,7 +63,12 @@ export function contextFooter(context: ComposerContext, columns: number, compact
   const ratio = usage?.windowTokens ? usage.usedTokens / usage.windowTokens : 0;
   const percentage = usage?.windowTokens ? `${usage.estimated ? symbols.approximate : ""}${(ratio * 100).toFixed(1)}%` : "?%";
   const count = usage?.windowTokens ? compactTokens(usage.windowTokens) : "?";
-  const summaryText = `${percentage} ${symbols.separator} R${cacheRate(context.sessionCache)} ${symbols.separator} ${count}`;
+  const basis = context.compacted ? "压缩后预估 " : usage?.basis === "request" ? "实报输入 " : "预估 ";
+  // Keep the compact footer stable on narrow terminals; wide terminals can
+  // also show the separate local estimate without replacing the input report.
+  const projection = width >= 120 && context.projectedTokens !== undefined && usage?.basis === "request"
+    ? ` ${symbols.separator} 本地${symbols.approximate}${compactTokens(context.projectedTokens)}` : "";
+  const summaryText = `${basis}${percentage} ${symbols.separator} R${cacheRate(context.sessionCache)} ${symbols.separator} ${count}${projection}`;
   if (compact) {
     // Decorative meter yields to model/effort on narrow terminals.
     const miniWidth = width >= 72 ? 6 : 0;

@@ -11,7 +11,8 @@ import {
   runInputSchema,
   settingsFields,
 } from "../shared/schemas";
-import type { AgentEvent, ContextUsage } from "../shared/schemas";
+import type { AgentEvent } from "../shared/schemas";
+import { advanceContextDisplay, emptyContextDisplay, replayContextDisplay } from "../shared/context-display";
 import { type ApprovalMode, DEFAULT_APPROVAL_MODE, approvalWarning, parseApprovalAnswer, parseApprovalMode, shouldAutoApprove } from "./approval-policy";
 import type { CliIO } from "./cli";
 import { formatHelp } from "./commands";
@@ -95,7 +96,7 @@ export async function interactive(
     appendLines(value ? tools.detail(Number(value), ui?.columns ?? 80) : tools.list(ui?.columns ?? 80));
   };
   let model = session?.model ?? settings.model;
-  let contextUsage: ContextUsage | null = null;
+  let contextDisplay = replayContextDisplay(session?.events ?? []);
   let usageModel = model;
   let titleRefresh: ReturnType<typeof setTimeout> | undefined;
   let titleRefreshClosed = false;
@@ -103,7 +104,8 @@ export async function interactive(
   const loadingWindows = new Set<string>();
   const refreshContext = (): void => {
     sessionCache.ensureSession(session);
-    if (usageModel !== model) { contextUsage = null; usageModel = model; }
+    if (usageModel !== model) { contextDisplay = emptyContextDisplay(); usageModel = model; }
+    const contextUsage = contextDisplay.context;
     const windowTokens = resolveContextWindow(model, settings, windows.get(model));
     const resolvedWindow = settings.modelContextWindows?.[model] ?? windows.get(model) ?? contextUsage?.windowTokens ?? windowTokens;
     const measured = contextUsage ? { ...contextUsage, windowTokens: resolvedWindow } : measureContext(session ? projectSummary(session) : [], resolvedWindow);
@@ -113,8 +115,11 @@ export async function interactive(
       reasoningEffort: settings.reasoningEffort ?? "default",
       sessionTitle: session?.title ?? "新会话",
       sessionCache: sessionCache.snapshot(),
-      usage: { ...currentUsage, ...budgetUsage(resolveContextBudget(resolvedWindow, settings)) },
-      estimated: true,
+      usage: contextDisplay.compacted && !contextUsage ? null
+        : { ...currentUsage, ...budgetUsage(resolveContextBudget(resolvedWindow, settings)) },
+      ...(contextDisplay.compacted ? { compacted: true } : {}),
+      ...(currentUsage.basis === "request" && contextDisplay.projected ? { projectedTokens: contextDisplay.projected.usedTokens } : {}),
+      estimated: currentUsage.estimated,
     });
     if (ui && !settings.modelContextWindows?.[model] && !windows.has(model) && !loadingWindows.has(model) && service.getModelContextWindow) {
       const requestedModel = model;
@@ -216,6 +221,7 @@ export async function interactive(
     stopResumedWatch = watchResumedSession(session, service, lifetime.signal, latest => {
       session = latest;
       sessionCache.restore(latest);
+      contextDisplay = replayContextDisplay(latest.events);
       refreshContext();
       ui?.setPlan?.(latest.plan ?? null);
       if (!isActiveSession(latest.status)) {
@@ -242,7 +248,8 @@ export async function interactive(
   const resetSessionControls = (): void => {
     clearResumedWatch();
     sessionCache.restore(session);
-    contextUsage = null;
+    contextDisplay = replayContextDisplay(session?.events ?? []);
+    usageModel = session?.model ?? model;
     ui?.setPlan?.(session?.plan ?? null);
     if (queue.length) safe.stdout("Pending input cleared on session change.\n");
     queue.clear();
@@ -637,7 +644,7 @@ export async function interactive(
                 signal.removeEventListener("abort", cancel);
                 clearStatus();
               }
-              if (!signal.aborted) contextUsage = null;
+              if (!signal.aborted) contextDisplay = replayContextDisplay(session?.events ?? []);
               if (!signal.aborted) safe.stdout(`Compacted ${requireSession().id}\n`);
               break;
             }
@@ -698,8 +705,8 @@ export async function interactive(
           (event) => {
             sessionCache.push(event);
             if (event.sessionId === requireSession().id) {
-              if (event.type === "context_usage") contextUsage = event.usage;
-              if (event.type === "context_usage" || event.type === "run_finished") refreshContext();
+              contextDisplay = advanceContextDisplay(contextDisplay, event);
+              if (event.type === "context_usage" || event.type === "run_finished" || event.type === "context_compacted" || event.type === "run_started") refreshContext();
             }
             if (event.type === "plan_updated" && event.sessionId === requireSession().id) ui?.setPlan?.(event.plan);
             live?.event(event);

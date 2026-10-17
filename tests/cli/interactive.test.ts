@@ -8,6 +8,7 @@ import type { ComposerContext, RunStatus } from "../../src/cli/ui-contract";
 import type { HarnessService } from "../../src/shared/contracts";
 import {
   defaultPublicSettings,
+  agentEventSchema,
   parseSessionId,
   sessionSnapshotSchema,
 } from "../../src/shared/schemas";
@@ -493,6 +494,33 @@ describe("rich integration adapters", () => {
     expect(host.contexts.at(-1)?.sessionTitle).toBe("Completed task");
   });
 
+  it("restores input reports, holds them through estimates and refreshes after manual compaction", async () => {
+    const baseEvent = { sessionId: id, timestamp: new Date().toISOString() };
+    const projected = agentEventSchema.parse({ ...baseEvent, type: "context_usage", usage: { windowTokens: 300000, usedTokens: 120000, estimated: true, basis: "projected", parts: { instructions: 0, memory: 0, conversation: 120000, tools: 0 } } });
+    const report = agentEventSchema.parse({ ...baseEvent, type: "context_usage", usage: { windowTokens: 300000, usedTokens: 210000, promptTokens: 200000, completionTokens: 10000, estimated: true, basis: "request-with-output", parts: { instructions: 0, memory: 0, conversation: 210000, tools: 0 } } });
+    const compactEvent = agentEventSchema.parse({ ...baseEvent, type: "context_compacted", removedMessages: 10, beforeChars: 800000, afterChars: 120000 });
+    const history = { ...snapshot, events: [report, projected] };
+    const host = richHost(["hello", "/compact", "/quit"], []);
+    const base = service(async (_input, sink) => {
+      expect(host.contexts.at(-1)?.usage?.usedTokens).toBe(200000);
+      sink(projected);
+      expect(host.contexts.at(-1)?.usage).toMatchObject({ usedTokens: 200000, estimated: false });
+      sink(report);
+      sink(projected);
+      expect(host.contexts.at(-1)?.usage?.usedTokens).toBe(200000);
+      sink(compactEvent);
+      expect(host.contexts.at(-1)).toMatchObject({ compacted: true, usage: null });
+      sink(projected);
+      expect(host.contexts.at(-1)?.usage?.usedTokens).toBe(120000);
+      return history;
+    });
+    expect(await runCliWithIO(["chat", "--session", id], { ...base, getSession: async () => history,
+      compactSession: async () => ({ ...history, events: [...history.events, compactEvent, projected] }) }, host.io)).toBe(0);
+    expect(host.err).toEqual([]);
+    expect(host.contexts[0]?.usage?.usedTokens).toBe(200000);
+    expect(host.contexts.at(-1)).toMatchObject({ compacted: true, usage: { usedTokens: 120000, estimated: true } });
+  });
+
   it("refreshes context footer for runtime projection, model changes, session resets and compaction", async () => {
     const host = richHost(["hello", "/model changed", "/compact", "/new", "/quit"], []);
     const usage = { windowTokens: 1000, usedTokens: 200, estimated: true, basis: "projected" as const, parts: { instructions: 50, memory: 0, conversation: 100, tools: 50 } };
@@ -511,7 +539,7 @@ describe("rich integration adapters", () => {
     expect(host.contexts).toContainEqual({ model: "test", reasoningEffort: "default", sessionTitle: "chat", usage: { ...usage, budgetTokens: 800 }, sessionCache: { promptTokens: 0, cachedPromptTokens: 0, partial: false }, estimated: true });
     expect(host.contexts.some((value) => value?.model === "changed" && value.estimated)).toBe(true);
     expect(host.contexts.some((value) => (value?.usage?.parts.memory ?? 0) > 0)).toBe(true);
-    expect(host.contexts.at(-1)).toMatchObject({ model: "changed", estimated: true, usage: { usedTokens: 0, windowTokens: null } });
+    expect(host.contexts.at(-1)).toMatchObject({ model: "changed", estimated: true, usage: { usedTokens: 0, windowTokens: 300000 } });
   });
 
 it("Shift+Tab callback shares /mode state without changing active-run approval scope", async () => {
