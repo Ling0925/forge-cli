@@ -1,5 +1,5 @@
 import { ForgeError } from "../../shared/errors";
-import { runInputSchema } from "../../shared/schemas";
+import { textPromptSchema } from "../../shared/schemas";
 import { terminalText } from "../format";
 import { DEFAULT_MAX_QUEUE_BYTES, DEFAULT_MAX_QUEUE_LINES } from "../terminal";
 
@@ -15,7 +15,7 @@ export class RunQueue {
   get steeringCount(): number { return this.items.filter(item => item.kind === "steer").length; }
 
   add(kind: PendingMessage["kind"], raw: string): void {
-    const text = runInputSchema.unwrap().shape.prompt.parse(terminalText(raw));
+    const text = textPromptSchema.parse(terminalText(raw));
     const size = Buffer.byteLength(text);
     if (this.items.length >= DEFAULT_MAX_QUEUE_LINES || this.bytes + size > DEFAULT_MAX_QUEUE_BYTES)
       throw new ForgeError("invalid_input", "Queue limit exceeded (1,000 messages / 1,000,000 bytes). Message rejected; earlier messages retained.");

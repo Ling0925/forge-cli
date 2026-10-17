@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { type CliIO, runCliWithIO } from "../../src/cli/cli";
-import type { HarnessService } from "../../src/shared/contracts";
+import type { HarnessService, RunControl } from "../../src/shared/contracts";
 import { defaultPublicSettings, parseSessionId, sessionSnapshotSchema } from "../../src/shared/schemas";
 import { extendedService } from "./service-fixture";
 
@@ -87,7 +87,7 @@ describe("interactive run controls", () => {
   it("queues follow-ups FIFO without overlapping runs and steers only the active run", async () => {
     const h = host(["first", "/quit"]);
     const prompts: string[] = [];
-    const steering: readonly string[][] = [];
+    const steering: ReturnType<RunControl["drainSteering"]>[] = [];
     const modes: string[] = [];
     let running = false;
     expect(await runCliWithIO(["chat"], service(async (input, _e, _approve, _signal, control) => {
@@ -98,7 +98,7 @@ describe("interactive run controls", () => {
       if (input.prompt === "first") {
         h.send("second"); h.send("改为只做测试", true); h.send("third"); h.send("/mode plan");
         expect(h.out.join("")).toContain("Mode: plan");
-        (steering as string[][]).push([...(control?.drainSteering() ?? [])]);
+        steering.push(control?.drainSteering() ?? []);
       }
       running = false; return snapshot;
     }), h.io)).toBe(0);
@@ -112,7 +112,7 @@ describe("interactive run controls", () => {
   it("routes /steer with ordinary Enter into the active run, not a later prompt", async () => {
     const h = host(["first", "/quit"]);
     const prompts: string[] = [];
-    let delivered: readonly string[] | undefined;
+    let delivered: ReturnType<RunControl["drainSteering"]> | undefined;
     await runCliWithIO(["chat"], service(async (input, _e, _a, _s, control) => {
       prompts.push(input.prompt);
       h.send("/steer 先停下改动\n只检查测试");

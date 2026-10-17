@@ -12,6 +12,7 @@ import {
   permissionSchema,
   publicSettingsSchema,
   runInputSchema,
+  textPromptSchema,
   sessionSnapshotSchema,
   settingsFields,
 } from "../shared/schemas";
@@ -645,15 +646,13 @@ export const runCliWithIO = async (
       modelText === undefined
         ? undefined
         : settingsFields.model.parse(modelText);
-    const prompt = runInputSchema
-      .unwrap()
-      .shape.prompt.parse(
-        file !== undefined
-          ? await readPromptFile(file, controller.signal)
-          : stdinPrompt
-            ? await io.readStdin(promptLimit, controller.signal)
-            : words.join(" "),
-      );
+    const prompt = textPromptSchema.parse(
+      file !== undefined
+        ? await readPromptFile(file, controller.signal)
+        : stdinPrompt
+          ? await io.readStdin(promptLimit, controller.signal)
+          : words.join(" "),
+    );
     const workspaceText = stringOption(args, "workspace");
     if (id === undefined && workspaceText === undefined)
       invalid("A new run requires --workspace PATH.");
