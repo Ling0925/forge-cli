@@ -31,6 +31,60 @@ const statusFor = (
   cancellable: boolean,
 ): RunStatus => ({ label, startedAt, toolCount, cancellable });
 
+/** Cumulative, display-only metadata of one in-flight tool argument stream. */
+export interface ToolPreview {
+  readonly name: string;
+  readonly argumentsChars: number;
+}
+
+const PREVIEW_LABEL = "生成参数中";
+const PREVIEW_FALLBACK_NAME = "工具调用";
+const PREVIEW_MAX_CHARS = 1_000_000;
+
+/** Untrusted name; never echo arguments, only the bounded cumulative size. */
+export const previewName = (name: string): string =>
+  sanitizeText(name).replace(/\s+/g, " ").trim() || PREVIEW_FALLBACK_NAME;
+
+export const previewChars = (value: number): number =>
+  Number.isFinite(value)
+    ? Math.min(PREVIEW_MAX_CHARS, Math.max(0, Math.floor(value)))
+    : 0;
+
+/** Single plain-text summary used by both the tail row and append-only stderr. */
+export const previewSummary = (preview: ToolPreview): string =>
+  `${previewName(preview.name)} ${uiSymbols().separator} ${PREVIEW_LABEL} ${uiSymbols().separator} ${previewChars(preview.argumentsChars)} chars`;
+
+/**
+ * One live row per pending tool call: name plus how many argument characters
+ * have arrived. The metadata is never a tool call and carries no arguments.
+ */
+export const toolPreviewLine = (
+  preview: ToolPreview,
+  width = 80,
+): RichLine => {
+  const symbols = uiSymbols();
+  const suffix = ` ${symbols.separator} ${PREVIEW_LABEL} ${symbols.separator} ${previewChars(preview.argumentsChars)} chars`;
+  return [
+    {
+      text: symbols.spinnerFrames[0] ?? symbols.active,
+      tone: "muted",
+      animation: "spinner",
+    },
+    { text: " " },
+    ...compactToolLine(
+      previewName(preview.name),
+      "",
+      suffix,
+      "muted",
+      Math.max(1, width - 2),
+    ),
+  ];
+};
+
+/** `tool_started` may carry the previewId of the row it replaces. */
+const previewIdOf = (event: AgentEvent): string | undefined =>
+  event.type === "tool_started" ? event.previewId : undefined;
+
 export const createEventRenderer = (
   options: EventRendererOptions = {},
 ): EventRenderer => {
@@ -96,6 +150,12 @@ export const createEventRenderer = (
     return lines;
   };
   const active = new Map<string, ToolCall>();
+  // Pending argument streams, keyed by previewId. Display-only: these are not
+  // tool calls, never enter the transcript and never raise toolCount.
+  const previews = new Map<string, ToolPreview>();
+  const clearPreviews = (): void => {
+    previews.clear();
+  };
   const stopTools = (label = "interrupted"): RichLine[] => {
     const lines = [...active.values()].map((call) => compactToolLine(
       call.function.name, toolTarget(call), ` ${uiSymbols().separator} ${label}`, "warning", options.width?.() ?? 80,
@@ -120,9 +180,12 @@ export const createEventRenderer = (
     const width = options.width?.() ?? 80;
     messageTail = nextTail;
     tail = wrapRichLines([
-      ...(reasoningLine ? [reasoningLine] : []),
+      // While arguments are still being generated, the pending-tool rows take
+      // the transient slot: reasoning is a lower-value duplicate there.
+      ...(reasoningLine && previews.size === 0 ? [reasoningLine] : []),
       ...nextTail,
       ...[...active.values()].map((call) => toolRunningLine(call, width)),
+      ...[...previews.values()].map((preview) => toolPreviewLine(preview, width)),
       ...[...children].map(([id, child]) => childLine(id, child)),
     ], width);
     return {
@@ -146,6 +209,7 @@ export const createEventRenderer = (
           reasoningLine = undefined;
           reasoningAccumulator = "";
           reasoningStreamed = "";
+          clearPreviews();
           return update([], [], live("retrying"));
         case "provider_retry":
           return update([], [], live(`重试 ${event.attempt}/${event.maxAttempts}`));
@@ -159,6 +223,7 @@ export const createEventRenderer = (
           reasoningAccumulator = "";
           reasoningStreamed = "";
           running = true;
+          clearPreviews();
           return update(flushText(), [], live("thinking"));
         case "reasoning_delta": {
           running = true;
@@ -175,12 +240,32 @@ export const createEventRenderer = (
           const chunk = markdown.push(event.text);
           return update(chunk.append, chunk.tail, live("responding"));
         }
+        case "tool_call_preview": {
+          running = true;
+          // Argument generation supersedes the transient reasoning row, but the
+          // assistant body already streamed to messageTail stays visible.
+          reasoningLine = undefined;
+          reasoningAccumulator = "";
+          reasoningStreamed = "";
+          if (!previews.has(event.previewId) && previews.size >= 256)
+            return update([], messageTail, currentStatus);
+          previews.set(event.previewId, {
+            name: event.name,
+            argumentsChars: previewChars(event.argumentsChars),
+          });
+          return update([], messageTail, live(previewName(event.name)));
+        }
+        case "tool_preview_reset":
+          clearPreviews();
+          return update([], messageTail, running ? live("thinking") : null);
         case "tool_started": {
           running = true;
           // A tool call ends the reasoning phase for this request.
           reasoningLine = undefined;
           reasoningAccumulator = "";
           reasoningStreamed = "";
+          const previewId = previewIdOf(event);
+          if (previewId) previews.delete(previewId);
           if (!active.has(event.call.id)) toolCount += 1;
           tools.start(event.call, now());
           active.set(event.call.id, event.call);
@@ -212,6 +297,7 @@ export const createEventRenderer = (
           reasoningLine = undefined;
           reasoningAccumulator = "";
           reasoningStreamed = "";
+          clearPreviews();
           return update(
             [
               ...flushText(),
@@ -226,6 +312,7 @@ export const createEventRenderer = (
           reasoningLine = undefined;
           reasoningAccumulator = "";
           reasoningStreamed = "";
+          clearPreviews();
           const tone =
             event.status === "completed"
               ? "success"
@@ -253,6 +340,7 @@ export const createEventRenderer = (
             running = false;
             reasoningLine = undefined;
             reasoningAccumulator = "";
+            clearPreviews();
             return update([...flushText(), ...stopTools("cancelled")], [], null);
           }
           return {
@@ -318,6 +406,7 @@ export const createEventRenderer = (
       running = false;
       reasoningLine = undefined;
       reasoningAccumulator = "";
+      clearPreviews();
       return update([...flushText(), ...stopTools()], [], null);
     },
   };

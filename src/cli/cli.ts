@@ -21,6 +21,7 @@ import type { AgentEvent, SessionStatus } from "../shared/schemas";
 import { DEFAULT_APPROVAL_MODE, parseApprovalAnswer, parseApprovalMode } from "./approval-policy";
 import { interactive, terminalText } from "./interactive";
 import { createNodeIO } from "./node-io";
+import { previewSummary } from "./render/events";
 export { createNodeIO, nodeIO } from "./node-io";
 export type { CreateNodeIOOptions } from "./node-io";
 import type { QuestionOptions } from "./terminal";
@@ -197,18 +198,47 @@ const readPromptFile = async (
   }
 };
 
+/**
+ * Plain output has no repaintable tail, so a pending-tool preview is announced
+ * once per previewId and then stays quiet. Bounded and per-IO, so it can never
+ * grow without limit or leak across sinks.
+ */
+const plainPreviews = new WeakMap<CliIO, Set<string>>();
+const plainPreviewIds = (output: CliIO): Set<string> => {
+  const existing = plainPreviews.get(output);
+  if (existing) return existing;
+  const created = new Set<string>();
+  plainPreviews.set(output, created);
+  return created;
+};
+
 const renderEvent = (output: CliIO, event: AgentEvent): void => {
   const io = {
     ...output,
     stdout: (text: string) => output.stdout(terminalText(text)),
     stderr: (text: string) => output.stderr(terminalText(text)),
   };
+  if (event.type === "run_started" || event.type === "run_finished" || event.type === "error" ||
+      (event.type === "state_changed" && ["cancelled", "failed", "interrupted"].includes(event.status)))
+    plainPreviewIds(output).clear();
   switch (event.type) {
     case "retry_reset":
+      plainPreviewIds(output).clear();
       io.stdout("\n本次响应未完成，已丢弃；正在重试。\n");
       return;
     case "provider_retry":
       io.stdout(`重试 ${event.attempt}/${event.maxAttempts} (${event.reason})\n`);
+      return;
+    case "tool_call_preview": {
+      // Announce a pending tool once. Streaming updates would repeat per chunk.
+      const seen = plainPreviewIds(output);
+      if (seen.has(event.previewId) || seen.size >= 256) return;
+      seen.add(event.previewId);
+      io.stderr(`${previewSummary(event)}\n`);
+      return;
+    }
+    case "tool_preview_reset":
+      plainPreviewIds(output).clear();
       return;
     case "text_delta":
       io.stdout(event.text);
