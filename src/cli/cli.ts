@@ -17,6 +17,7 @@ import {
   settingsFields,
 } from "../shared/schemas";
 import type { AgentEvent, SessionStatus } from "../shared/schemas";
+import { isPrimarySession } from "../shared/sessions";
 
 import { DEFAULT_APPROVAL_MODE, parseApprovalAnswer, parseApprovalMode } from "./approval-policy";
 import { interactive, terminalText } from "./interactive";
@@ -645,7 +646,7 @@ export const runCliWithIO = async (
         const value =
           command === "models"
             ? await service.listModels(controller.signal)
-            : await service.listSessions();
+            : (await service.listSessions()).filter(isPrimarySession);
         if (flag(args, "json")) jsonLine(io, value);
         else readable(io, value);
       }

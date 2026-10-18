@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import type { HarnessService } from "../../shared/contracts";
 import { settingsFields } from "../../shared/schemas";
+import { isPrimarySession } from "../../shared/sessions";
 import type { CliIO } from "../cli";
 import type { PickerSpec } from "../ui-contract";
 import { abortable } from "./abortable";
@@ -121,7 +122,7 @@ export async function pickSession(
       selected,
       placeholder: "Filter sessions",
       emptyLabel: "No sessions available.",
-      items: sessions.map((session) => ({
+      items: sessions.filter(isPrimarySession).map((session) => ({
         value: session.id,
         label: session.title,
         ...(isActiveSession(session.status) ? { active: true } : {}),
