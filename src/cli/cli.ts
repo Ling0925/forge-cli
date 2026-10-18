@@ -18,6 +18,7 @@ import {
 } from "../shared/schemas";
 import type { AgentEvent, SessionStatus } from "../shared/schemas";
 import { isPrimarySession } from "../shared/sessions";
+import { collectPublishedFiles, publishedFileIdSchema, publishedFileResponseSchema } from "../shared/published-files";
 
 import { DEFAULT_APPROVAL_MODE, parseApprovalAnswer, parseApprovalMode } from "./approval-policy";
 import { interactive, terminalText } from "./interactive";
@@ -57,6 +58,8 @@ forge checkpoints diff|restore <session-id> <checkpoint-uuid> [--json]
 forge mcp list [--json] | register <id> <label> <command> [args...] [--disabled]
 forge mcp enable|disable|remove|health <id> [--json]
 forge export <session-id> --output PATH (explicit destination; no implicit path)
+forge files list <session-id> [--json]
+forge files save <session-id> <file-id> --output PATH (never overwrites)
 forge rename <id> <title> | archive <id> [--unarchive]
 forge run [prompt...] --workspace PATH [run options]
 forge run [prompt...] --session UUID [run options]
@@ -536,6 +539,25 @@ export const runCliWithIO = async (
       }
       if (flag(args, "json")) jsonLine(io, value ?? null);
       else readable(io, value ?? null);
+      return 0;
+    }
+    if (command === "files") {
+      const action = argv[1];
+      const args = parseArgs(argv.slice(2), ["output"], ["json"]);
+      const id = parseSessionId(args.positional[0]);
+      let value: unknown;
+      if (action === "list" && args.positional.length === 1 && !stringOption(args, "output")) {
+        value = collectPublishedFiles((await service.getSession(id)).messages);
+      } else if (action === "save" && args.positional.length === 2) {
+        const destination = stringOption(args, "output") ?? invalid("files save requires --output PATH.");
+        if (!service.getPublishedFile) invalid("File attachments are unavailable on this host.");
+        const response = publishedFileResponseSchema.parse(await service.getPublishedFile!(id, publishedFileIdSchema.parse(args.positional[1])));
+        const output = resolve(destination);
+        await writeFile(output, Buffer.from(response.base64, "base64"), { flag: "wx", mode: 0o600 });
+        value = { output, file: response.file };
+      } else return invalid("Use files list <session-id> or files save <session-id> <file-id> --output PATH.");
+      if (flag(args, "json")) jsonLine(io, value);
+      else readable(io, value);
       return 0;
     }
     if (
