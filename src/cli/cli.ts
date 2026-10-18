@@ -277,6 +277,7 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
     case "state_changed":
     case "permission_changed":
     case "approval_requested":
+    case "approval_resolved":
     case "context_usage":
     case "context_compacted":
     // Live reasoning preview is a rich-terminal affordance; plain output stays quiet.
