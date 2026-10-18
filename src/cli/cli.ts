@@ -33,7 +33,8 @@ const help = `Forge — shared-core agent CLI
 
 forge chat [--workspace PATH] [--session UUID] [--approval full-access|auto|manual] [--thinking|--expand-thinking]
 forge config show
-forge config set [--base-url URL] [--model MODEL] [--api-mode chat-completions|responses] [--api-key-stdin]
+forge config set [--base-url URL] [--model MODEL] [--api-mode chat-completions|responses|anthropic] [--api-key-stdin]
+                 [--max-output-tokens NUMBER]
                  [--reasoning-effort default|none|minimal|low|medium|high|xhigh]
                  [--theme system|light|dark] [--permission readonly|workspace|unrestricted]
                  [--timeout-ms NUMBER] [--max-turns NUMBER] [--max-tools NUMBER] [--context-chars NUMBER] [--context-budget-tokens NUMBER|auto]
@@ -381,6 +382,7 @@ export const runCliWithIO = async (
           "base-url",
           "model",
           "api-mode",
+          "max-output-tokens",
           "reasoning-effort",
           "theme",
           "permission",
@@ -457,6 +459,9 @@ export const runCliWithIO = async (
             : {}),
           ...(numeric("max-turns") !== undefined
             ? { maxTurns: numeric("max-turns") }
+            : {}),
+          ...(numeric("max-output-tokens") !== undefined
+            ? { maxOutputTokens: numeric("max-output-tokens") }
             : {}),
           ...(numeric("max-tools") !== undefined
             ? { maxToolCalls: numeric("max-tools") }

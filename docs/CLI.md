@@ -39,6 +39,18 @@ forge config set --lsp-servers '[]'
 
 配置存为公共设置，参数不要放密钥。服务器 ID 与文件扩展不允许重叠。`lsp(operation,path,line?,character?,offset?,limit?)` 支持 symbols、definition、references、hover，路径相对工作区，位置为 1-based UTF-16。只请求语义读取，不接受服务器发起的改文件/执行命令；结果有界、过滤工作区外/敏感位置并脱敏。服务器是外部进程，**语义只读不等于 OS 沙箱**：readonly/plan 拒绝，workspace 每次调用经审批，unrestricted 允许。服务器可以自行访问网络或用户配置，审批应考虑风险。每次调用独立启动并清理，不自动重连或回退；会有初始化开销。
 
+## 模型协议
+
+设置页的“模型来源 → 协议”可选 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages。CLI 示例（`MODEL_ID` 替换为服务支持的模型）：
+
+```sh
+forge config set --api-mode anthropic --base-url https://api.anthropic.com --model MODEL_ID
+forge config set --max-output-tokens 8192
+forge config set --api-key-stdin
+```
+
+最后一条命令从标准输入读取密钥。Anthropic 默认输出上限为 8192 tokens；输出上限是共享设置，切换来源时仍生效。使用 OpenAI 协议时基础地址通常以 `/v1` 结尾。协议由配置明确选择，不按模型名自动切换。
+
 ## 思考强度
 
 ```sh
@@ -47,7 +59,7 @@ forge config show
 forge config set --reasoning-effort default
 ```
 
-此项持久化为共享 provider 配置，后续 CLI 和桌面模型请求使用该设置。可选值为 `default`、`none`、`minimal`、`low`、`medium`、`high`、`xhigh`；未设置或 `default` 时不发送思考强度字段，使用服务端默认值（`none` 则明确发送禁用值）。Chat Completions 发送 `reasoning_effort`，Responses 发送 `reasoning.effort`。不同模型/网关支持的档位不同，不支持时可能拒绝请求；不会自动降档重试。这不是思考过程显示开关，也不是单次 run 参数。
+此项持久化为共享 provider 配置，后续 CLI 和桌面模型请求使用该设置。可选值为 `default`、`none`、`minimal`、`low`、`medium`、`high`、`xhigh`；未设置或 `default` 时不发送思考强度字段，使用服务端默认值（`none` 则明确发送禁用值）。Chat Completions 发送 `reasoning_effort`，Responses 发送 `reasoning.effort`。Anthropic 的非默认档位映射为显式 thinking token 预算，`none` 禁用 thinking；具体预算见 [PROVIDERS.md](PROVIDERS.md)。不同模型/网关支持的档位不同，不支持时可能拒绝请求；不会自动降档重试。这不是思考过程显示开关，也不是单次 run 参数。
 
 ## 上下文预算
 
@@ -125,7 +137,7 @@ forge config set --reasoning-effort default
 
 ### 模型请求超时
 
-- `requestTimeoutMs`（`forge config set --timeout-ms NUMBER`，默认 60000，范围 1000–600000）对 Chat Completions / Responses 生成请求表示**连续无网络数据的等待上限**，不再是整个生成过程的总时限。
+- `requestTimeoutMs`（`forge config set --timeout-ms NUMBER`，默认 60000，范围 1000–600000）对 Chat Completions / Responses / Anthropic 生成请求表示**连续无网络数据的等待上限**，不再是整个生成过程的总时限。
 - 请求开始等待响应头也受该上限约束；收到响应头、非空响应体数据后重新计时。正文、思考、工具参数、SSE 注释心跳和未拼完的事件数据均算网络活动；界面 Thinking 动画本身不算。
 - 持续有数据的慢模型可以运行超过该时间；断流则报 `idle timeout` 并取消读取，用户 Ctrl+C 仍能取消。每个并发请求独立计时，模型目录查询保留原有总时限，工具执行超时不受此改动影响。
 - 如果模型首包慢、网关缓冲输出，或长时间思考但不发送任何数据，客户端仍无法知道远端是否活跃，可显式增大等待值，例如 `forge config set --timeout-ms 180000`。心跳只证明连接活动，不保证生成进展；持续心跳的请求不会仅因总耗时而终止，可手动取消。HTTP 网关自身的超时仍可能发生。

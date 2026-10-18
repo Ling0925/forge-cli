@@ -348,6 +348,14 @@ describe("Forge CLI", () => {
     expect(f.updates).toHaveLength(1);
   });
 
+  it("configures Anthropic and validates the output token limit", async () => {
+    const f = fixture("/unused");
+    expect(await runCliWithIO(["config", "set", "--api-mode", "anthropic", "--max-output-tokens", "4096"], f.service, f.io)).toBe(0);
+    expect(f.updates).toEqual([{ settings: { apiMode: "anthropic", maxOutputTokens: 4096 } }]);
+    expect(await runCliWithIO(["config", "set", "--max-output-tokens", "0"], f.service, f.io)).toBe(1);
+    expect(f.updates).toHaveLength(1);
+  });
+
   it("dispatches context, skills, MCP and checkpoint actions to the shared service", async () => {
     const f = fixture("/unused");
     const calls: string[] = [];
