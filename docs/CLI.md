@@ -22,7 +22,7 @@ forge run --session UUID 'Continue the task'
 - `list_files(path?, recursive?, glob?, offset?, limit?)`：glob 相对查询根目录，支持 `*`、`**`、`?`，按文件名匹配；跨目录查找需 `recursive:true`。分页只覆盖本次有界扫描，不承诺扫描完整大仓库。
 - `search_files(query, path?, glob?, mode?, case_sensitive?, regex?, context_lines?, offset?, limit?)`：默认字面、区分大小写、逐行搜索。`content` 返回命中内容，`files` 只返回命中文件，`count` 返回每个文件的匹配行数（不是出现次数）。regex 是显式、有资源/时间上限的单行正则子集，不支持任意 PCRE 或跨行搜索。`scan_truncated` 与分页 `truncated/next_offset` 分开；二进制、敏感/超大文件仍跳过，搜索不建立写入授权。
 - `read_file` 可传 `if_version`：当前 SHA-256 相同则返回 `unchanged:true`、省略正文；省略结果不建立新的读取授权。默认不传就照常返回正文，尤其模型上下文已压缩、需要真正重读时不要传旧版本。返回读取范围/版本，空文件与未变化明确区分。未新增图片、PDF、Notebook 解码能力。
-- `run_command` 增加 `background:true`，先完成原审批并确认进程启动，再返回 task ID。仍保留最多 120 秒超时；输出超过预览长度不会终止命令。后台不是持久服务器，也不是沙箱。
+- `run_command` 增加 `background:true`，先完成原审批并确认进程启动，再返回 task ID。前台、后台均由模型按预计耗时显式传入必填 `timeout_ms`（整数 1–1800000 毫秒，最长 30 分钟），不再默认 30 秒；输出超过预览长度不会终止命令。后台不是持久服务器，也不是沙箱。
 - 唯一新增后台控制工具 `command_task(action,id?,offset?,limit?,timeout_ms?)`，action 为 list/read/wait/stop；只控制本轮注册表、当前会话拥有的任务。最多 4 个活跃、32 个累计；读取偏移为 UTF-16 字符单位。运行中只返回状态，完成后才发布全量脱敏过的有界输出并分页读取，避免秘密跨输出片段泄露。不是实时日志流。停止会等待进程退出；等待超时不取消。
 - 主代理准备结束时会等待未交付后台结果，追加内部结果供其检查；退出/取消会清理本进程任务。不跨进程恢复后台命令，不自动重试失败任务。想常驻开发服务器需另行明确生命周期需求。
 
@@ -193,7 +193,7 @@ CLI 实时与恢复历史优先消费保存的 patch，不读取当前文件重�
 
 默认 harness 为原生文件编辑配置 checkpoint store，可通过 checkpoint 恢复；自定义工具注册器未配置 store 时不能承诺恢复。有限的 before/after 预览不等于备份。命令副作用不纳入 checkpoint。这是工具选择指引，不是 shell 写入的运行时检测器，更不是 OS 沙箱；不能声称已强制识别/拦截任意脚本写文件。
 
-`run_command` 运维契约：显式 argv（允许显式 shell），cwd 经路径守卫；最小环境不继承凭据或代理环境变量，但 HOME 使用宿主用户目录（`os.homedir()`，优先尊重宿主 HOME），不再重定向到工作区。因此命令可使用本机用户配置和认证，也可能改动用户目录；命令审批仍须考虑这些副作用。TMPDIR/TMP/TEMP 仍指向工作区，PATH 包含系统工具、宿主 Node 目录及已有的绝对调用方 PATH 目录。超时默认 30 秒、最大 120 秒；stdout/stderr 写入私有临时日志，完成后整体脱敏再分页。每个流的返回预览最多 12000 个字符，编码结果仍不超过 128 KiB；`preview_truncated` 只表示还有内容，不算命令失败。用 `read_command_output(id, stream?, offset?, limit?)` 和结果中的 `output_id` 取回剩余日志，偏移按 UTF-16 字符计数。日志仅在本轮工具实例存活期间有效，结束时清理；如需长期保留，在结束前另存脱敏内容。采集配额为单命令 16 MiB、单实例 128 MiB；达到配额或日志写入失败只停止采集，不杀进程，也不把成功退出的命令算作失败。此时 `truncated:true` 明确表示日志不完整，为避免泄露被截断的秘密，不展示部分原始日志。超时/取消等待进程实际关闭。不因压缩面向模型的工具描述而放宽上述行为。
+`run_command` 运维契约：显式 argv（允许显式 shell），cwd 经路径守卫；最小环境不继承凭据或代理环境变量，但 HOME 使用宿主用户目录（`os.homedir()`，优先尊重宿主 HOME），不再重定向到工作区。因此命令可使用本机用户配置和认证，也可能改动用户目录；命令审批仍须考虑这些副作用。TMPDIR/TMP/TEMP 仍指向工作区，PATH 包含系统工具、宿主 Node 目录及已有的绝对调用方 PATH 目录。`timeout_ms` 必须由模型按预计耗时显式传入，取值为 1–1800000 毫秒（最长 30 分钟），没有默认值；构建、测试应预留足够时间。`command_task.wait` 的 `timeout_ms` 只决定单次等待多久（默认 30 秒、最多 120 秒），不会截断命令的执行时限；stdout/stderr 写入私有临时日志，完成后整体脱敏再分页。每个流的返回预览最多 12000 个字符，编码结果仍不超过 128 KiB；`preview_truncated` 只表示还有内容，不算命令失败。用 `read_command_output(id, stream?, offset?, limit?)` 和结果中的 `output_id` 取回剩余日志，偏移按 UTF-16 字符计数。日志仅在本轮工具实例存活期间有效，结束时清理；如需长期保留，在结束前另存脱敏内容。采集配额为单命令 16 MiB、单实例 128 MiB；达到配额或日志写入失败只停止采集，不杀进程，也不把成功退出的命令算作失败。此时 `truncated:true` 明确表示日志不完整，为避免泄露被截断的秘密，不展示部分原始日志。超时/取消等待进程实际关闭。不因压缩面向模型的工具描述而放宽上述行为。
 
 ### 底栏会话名称
 
