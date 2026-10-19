@@ -1,4 +1,5 @@
 import type { AgentEvent, ApprovalRequest } from "../shared/schemas";
+import { webSearchStatus } from "../shared/web-search-display";
 import type { CliIO } from "./cli";
 import { createEventRenderer, previewSummary } from "./render/events";
 import { renderRichLine } from "./render/rich";
@@ -79,6 +80,7 @@ export class LiveRun {
       this.announced.clear();
     }
     if (this.ui) return;
+    if (event.type === "web_search") this.io.stderr(`${webSearchStatus(event.search)}\n`);
     if (event.type === "tool_call_preview") {
       // One line per pending tool, not one per argument chunk. The rich tail
       // owns this row when a terminal UI is attached.

@@ -17,6 +17,7 @@ import {
   settingsFields,
 } from "../shared/schemas";
 import type { AgentEvent, SessionStatus } from "../shared/schemas";
+import { webSearchDetails, webSearchStatus } from "../shared/web-search-display";
 import { isPrimarySession } from "../shared/sessions";
 import { collectPublishedFiles, publishedFileIdSchema, publishedFileResponseSchema } from "../shared/published-files";
 
@@ -36,7 +37,7 @@ const help = `Forge — shared-core agent CLI
 forge chat [--workspace PATH] [--session UUID] [--approval full-access|auto|manual] [--thinking|--expand-thinking]
 forge config show
 forge config set [--base-url URL] [--model MODEL] [--api-mode chat-completions|responses|anthropic] [--api-key-stdin]
-                 [--max-output-tokens NUMBER]
+                 [--max-output-tokens NUMBER] [--web-search disabled|cached|live] (Responses only; default disabled)
                  [--reasoning-effort default|none|minimal|low|medium|high|xhigh|max]
                  [--theme system|light|dark] [--permission readonly|workspace|unrestricted]
                  [--timeout-ms NUMBER] [--max-turns NUMBER] [--max-tools NUMBER] [--context-chars NUMBER] [--context-budget-tokens NUMBER|auto]
@@ -245,6 +246,12 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
     case "tool_preview_reset":
       plainPreviewIds(output).clear();
       return;
+    case "web_search":
+      io.stderr(`${webSearchStatus(event.search)}\n`);
+      return;
+    case "web_search_result":
+      io.stdout(webSearchDetails(event));
+      return;
     case "text_delta":
       io.stdout(event.text);
       return;
@@ -388,6 +395,7 @@ export const runCliWithIO = async (
           "base-url",
           "model",
           "api-mode",
+          "web-search",
           "max-output-tokens",
           "reasoning-effort",
           "theme",
@@ -446,6 +454,9 @@ export const runCliWithIO = async (
             : {}),
           ...(stringOption(args, "api-mode") !== undefined
             ? { apiMode: stringOption(args, "api-mode") }
+            : {}),
+          ...(stringOption(args, "web-search") !== undefined
+            ? { webSearch: stringOption(args, "web-search") }
             : {}),
           ...(stringOption(args, "reasoning-effort") !== undefined
             ? { reasoningEffort: stringOption(args, "reasoning-effort") }

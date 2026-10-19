@@ -329,6 +329,16 @@ describe("Forge CLI", () => {
     expect(f.updates).toHaveLength(8);
   });
 
+  it("configures explicit native search modes and rejects invalid values", async () => {
+    const f = fixture("/unused");
+    for (const webSearch of ["disabled", "cached", "live"]) {
+      expect(await runCliWithIO(["config", "set", "--web-search", webSearch], f.service, f.io)).toBe(0);
+      expect(f.updates.at(-1)).toEqual({ settings: { webSearch } });
+    }
+    expect(await runCliWithIO(["config", "set", "--web-search", "bing"], f.service, f.io)).toBe(1);
+    expect(f.updates).toHaveLength(3);
+  });
+
   it("forwards valid API mode and rejects invalid mode before updating settings", async () => {
     const f = fixture("/unused");
     expect(

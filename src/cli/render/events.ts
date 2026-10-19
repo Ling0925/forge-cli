@@ -1,7 +1,8 @@
 import type { AgentEvent, ApprovalRequest, TaskPlan, ToolCall } from "../../shared/schemas";
 import type { RenderUpdate, RichLine, RunStatus } from "../ui-contract";
 import { estimateTokens } from "../../shared/context-usage";
-import { MarkdownStream } from "./markdown";
+import { MarkdownStream, markdownLines } from "./markdown";
+import { webSearchDetails, webSearchStatus } from "../../shared/web-search-display";
 import { uiSymbols } from "../symbols";
 import { wrapRichLines } from "./rich";
 import { sanitizeText } from "./sanitize";
@@ -225,6 +226,10 @@ export const createEventRenderer = (
           running = true;
           clearPreviews();
           return update(flushText(), [], live("thinking"));
+        case "web_search":
+          return update([], messageTail, live(webSearchStatus(event.search)));
+        case "web_search_result":
+          return update([...flushText(), ...markdownLines(webSearchDetails(event), options.width?.() ?? 80)], [], live("thinking"));
         case "reasoning_delta": {
           running = true;
           const appended = updateReasoning(event.text);
