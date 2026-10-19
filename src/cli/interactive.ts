@@ -96,6 +96,11 @@ export async function interactive(
     appendLines(value ? tools.detail(Number(value), ui?.columns ?? 80) : tools.list(ui?.columns ?? 80));
   };
   let model = session?.model ?? settings.model;
+  /**
+   * The source follows the chosen model. This only holds a source the user
+   * picked in this window before any run pinned it to a session.
+   */
+  let pickedSourceId: string | undefined;
   let contextDisplay = replayContextDisplay(session?.events ?? []);
   let usageModel = model;
   let titleRefresh: ReturnType<typeof setTimeout> | undefined;
@@ -105,7 +110,7 @@ export async function interactive(
   const refreshContext = (): void => {
     sessionCache.ensureSession(session);
     if (usageModel !== model) { contextDisplay = emptyContextDisplay(); usageModel = model; }
-    const sourceId = session?.providerSourceId ?? settings.activeSourceId;
+    const sourceId = session?.providerSourceId ?? pickedSourceId ?? settings.activeSourceId;
     const windowKey = JSON.stringify([sourceId ?? "legacy", model]);
     const contextUsage = contextDisplay.context;
     const windowTokens = resolveContextWindow(model, settings, windows.get(windowKey));
@@ -485,6 +490,12 @@ export async function interactive(
             case "/model":
               if (value) {
                 model = settingsFields.model.parse(value);
+                // A typed exact id also decides the source: resolve it from the
+                // stored catalogs so no separate switch is needed.
+                const owners = (settings.providerSources ?? []).filter(
+                  (source) => source.model === value,
+                );
+                if (owners.length === 1) pickedSourceId = owners[0]?.id;
                 safe.stdout(`Model: ${model}\n`);
                 refreshContext();
                 if (ui) await changeReasoning();
@@ -501,7 +512,8 @@ export async function interactive(
                     session?.providerSourceId,
                   );
                   if (chosen !== null && !active.signal.aborted) {
-                    model = chosen;
+                    model = chosen.model;
+                    pickedSourceId = chosen.sourceId;
                     safe.stdout(`Model: ${model}\n`);
                     refreshContext();
                     if (ui) await changeReasoning();
@@ -685,7 +697,13 @@ export async function interactive(
         }
 
         if (lifetime.signal.aborted) break;
-        session ??= await service.createSession(createSessionInputSchema.parse({ workspace, model }));
+        // Picked model + source travel together; a new session pins that pair.
+        const pinnedInput = {
+          workspace,
+          model,
+          ...(pickedSourceId ? { providerSourceId: pickedSourceId } : {}),
+        };
+        session ??= await service.createSession(createSessionInputSchema.parse(pinnedInput));
         if (lifetime.signal.aborted) break;
         clearResumedWatch();
         refreshContext();
@@ -704,6 +722,7 @@ export async function interactive(
             model,
             permission,
             mode,
+            ...(pickedSourceId ? { providerSourceId: pickedSourceId } : {}),
           }),
           (event) => {
             sessionCache.push(event);
