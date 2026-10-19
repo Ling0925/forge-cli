@@ -40,7 +40,7 @@ forge config set [--base-url URL] [--model MODEL] [--api-mode chat-completions|r
                  [--max-output-tokens NUMBER] [--web-search disabled|cached|live] (Responses only; default disabled)
                  [--reasoning-effort default|none|minimal|low|medium|high|xhigh|max]
                  [--theme system|light|dark] [--permission readonly|workspace|unrestricted]
-                 [--timeout-ms NUMBER] [--max-turns NUMBER] [--max-tools NUMBER] [--context-chars NUMBER] [--context-budget-tokens NUMBER|auto]
+                 [--timeout-ms NUMBER] [--max-tools NUMBER] [--context-chars NUMBER] [--context-budget-tokens NUMBER|auto]
                   [--context-tokens NUMBER|auto] (window for --model or current model)
                  [--browser-origins ORIGIN[,ORIGIN...]] [--browser-executable PATH]
                  [--lsp-servers JSON] (array of {id,command,args,extensions}; [] disables)
@@ -49,6 +49,7 @@ optional port; no credentials, path, query, fragment or wildcard; at most 32).
 An empty value clears the list; no origins disables browser tools (default).
 --browser-executable selects a local Chromium/Chrome executable; an empty value
 uses the Playwright default or FORGE_BROWSER_EXECUTABLE.
+--max-turns is accepted for compatibility only; it does not limit execution steps.
 forge models [--json]
 forge sessions [--json]
 forge show <id> [--json]
@@ -268,7 +269,7 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
       return;
     case "run_finished":
       io.stdout(
-        `\nRun ${event.status}; turns=${event.turns}, tools=${event.toolCalls}\n`,
+        `\nRun ${event.status}; ${event.turn === undefined ? "" : `turn=${event.turn}, `}steps=${event.steps ?? event.turns}, tools=${event.toolCalls}${event.retries === undefined ? "" : `, retries=${event.retries}`}\n`,
       );
       return;
     case "run_started":
@@ -285,6 +286,8 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
       );
       return;
     case "title_changed":
+    case "step_started":
+    case "step_finished":
     case "state_changed":
     case "permission_changed":
     case "approval_requested":
@@ -509,6 +512,8 @@ export const runCliWithIO = async (
             "",
           )
         : undefined;
+      if (settings.settings?.maxTurns !== undefined)
+        io.stderr("--max-turns is deprecated and does not limit execution. Use --max-tools for the tool attempt budget.\n");
       const input = configureInputSchema.parse({
         ...settings,
         ...(apiKey !== undefined ? { apiKey } : {}),

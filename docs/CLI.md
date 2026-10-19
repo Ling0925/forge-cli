@@ -15,6 +15,14 @@ forge run --session UUID 'Continue the task'
 
 使用 `--prompt-stdin` 明确从 stdin 读取提示词。run 的 `--json` 输出 version 1 JSONL event/result envelope，不是交互界面。具体选项以 `forge --help` 为准。
 
+## 轮次与执行步数
+
+一次提问启动一轮运行；一次模型生成连同它要求执行的工具算一步。一轮可以有多步，一步可以有多个工具调用。中途补充要求仍属于当前轮，请求重试不增加步数。子会话单独计数。
+
+终端状态显示当前轮和步，结束摘要分别显示步数、工具调用数和请求重试数。JSONL 新增 `step_started` / `step_finished`，事件通过 `turn` / `step` 关联；`run_finished.steps` 是本轮已结束步数，失败和取消也计入。旧字段 `run_finished.turns` 保留原有模型迭代含义。旧记录没有重试统计时不补造为零。
+
+`--max-turns` 仅保留配置兼容，不再限制执行，也不再出现在 Web 设置表单中。需要限制工具尝试次数时使用 `forge config set --max-tools 100`。
+
 ## 文件搜索、条件读取与后台命令
 
 工具名不重复扩张：文件名 glob 合并到 `list_files`，内容搜索增强现有 `search_files`，条件读取仍为 `read_file`；不另加 Grep/Glob/Read 别名。
