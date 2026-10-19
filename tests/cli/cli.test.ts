@@ -306,6 +306,7 @@ describe("Forge CLI", () => {
       "medium",
       "high",
       "xhigh",
+      "max",
     ]) {
       expect(
         await runCliWithIO(
@@ -325,7 +326,7 @@ describe("Forge CLI", () => {
         f.io,
       ),
     ).toBe(1);
-    expect(f.updates).toHaveLength(7);
+    expect(f.updates).toHaveLength(8);
   });
 
   it("forwards valid API mode and rejects invalid mode before updating settings", async () => {

@@ -693,6 +693,7 @@ it("Shift+Tab callback shares /mode state without changing active-run approval s
       "medium",
       "high",
       "xhigh",
+      "max",
     ]);
     expect(updateSettings.mock.calls).toEqual([
       [{ settings: { reasoningEffort: "high" } }],

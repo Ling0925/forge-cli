@@ -37,7 +37,7 @@ forge chat [--workspace PATH] [--session UUID] [--approval full-access|auto|manu
 forge config show
 forge config set [--base-url URL] [--model MODEL] [--api-mode chat-completions|responses|anthropic] [--api-key-stdin]
                  [--max-output-tokens NUMBER]
-                 [--reasoning-effort default|none|minimal|low|medium|high|xhigh]
+                 [--reasoning-effort default|none|minimal|low|medium|high|xhigh|max]
                  [--theme system|light|dark] [--permission readonly|workspace|unrestricted]
                  [--timeout-ms NUMBER] [--max-turns NUMBER] [--max-tools NUMBER] [--context-chars NUMBER] [--context-budget-tokens NUMBER|auto]
                   [--context-tokens NUMBER|auto] (window for --model or current model)
