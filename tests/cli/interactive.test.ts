@@ -475,6 +475,20 @@ describe("rich integration adapters", () => {
     }
   });
 
+  it("updates the footer title at run start and on generation before run completion", async () => {
+    const host = richHost(["hello", "/quit"], []);
+    const baseEvent = { sessionId: id, timestamp: new Date().toISOString() };
+    const base = service(async (_input, sink) => {
+      sink({ ...baseEvent, type: "run_started", model: snapshot.model, permission: "workspace", title: "hello" });
+      expect(host.contexts.at(-1)?.sessionTitle).toBe("hello");
+      sink({ ...baseEvent, type: "title_changed", title: "Greeting task" });
+      expect(host.contexts.at(-1)?.sessionTitle).toBe("Greeting task");
+      return { ...snapshot, title: "Greeting task", titleSource: "auto" };
+    });
+    expect(await runCliWithIO(["chat"], base, host.io)).toBe(0);
+    expect(host.err).toEqual([]);
+  });
+
   it("updates the footer title after creation, rename, resume, fork and run completion", async () => {
     const host = richHost(["/new", "/rename Renamed", `/resume ${id}`, "/fork", "hello", "/quit"], []);
     const base = service(async () => ({ ...snapshot, title: "Completed task" }));

@@ -380,6 +380,7 @@ export const createEventRenderer = (
           return update([], messageTail, currentStatus);
         }
         case "approval_resolved":
+        case "title_changed":
           return { append: [], tail };
         case "permission_changed":
         case "context_compacted":

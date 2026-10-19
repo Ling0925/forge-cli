@@ -277,6 +277,7 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
         `\nChild ${event.childSessionId}: ${event.status}; model=${event.model}\n${event.summary}\n`,
       );
       return;
+    case "title_changed":
     case "state_changed":
     case "permission_changed":
     case "approval_requested":

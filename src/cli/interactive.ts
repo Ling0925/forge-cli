@@ -135,8 +135,8 @@ export async function interactive(
   const refreshAutoTitle = (): void => {
     if (titleRefresh) clearTimeout(titleRefresh);
     const completed = session;
-    if (!ui || completed?.status !== "completed" || completed.titleSource !== "default") return;
-    // Automatic naming is persisted asynchronously after run() returns (2s deadline).
+    if (!ui || !completed || (completed.titleSource !== "default" && completed.titleSource !== "auto")) return;
+    // A fast run can return before first-message naming finishes (2s deadline).
     // Refresh metadata once without delaying input or replacing a newer snapshot.
     titleRefresh = setTimeout(() => {
       if (titleRefreshClosed || lifetime.signal.aborted || session !== completed || runInProgress) return;
@@ -709,7 +709,9 @@ export async function interactive(
             sessionCache.push(event);
             if (event.sessionId === requireSession().id) {
               contextDisplay = advanceContextDisplay(contextDisplay, event);
-              if (event.type === "context_usage" || event.type === "run_finished" || event.type === "context_compacted" || event.type === "run_started") refreshContext();
+              if ((event.type === "run_started" || event.type === "title_changed") && event.title)
+                session = { ...requireSession(), title: event.title };
+              if (event.type === "context_usage" || event.type === "run_finished" || event.type === "context_compacted" || event.type === "run_started" || event.type === "title_changed") refreshContext();
             }
             if (event.type === "plan_updated" && event.sessionId === requireSession().id) ui?.setPlan?.(event.plan);
             live?.event(event);
