@@ -53,6 +53,7 @@ function builtinDetail(name: string, r: Record<string, unknown>, value: unknown)
       if (r.mode === "count") return `${matches.length} file counts · ${matches.reduce<number>((sum, item) => sum + (typeof object(item)?.count === "number" ? Number(object(item)?.count) : 0), 0)} matching lines on this page`;
       return `${matches.length} matches · ${matches.slice(0, 2).map(item => { const m = object(item); return `${scalar(m?.path)}:${scalar(m?.line)}`; }).join(", ")}`;
     }
+    case "append_file":
     case "write_file": return r.unchanged === true ? "No changes · content already matches" : r.written === true ? "File written" : "Write result unavailable";
     case "edit_file": return r.unchanged === true ? "No changes · replacement already matches" : r.edited === true ? `File edited · ${scalar(r.replacements)} replacements` : "Edit result unavailable";
     case "make_directory": return r.created === true ? "Directory ready" : "Directory result unavailable";
@@ -90,6 +91,7 @@ function builtinDetail(name: string, r: Record<string, unknown>, value: unknown)
     case "project_context": return `${array(r.sources).length} instruction sources · ${paths(array(r.sources))}`;
     case "load_skill": return `${scalar(r.name) || scalar(r.id)} · ${scalar(r.sourceDirectory)}`;
     case "list_models": return `${array(r.ids).length} models / ${scalar(r.total)} total · ${array(r.ids).slice(0, 2).map(scalar).join(", ")}`;
+    case "create_plan":
     case "update_plan": {
       const steps = array(r.steps);
       const active = steps.find(step => object(step)?.status === "in_progress");

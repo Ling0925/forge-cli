@@ -72,7 +72,7 @@ forge config set --reasoning-effort default
 
 ### 工具上下文瘦身
 
-发给模型的请求副本会省略成功 `write_file/edit_file` 结果中的 before/after 文件预览，只保留执行结果与路径/变更类型，并明确提示省略。完整消息、工具事件、Diff 与 checkpoint 不修改；旧会话恢复后也适用。
+发给模型的请求副本会省略成功 `write_file/append_file/edit_file` 结果中的文件预览和 diff patch，只保留执行结果与路径/变更类型，并明确提示省略。完整消息、工具事件、Diff 与 checkpoint 不修改；旧会话恢复后也适用。
 
 缓存优先：已撤销“最近 8 条全文、更旧结果动态摘录”的滑动策略。普通工具结果正文不随年龄改变；成功编辑的预览从首次发送起就固定省略。正常追加消息时，此投影保持历史前缀逐字节稳定；用户消息、助手调用参数及 Responses continuation 不改。摘要请求也使用同一固定精简视图。只有达到既有压缩阈值或显式 /compact 时才集中生成并保存摘要；极端超限仍有既有预算兜底。升级恢复旧会话时投影切换可能造成一次缓存失效，实际命中还受服务商、TTL、模型和工具/指令变更影响，不能承诺缓存命中率或账单降幅。衡量成本应结合 provider 实报输入、cached tokens、未缓存输入与延迟，不只看上下文总量。
 
@@ -175,17 +175,19 @@ env -u NO_COLOR TERM=xterm-256color node scripts/qa-cli-terminal.mjs --cli dist/
 
 ### 文件编辑工具选择与命令边界
 
-大文件建议分块生成，而不是失败后重新输出整份文件。原生读写和 checkpoint 共同支持最多 16 MiB 的文件；单次生成仍受模型和工具参数限制，建议每块不超过 16000 字符。`write_file` 的默认替换行为不变；追加时必须传入预期 UTF-8 字节数，防止重复执行造成重复内容：
+大文件建议分块生成，而不是失败后重新输出整份文件。原生读写和 checkpoint 共同支持最多 16 MiB 的文件；单次生成仍受模型和工具参数限制，建议每块不超过 16000 字符。`write_file` 只接收 `path`、`content`，用于创建或整体替换。追加使用 `append_file`，必须传入预期 UTF-8 字节数，防止重复执行造成重复内容。以下是 `append_file` 的参数：
 
 ```json
-{"path":"large.ts","content":"第一块\n","append":true,"expected_bytes":0}
+{"path":"large.ts","content":"第一块\n","expected_bytes":0}
 ```
 
-下一块把 `expected_bytes` 设为上一条成功结果的 `size_bytes`。大小不符时原文件不变，先读取确认状态；不要原样重试。现有文件仍需首次读取，局部修改优先使用 `edit_file`。相同工具、相同参数和相同错误累计三次后，本轮运行停止并保留失败证据；改过参数可以继续，成功修改目标文件会重置该目标的失败记录。
+下一块把 `expected_bytes` 设为上一条成功结果的 `size_bytes`。大小不符时原文件不变，先读取确认状态；不要原样重试。旧的 `write_file(append:true, expected_bytes)` 调用仍兼容，但不再对模型公开这组参数。局部修改优先使用 `edit_file`。
+
+参数校验失败会返回字段与约束，例如 `limit: maximum 200`，不回显提交的内容。同一工具、目标和校验错误累计三次后，本轮运行停止并保留失败证据；只改文件内容等无关参数不会重置计数。其他错误仍按相同参数计数。成功纠正调用或成功修改目标文件会清除相应失败记录。
 
 共享核心提示词明确：新建/整体替换文件用 `write_file`，局部字面替换用 `edit_file`，缺少父目录时用 `make_directory`。不得用 Node/Python/sed/cat、重定向或脚本替代原生文件编辑工具。`run_command` 保留构建、测试、git、包管理等用途；正常构建生成产物不等于借命令改写源文件。
 
-文件工具实行运行时“先读后写”：覆盖或编辑已有文件之前，必须由同一会话成功调用 `read_file` 读取当前版本。内部读取、`search_files`、越界空页不算；至少返回一行的分页读取可以建立读取记录，但模型仍须读完与修改有关的页面。文件被外部改动后须重新读取；本会话成功写入会更新已知版本，不强制读回自己刚写的内容。并发排队时仍检查版本，避免后到的写入覆盖未见的新版本；新建文件无需先读不存在的目标。读取记录仅在当前工具实例内有效，重启后须重读，并发会话不能互相授权。`read_file` 额外返回 SHA-256 `version`、`size_bytes` 和 `lines_returned`。内容完全相同的 write/edit 返回 `unchanged: true`，不写磁盘、不创建 checkpoint，也不输出伪 diff。
+文件工具实行运行时“先读后写”：覆盖、追加或编辑已有文件之前，必须由同一会话在当前运行中成功调用 `read_file` 读取当前版本。内部读取、`search_files`、越界空页和仅返回 `unchanged:true` 的条件读取不算；至少返回一行的分页读取可以建立读取记录，但模型仍须读完与修改有关的页面。文件被外部改动后须重新读取；本轮成功写入会更新已知版本，不强制读回自己刚写的内容。并发排队时仍检查版本，避免后到的写入覆盖未见的新版本；新建文件无需先读不存在的目标。读取记录仅在当前工具实例内有效，下一轮运行或重启后须重读，并发会话不能互相授权。`read_file` 额外返回 SHA-256 `version`、`size_bytes` 和 `lines_returned`。内容完全相同的 write/edit 返回 `unchanged: true`，不写磁盘、不创建 checkpoint，也不输出伪 diff。
 
 原生 write/edit 在写入前使用完整 before/after 计算结构化 `patch`，不是工作区累计的 `git diff`。共享层复用有预算的 Myers 搜索，保留原始 Tab、CR 与末尾换行，邻近修改合并并保留 3 行上下文；统计只计完整编辑脚本的真实插入/删除。结果保存最多 400 行、64 个 hunk、24 KiB 编码预算的有序 patch 前缀，单行最多 8192 字符；超限不截半行、不移动后方新增行。`patch.status` 区分 complete / truncated / unavailable，保存截断仍保留精确总增删数与省略计数，计算超预算则不报伪造的 0。原有 before/after 各 8192 字符预览仍保留，其 truncated 不影响新 patch。因此大文件后部的小修改也可显示真实 diff。
 

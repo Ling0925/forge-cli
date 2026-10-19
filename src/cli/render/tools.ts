@@ -226,7 +226,7 @@ export const toolSummaryLines = (
   const label = failed ? "failed" : "done";
   const symbols = uiSymbols();
   const exit = parsed.exitCode === null ? "" : ` ${symbols.separator} exit ${parsed.exitCode}`;
-  const changes = call && ["edit_file", "write_file"].includes(call.function.name) ? result.changes ?? [] : [];
+  const changes = call && ["edit_file", "write_file", "append_file"].includes(call.function.name) ? result.changes ?? [] : [];
   let statBadge = "";
   if (changes.length > 0) {
     let totalAdded = 0;
