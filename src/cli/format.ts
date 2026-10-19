@@ -169,7 +169,8 @@ export const planLines = (
   width: number,
 ): readonly RichLine[] => {
   if (!plan) return [[span("No active execution plan.", "muted")]];
-  const lines: RichLine[] = [[span("Execution Plan", "accent")]];
+  const lines: RichLine[] = [[span(plan.title ? `Execution Plan: ${sanitizeText(plan.title)}` : "Execution Plan", "accent")]];
+  if (plan.id) lines.push([span(`ID: ${sanitizeText(plan.id)}`, "muted")]);
   if (plan.explanation)
     lines.push([
       span(

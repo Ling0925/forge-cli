@@ -1,5 +1,6 @@
 import { projectSummary } from "../core/context";
 import { createSlashActions } from "../shared/slash-actions";
+import { sessionPlans } from "../shared/plans";
 import { parseSlashCommand } from "../shared/slash-commands";
 import type { HarnessService } from "../shared/contracts";
 import { budgetUsage, measureContext, resolveContextBudget, resolveContextWindow } from "../shared/context-usage";
@@ -571,10 +572,13 @@ export async function interactive(
               } else safe.stdout(`Mode: ${mode}\n`);
               break;
             case "/plan": {
-              const currentPlan = await actions.plan(requireSession().id);
-              ui?.setPlan?.(currentPlan);
-              if (ui) ui.append(planLines(currentPlan, ui.columns));
-              else styled(`${formatPlan(currentPlan, theme)}\n`);
+              const snapshot = await actions.export(requireSession().id);
+              const plans = sessionPlans(snapshot);
+              ui?.setPlan?.(snapshot.plan ?? null);
+              for (const plan of plans.length ? plans : [null]) {
+                if (ui) ui.append(planLines(plan, ui.columns));
+                else styled(`${formatPlan(plan, theme)}\n`);
+              }
               break;
             }
             case "/sessions": {

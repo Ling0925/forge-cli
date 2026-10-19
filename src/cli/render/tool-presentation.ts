@@ -93,7 +93,7 @@ function builtinDetail(name: string, r: Record<string, unknown>, value: unknown)
     case "update_plan": {
       const steps = array(r.steps);
       const active = steps.find(step => object(step)?.status === "in_progress");
-      return `Plan ${steps.filter(step => object(step)?.status === "completed").length}/${steps.length}${active ? ` · ${scalar(object(active)?.step)}` : ""}`;
+      return `Plan ${steps.filter(step => object(step)?.status === "completed").length}/${steps.length}${scalar(r.title) ? ` · ${scalar(r.title)}` : ""}${active ? ` · ${scalar(object(active)?.step)}` : ""}`;
     }
     case "spawn_agent": return `Agent ${scalar(r.childSessionId)} · ${scalar(r.model)}`;
     case "list_agents": return agentOverview(Array.isArray(value) ? value : array(r.agents), typeof r.total === "number" ? r.total : undefined);

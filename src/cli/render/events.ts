@@ -416,7 +416,7 @@ export const createEventRenderer = (
 };
 
 const planEventLines = (plan: TaskPlan): RichLine[] => {
-  const rows: RichLine[] = [[{ text: "Plan", tone: "accent" }]];
+  const rows: RichLine[] = [[{ text: plan.title ? `Plan: ${plan.title}` : "Plan", tone: "accent" }]];
   if (plan.explanation) rows.push([{ text: plan.explanation, tone: "muted" }]);
   for (const [index, step] of plan.steps.entries()) {
     const tone =
