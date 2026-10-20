@@ -35,6 +35,9 @@ const promptLimit = 1_000_000;
 const keyLimit = 16_386;
 const help = `Forge — shared-core agent CLI
 
+forge host --socket PATH (optional headless shared host)
+forge attach --socket PATH <command> (connect only; see forge attach --help)
+
 forge chat [--workspace PATH] [--session UUID] [--approval full-access|auto|manual] [--thinking|--expand-thinking]
 forge config show
 forge hooks show | set <json-file> | clear
