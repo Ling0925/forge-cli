@@ -115,6 +115,9 @@ export async function runAttach(
     : undefined;
   const client = await connectLocalHost({
     socketPath,
+    // Control requests may wait through long runs. Consume unrelated events
+    // from the handshake onward instead of filling the bounded watch backlog.
+    ...(rpc ? { onEvent: () => {} } : {}),
     ...(hostId ? { hostId } : {}),
     ...(cursor !== undefined ? { cursor } : {}),
   });

@@ -95,3 +95,19 @@ unverified. The native suite is committed unchanged and must be run in an allowe
 Linux environment before treating issue #4's end-to-end acceptance as complete.
 The draft PR intentionally does not close that issue. No desktop packaging,
 installation, real provider call or device enrollment is part of this validation.
+
+### Delayed control replies and event consumption
+
+RPC-only attach commands install an event consumer before handshake/replay and
+discard events they do not display. A delayed steering acknowledgment or
+`cancelRun(wait: true)` can therefore outlive unrelated host output without
+filling the client's watch backlog. This does not add retries or cancel work on
+disconnect. Watch clients retain their bounded buffering, cursor recovery and
+slow-consumer failure behavior.
+
+The shared protocol suite includes delayed steer/cancel cases exceeding either
+2,048 events or 4 MiB, plus a bounded unconsumed watcher case. Both in-memory and
+native Unix-socket test entry points use those cases. In the current sandbox,
+all native cases still stop at `listen EPERM`; memory/TCP service checks are not
+claims of validated native desktop + CLI + LAN integration. That acceptance
+remains pending a permitted Unix-socket environment.
