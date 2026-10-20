@@ -41,6 +41,10 @@ const promptLimit = 1_000_000;
 const keyLimit = 16_386;
 const help = `Forge — shared-core agent CLI
 
+forge devices pair NAME | list | revoke DEVICE_ID (local LAN authorization)
+forge host --socket PATH (optional headless shared host)
+forge attach --socket PATH <command> (connect only; see forge attach --help)
+
 forge chat [--workspace PATH] [--session UUID] [--approval full-access|auto|manual] [--thinking|--expand-thinking]
 forge config show
 forge hooks show | set <json-file> | clear
@@ -48,7 +52,7 @@ forge config set [--base-url URL] [--model MODEL] [--api-mode chat-completions|r
                  [--max-output-tokens NUMBER] [--web-search disabled|cached|live] (Responses only; default disabled)
                  [--reasoning-effort default|none|minimal|low|medium|high|xhigh|max]
                  [--theme system|light|dark] [--permission readonly|workspace|unrestricted]
-                 [--timeout-ms NUMBER] [--max-tools NUMBER] [--context-chars NUMBER] [--context-budget-tokens NUMBER|auto]
+                 [--timeout-ms NUMBER] [--max-tools NUMBER] [--max-root-tools NUMBER] [--root-timeout-ms NUMBER] [--context-chars NUMBER] [--context-budget-tokens NUMBER|auto]
                   [--context-tokens NUMBER|auto] (window for --model or current model)
                  [--browser-origins ORIGIN[,ORIGIN...]] [--browser-executable PATH]
                  [--lsp-servers JSON] (array of {id,command,args,extensions}; [] disables)
@@ -449,6 +453,8 @@ export const runCliWithIO = async (
           "timeout-ms",
           "max-turns",
           "max-tools",
+          "max-root-tools",
+          "root-timeout-ms",
           "context-chars",
           "context-tokens",
           "context-budget-tokens",
@@ -529,6 +535,8 @@ export const runCliWithIO = async (
           ...(numeric("max-tools") !== undefined
             ? { maxToolCalls: numeric("max-tools") }
             : {}),
+          ...(numeric("max-root-tools") !== undefined ? { maxRootToolCalls: numeric("max-root-tools") } : {}),
+          ...(numeric("root-timeout-ms") !== undefined ? { rootTimeoutMs: numeric("root-timeout-ms") } : {}),
           ...(tokenWindow !== undefined ? { modelContextWindows: { ...current?.modelContextWindows, [targetModel!]: tokenWindow === "auto" ? null : Number(tokenWindow) } } : {}),
           ...(tokenBudget !== undefined ? { contextBudgetTokens: tokenBudget === "auto" ? null : Number(tokenBudget) } : {}),
           ...(numeric("context-chars") !== undefined
