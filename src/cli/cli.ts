@@ -52,7 +52,7 @@ An empty value clears the list; no origins disables browser tools (default).
 --browser-executable selects a local Chromium/Chrome executable; an empty value
 uses the Playwright default or FORGE_BROWSER_EXECUTABLE.
 --max-turns is accepted for compatibility only; it does not limit execution steps.
-forge models [--json]
+forge models [--source ID] [--refresh] [--json]
 forge sessions [--json]
 forge show <id> [--json]
 forge compact|fork|diagnostics <id> [--json]
@@ -713,7 +713,10 @@ export const runCliWithIO = async (
       return 0;
     }
     if (command === "models" || command === "sessions" || command === "show") {
-      const args = parseArgs(argv.slice(1), [], ["json"]);
+      const args = parseArgs(argv.slice(1), command === "models" ? ["source"] : [],
+        command === "models" ? ["json", "refresh"] : ["json"]);
+      const sourceId = stringOption(args, "source");
+      if (sourceId !== undefined && !/^[a-z][a-z0-9_-]{0,31}$/.test(sourceId)) invalid("--source expects a configured source ID.");
       if (command === "show") {
         if (args.positional.length !== 1)
           invalid("show requires one session UUID.");
@@ -726,7 +729,7 @@ export const runCliWithIO = async (
         noPositionals(args);
         const value =
           command === "models"
-            ? await service.listModels(controller.signal)
+            ? await service.listModels(controller.signal, sourceId, flag(args, "refresh"))
             : (await service.listSessions()).filter(isPrimarySession);
         if (flag(args, "json")) jsonLine(io, value);
         else readable(io, value);

@@ -15,6 +15,13 @@ forge run --session UUID 'Continue the task'
 
 使用 `--prompt-stdin` 明确从 stdin 读取提示词。run 的 `--json` 输出 version 1 JSONL event/result envelope，不是交互界面。具体选项以 `forge --help` 为准。
 
+## 模型目录本地缓存
+
+- 模型 ID 和 API 实报的上下文窗口元数据会保存到 `$FORGE_HOME/model-catalogs/`；默认目录为 `~/.local/share/forge/model-catalogs/`。CLI、桌面后端、运行时窗口查询与 `list_models` 工具复用同一份缓存，重启后仍可读取，不再每次重新联网。
+- 首次成功拉取后优先读本地，无定时过期刷新。缓存按来源 ID、API 地址、协议和密钥隔离；更换这些连接信息时重新拉取。文件名为摘要，不保存明文密钥、地址或原始 API 响应。未提供窗口的模型保存 `null`，不把本地默认窗口冒充 API 元数据。
+- `forge models [--source ID] [--json]` 读取指定来源（省略时使用当前默认来源）的目录；加 `--refresh` 强制联网更新，例如 `forge models --source my-api --refresh`。桌面/Web 现有“刷新模型”按钮同样强制更新后端缓存。
+- 缺失或损坏的缓存会重新拉取；显式刷新失败会报错并保留上次成功文件，后续普通读取仍可复用。目录不保证模型实时可用、额度或能力；更换服务商套餐或发现目录变化时请主动刷新。缓存写盘失败不阻止返回已成功拉取的目录，但此时不能保证跨进程复用。
+
 ## 轮次与执行步数
 
 一次提问启动一轮运行；一次模型生成连同它要求执行的工具算一步。一轮可以有多步，一步可以有多个工具调用。中途补充要求仍属于当前轮，请求重试不增加步数。子会话单独计数。
