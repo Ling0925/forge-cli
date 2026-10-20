@@ -208,6 +208,17 @@ describe("Forge CLI", () => {
     expect(f.approvals).toHaveLength(0); expect(f.runs).toHaveLength(0);
   });
 
+  it("configures root task bounds and rejects invalid limits before updating", async () => {
+    const f = fixture("/unused");
+    expect(await runCliWithIO(["config", "set", "--max-root-tools", "250", "--root-timeout-ms", "5000"], f.service, f.io)).toBe(0);
+    expect(f.updates).toEqual([{ settings: { maxRootToolCalls: 250, rootTimeoutMs: 5000 } }]);
+    for (const [flag, value] of [["--max-root-tools", "0"], ["--max-root-tools", "1000001"], ["--root-timeout-ms", "999"], ["--root-timeout-ms", "86400001"], ["--max-root-tools", "1.5"]]) {
+      expect(await runCliWithIO(["config", "set", flag ?? "", value ?? ""], f.service, f.io)).toBe(1);
+    }
+    expect(f.updates).toHaveLength(1);
+    expect(f.runs).toHaveLength(0);
+  });
+
   it("configures explicit local LSP servers without starting or installing them", async () => {
     const f = fixture("/unused");
     const servers = [{ id: "typescript", command: "typescript-language-server", args: ["--stdio"], extensions: [".ts", ".tsx"] }];
