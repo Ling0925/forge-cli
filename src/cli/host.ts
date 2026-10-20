@@ -1,5 +1,5 @@
 import { createHarness } from "../core/harness";
-import { createRuntimeHub } from "../desktop/runtime";
+import { createRuntimeHub } from "../host/runtime";
 import { hostError } from "../host/errors";
 import { createLocalHost } from "../host/local-server";
 
