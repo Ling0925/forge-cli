@@ -24,6 +24,12 @@ import { collectPublishedFiles, publishedFileIdSchema, publishedFileResponseSche
 
 import { DEFAULT_APPROVAL_MODE, parseApprovalAnswer, parseApprovalMode } from "./approval-policy";
 import { interactive, terminalText } from "./interactive";
+import {
+  loadModelCatalog,
+  runProvidersCommand,
+  runRoutesCommand,
+  type ModelAccessCommandContext,
+} from "./model-access";
 import { createNodeIO } from "./node-io";
 import { previewSummary } from "./render/events";
 export { createNodeIO, nodeIO } from "./node-io";
@@ -52,7 +58,16 @@ An empty value clears the list; no origins disables browser tools (default).
 --browser-executable selects a local Chromium/Chrome executable; an empty value
 uses the Playwright default or FORGE_BROWSER_EXECUTABLE.
 --max-turns is accepted for compatibility only; it does not limit execution steps.
-forge models [--source ID] [--refresh] [--json]
+forge models [--source ID] [--credential ID --details] [--refresh] [--json]
+forge providers list|presets [--json]
+forge providers catalog <source-id> [--credential ID] [--refresh] [--json]
+forge providers test <source-id> [--kind catalog|inference] [--model MODEL] [--json]
+forge providers save (--input FILE | --stdin) [--json]
+forge providers save --id ID --label LABEL --base-url URL [--api-key-stdin] [--json]
+forge providers import (--input FILE | --stdin) [--apply --source ID[,ID...]] [--json]
+forge providers login <source-id> [codex|copilot] [--label LABEL] [--json]
+forge providers quota <source-id> [--credential ID] [--json]
+forge routes list|save|remove [--json]
 forge sessions [--json]
 forge show <id> [--json]
 forge compact|fork|diagnostics <id> [--json]
@@ -72,10 +87,11 @@ forge resume UUID [--approval full-access|auto|manual] [--thinking|--expand-thin
 
 resume opens interactive chat for an existing session; no prompt is required or accepted.
 For a single request or JSON output, use forge run --session UUID with a prompt source.
-Run options: --model MODEL --mode plan|build --permission readonly|workspace|unrestricted
+Run options: --model MODEL --route-group ID --mode plan|build --permission readonly|workspace|unrestricted
              --prompt-file PATH | --prompt-stdin
              --json --yes
 Use exactly one prompt source. Stdin is never read implicitly.
+A route group is used only with an explicit --route-group; --model stays exact.
 --yes approves calls only with explicitly selected --permission unrestricted.
 Chat defaults to full-access: tool approvals are automatic within existing permissions.
 Commands are not sandboxed and may access external files/network. /approval manual
@@ -222,6 +238,12 @@ const plainPreviewIds = (output: CliIO): Set<string> => {
   return created;
 };
 
+/** One bounded line for a real provider attempt: identity and outcome only. */
+const attemptField = (value: string | undefined): string => {
+  const text = terminalText(value ?? "-").replace(/\s+/g, " ").trim();
+  return text === "" ? "-" : text.slice(0, 256);
+};
+
 const renderEvent = (output: CliIO, event: AgentEvent): void => {
   const io = {
     ...output,
@@ -239,6 +261,15 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
     case "provider_retry":
       io.stdout(`重试 ${event.attempt}/${event.maxAttempts} (${event.reason})\n`);
       return;
+    case "provider_attempt": {
+      const attempt = event.selection;
+      const usage = attempt.usage === undefined ? "" : ` tokens=${attempt.usage.totalTokens}`;
+      const error = attempt.errorCode === undefined ? "" : ` error=${attemptField(attempt.errorCode)}`;
+      io.stdout(
+        `Provider ${attempt.outcome} source=${attemptField(attempt.sourceId)} model=${attemptField(attempt.model)} protocol=${attemptField(attempt.apiMode)} credential=${attemptField(attempt.credentialId)} group=${attemptField(attempt.groupId)} attempt=${attempt.attempt} reason=${attemptField(attempt.reason)}${error}${usage}\n`,
+      );
+      return;
+    }
     case "tool_call_preview": {
       // Announce a pending tool once. Streaming updates would repeat per chunk.
       const seen = plainPreviewIds(output);
@@ -383,11 +414,15 @@ export const runCliWithIO = async (
         expandReasoning,
       );
     }
+    const scopedHelp =
+      (command === "providers" || command === "routes") &&
+      argv.includes("--help");
     if (
-      command === undefined ||
-      command === "--help" ||
-      command === "-h" ||
-      argv.includes("--help")
+      !scopedHelp &&
+      (command === undefined ||
+        command === "--help" ||
+        command === "-h" ||
+        argv.includes("--help"))
     ) {
       io.stdout(help);
       return 0;
@@ -532,6 +567,19 @@ export const runCliWithIO = async (
         publicSettingsSchema.parse(await service.updateSettings(input)),
       );
       return 0;
+    }
+    if (command === "providers" || command === "routes") {
+      const context: ModelAccessCommandContext = {
+        service,
+        signal: controller.signal,
+        stdout: io.stdout,
+        stderr: io.stderr,
+        readStdin: io.readStdin,
+        dispose: () => service.dispose(),
+      };
+      return command === "providers"
+        ? await runProvidersCommand(argv.slice(1), context)
+        : await runRoutesCommand(argv.slice(1), context);
     }
     if (command === "hooks") {
       const action = argv[1];
@@ -714,10 +762,12 @@ export const runCliWithIO = async (
       return 0;
     }
     if (command === "models" || command === "sessions" || command === "show") {
-      const args = parseArgs(argv.slice(1), command === "models" ? ["source"] : [],
-        command === "models" ? ["json", "refresh"] : ["json"]);
+      const args = parseArgs(argv.slice(1), command === "models" ? ["source", "credential"] : [],
+        command === "models" ? ["json", "refresh", "details"] : ["json"]);
       const sourceId = stringOption(args, "source");
       if (sourceId !== undefined && !/^[a-z][a-z0-9_-]{0,31}$/.test(sourceId)) invalid("--source expects a configured source ID.");
+      const credentialId = stringOption(args, "credential");
+      if (credentialId !== undefined && !flag(args, "details")) invalid("--credential requires --details.");
       if (command === "show") {
         if (args.positional.length !== 1)
           invalid("show requires one session UUID.");
@@ -728,12 +778,22 @@ export const runCliWithIO = async (
         else readable(io, snapshot);
       } else {
         noPositionals(args);
-        const value =
-          command === "models"
-            ? await service.listModels(controller.signal, sourceId, flag(args, "refresh"))
-            : (await service.listSessions()).filter(isPrimarySession);
-        if (flag(args, "json")) jsonLine(io, value);
-        else readable(io, value);
+        if (command === "models" && flag(args, "details")) {
+          const catalog = await loadModelCatalog(service, controller.signal, {
+            ...(sourceId === undefined ? {} : { sourceId }),
+            ...(credentialId === undefined ? {} : { credentialId }),
+            refresh: flag(args, "refresh"),
+          });
+          if (flag(args, "json")) jsonLine(io, catalog);
+          else readable(io, catalog);
+        } else {
+          const value =
+            command === "models"
+              ? await service.listModels(controller.signal, sourceId, flag(args, "refresh"))
+              : (await service.listSessions()).filter(isPrimarySession);
+          if (flag(args, "json")) jsonLine(io, value);
+          else readable(io, value);
+        }
       }
       return controller.signal.aborted ? 130 : 0;
     }
@@ -741,7 +801,7 @@ export const runCliWithIO = async (
       invalid("Unknown command. Use --help for usage.");
     const args = parseArgs(
       argv.slice(1),
-      ["workspace", "session", "model", "mode", "permission", "prompt-file"],
+      ["workspace", "session", "model", "route-group", "mode", "permission", "prompt-file"],
       ["json", "yes", "prompt-stdin"],
     );
     const idText = stringOption(args, "session");
@@ -767,6 +827,7 @@ export const runCliWithIO = async (
       modelText === undefined
         ? undefined
         : settingsFields.model.parse(modelText);
+    const routeGroupId = stringOption(args, "route-group");
     const prompt = textPromptSchema.parse(
       file !== undefined
         ? await readPromptFile(file, controller.signal)
@@ -788,6 +849,7 @@ export const runCliWithIO = async (
             createSessionInputSchema.parse({
               workspace,
               ...(model !== undefined ? { model } : {}),
+              ...(routeGroupId !== undefined ? { routeGroupId } : {}),
             }),
           )
         : await service.getSession(id);
@@ -798,6 +860,7 @@ export const runCliWithIO = async (
       prompt,
       ...(permission !== undefined ? { permission } : {}),
       ...(model !== undefined ? { model } : {}),
+      ...(routeGroupId !== undefined ? { routeGroupId } : {}),
       ...(stringOption(args, "mode") !== undefined
         ? { mode: stringOption(args, "mode") }
         : {}),

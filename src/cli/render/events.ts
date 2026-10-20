@@ -1,3 +1,4 @@
+import type { ProviderAttempt } from "../../shared/model-access";
 import type { AgentEvent, ApprovalRequest, TaskPlan, ToolCall } from "../../shared/schemas";
 import type { RenderUpdate, RichLine, RunStatus } from "../ui-contract";
 import { estimateTokens } from "../../shared/context-usage";
@@ -85,6 +86,54 @@ export const toolPreviewLine = (
 /** `tool_started` may carry the previewId of the row it replaces. */
 const previewIdOf = (event: AgentEvent): string | undefined =>
   event.type === "tool_started" ? event.previewId : undefined;
+
+const attemptField = (value: string | undefined): string =>
+  sanitizeText(value ?? "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 256) || "-";
+
+/** One concise, secret-free row for the real provider selection and outcome. */
+export const providerAttemptLine = (
+  selection: ProviderAttempt,
+  width = 80,
+): RichLine => {
+  const usage =
+    selection.usage === undefined
+      ? ""
+      : ` · tokens ${selection.usage.totalTokens}`;
+  const error =
+    selection.errorCode === undefined
+      ? ""
+      : ` · error ${attemptField(selection.errorCode)}`;
+  const text = [
+    `provider ${selection.outcome}`,
+    `${attemptField(selection.sourceId)}/${attemptField(selection.model)}`,
+    attemptField(selection.apiMode),
+    `credential ${attemptField(selection.credentialId)}`,
+    selection.groupId === undefined
+      ? undefined
+      : `group ${attemptField(selection.groupId)}`,
+    `attempt ${selection.attempt}`,
+    attemptField(selection.reason),
+  ]
+    .filter((value): value is string => value !== undefined)
+    .join(" · ");
+  return [
+    {
+      text: truncate(
+        sanitizeText(`${text}${error}${usage}`),
+        Math.max(1, width),
+      ),
+      tone:
+        selection.outcome === "failed"
+          ? "error"
+          : selection.outcome === "succeeded"
+            ? "success"
+            : "muted",
+    },
+  ];
+};
 
 export const createEventRenderer = (
   options: EventRendererOptions = {},
@@ -223,6 +272,16 @@ export const createEventRenderer = (
           return update([], [], live("retrying"));
         case "provider_retry":
           return update([], [], live(`重试 ${event.attempt}/${event.maxAttempts}`));
+        case "provider_attempt":
+          running = true;
+          return update(
+            [
+              ...flushText(),
+              providerAttemptLine(event.selection, options.width?.() ?? 80),
+            ],
+            [],
+            live(`provider ${event.selection.outcome}`),
+          );
         case "run_started":
           turnNumber = event.turn;
           stepNumber = undefined;
