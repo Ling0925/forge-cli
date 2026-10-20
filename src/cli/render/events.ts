@@ -302,6 +302,9 @@ export const createEventRenderer = (
             live("thinking"),
           );
         }
+        case "tool_hook":
+          if (event.diagnostic.status === "ok" || event.diagnostic.status === "skipped") return update([], [], live("thinking"));
+          return update([...flushText(), [{ text: sanitizeText(`Hook ${event.diagnostic.id}: ${event.diagnostic.reason ?? event.diagnostic.status}`), tone: "error" }]], [], live("thinking"));
         case "plan_updated":
           return update(
             [...flushText(), ...planEventLines(event.plan)],

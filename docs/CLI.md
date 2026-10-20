@@ -139,6 +139,24 @@ forge config set --reasoning-effort default
 
 ## 命令与边界
 
+### 远程 MCP 与 hooks
+
+```sh
+forge mcp register local "Local" node /path/to/server.mjs
+forge mcp register-remote remote "Remote" https://example.com/mcp
+forge mcp register-remote legacy "Legacy" https://example.com/sse --transport sse
+forge mcp register-remote authenticated "Private" https://example.com/mcp --headers-file /path/to/headers.json
+forge hooks set /path/to/hooks.json
+forge hooks show
+forge hooks clear
+```
+
+远程 MCP 默认使用 Streamable HTTP。`headers.json` 是请求头对象，例如 `{"Authorization":"Bearer YOUR_TOKEN"}`；值只保存到本机私有目录，不出现在 MCP 列表。注册默认启用，但注册本身不连接；加 `--disabled` 可先保存再启用。普通工具调用沿用当前权限。
+
+Hooks 默认关闭；只配置需要的事件即可。配置格式与失败行为见 [TOOL_HOOKS.md](TOOL_HOOKS.md)。
+
+### 交互命令
+
 `/help` 提供当前完整命令列表，包括 mode、plan、model、permission、sessions、resume、new、fork、rename、archive、compact、diagnostics、context、skills、checkpoints、mcp、export、quit。Slash 参数按空白切分，不支持 shell 式引号分组；含空格的路径或参数使用直接命令。shell 对直接命令负责引号分组，MCP 的 `--` 分隔后续服务器参数。
 
 `forge config show` 只显示公共配置；`forge config set --api-key-stdin` 避免把 key 放在 argv。不要分享私有配置。`/export` 导出对话，分享前检查。checkpoint restore 会修改文件，先 list/diff。非交互自动审批仅限明确的 unrestricted 权限与 `--yes`；workspace 权限不能自动授权。

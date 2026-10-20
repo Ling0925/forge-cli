@@ -19,6 +19,9 @@ import type {
   SessionStatus,
 } from "../../src/shared/schemas";
 import { extendedService } from "./service-fixture";
+import { createMcpService } from "../../src/mcp/registry";
+import { openToolHooksStore } from "../../src/store/tool-hooks";
+import { mcpRecordDtoSchema, mcpRegisterDtoSchema } from "../../src/shared/ipc";
 
 const id = parseSessionId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
 const timestamp = "2026-01-01T00:00:00.000Z";
@@ -175,6 +178,36 @@ const fixture = (
 };
 
 describe("Forge CLI", () => {
+  it("registers remote MCP with private headers through CLI and returns a bridge-safe record", async () => {
+    const root = await directory(); const f = fixture(root);
+    const mcp = await createMcpService({ home: root });
+    const path = join(root, "headers.json");
+    await writeFile(path, JSON.stringify({ Authorization: "Bearer fixture-private-value" }));
+    const service = { ...f.service, registerMcpServer: mcp.register };
+    try {
+      expect(await runCliWithIO(["mcp", "register-remote", "remote", "Remote", "http://127.0.0.1:1/mcp", "--headers-file", path, "--json"], service, f.io)).toBe(0);
+      const record = mcpRecordDtoSchema.parse(JSON.parse(f.output.join("")));
+      expect(record).toMatchObject({ transport: "http", url: "http://127.0.0.1:1/mcp", hasPrivateHeaders: true, headerCount: 1 });
+      expect(JSON.stringify(record)).not.toContain("fixture-private-value");
+      expect(JSON.stringify(record)).not.toContain("Authorization");
+      expect(mcpRegisterDtoSchema.safeParse({ id: "sse", label: "SSE", transport: "sse", url: "http://127.0.0.1:1/events" }).success).toBe(true);
+      expect((await mcp.health("remote")).connected).toBe(false);
+    } finally { await mcp.dispose(); }
+  });
+
+  it("sets and clears host-only hooks without starting a run or requesting approval", async () => {
+    const root = await directory(); const f = fixture(root);
+    const store = await openToolHooksStore(root);
+    const config = { beforeTool: [{ id: "guard", command: "/fixture/guard" }], afterTool: [], toolError: [], runEnd: [] };
+    const path = join(root, "input.json"); await writeFile(path, JSON.stringify(config));
+    const service = { ...f.service, getToolHooks: store.get, setToolHooks: async (value: Parameters<typeof store.set>[0]) => { await store.set(value); } };
+    expect(await runCliWithIO(["hooks", "set", path], service, f.io)).toBe(0);
+    expect((await store.get()).beforeTool[0]?.command).toBe("/fixture/guard");
+    expect(await runCliWithIO(["hooks", "clear"], service, f.io)).toBe(0);
+    expect((await store.get()).beforeTool).toEqual([]);
+    expect(f.approvals).toHaveLength(0); expect(f.runs).toHaveLength(0);
+  });
+
   it("configures explicit local LSP servers without starting or installing them", async () => {
     const f = fixture("/unused");
     const servers = [{ id: "typescript", command: "typescript-language-server", args: ["--stdio"], extensions: [".ts", ".tsx"] }];

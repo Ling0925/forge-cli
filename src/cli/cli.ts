@@ -1,7 +1,8 @@
 import { open, stat } from "node:fs/promises";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { mcpRegisterInputSchema } from "../mcp/types";
+import { mcpRegisterInputSchema, mcpRemoteRegisterInputSchema } from "../mcp/types";
+import { toolHooksConfigSchema } from "../shared/tool-hooks";
 import { assertNever } from "../shared/contracts";
 import type { HarnessService } from "../shared/contracts";
 import { ForgeError, toErrorInfo } from "../shared/errors";
@@ -36,6 +37,7 @@ const help = `Forge — shared-core agent CLI
 
 forge chat [--workspace PATH] [--session UUID] [--approval full-access|auto|manual] [--thinking|--expand-thinking]
 forge config show
+forge hooks show | set <json-file> | clear
 forge config set [--base-url URL] [--model MODEL] [--api-mode chat-completions|responses|anthropic] [--api-key-stdin]
                  [--max-output-tokens NUMBER] [--web-search disabled|cached|live] (Responses only; default disabled)
                  [--reasoning-effort default|none|minimal|low|medium|high|xhigh|max]
@@ -59,6 +61,7 @@ forge checkpoints list <session-id> [--json]
 forge checkpoints diff|restore <session-id> <checkpoint-uuid> [--json]
 forge mcp list [--json] | register <id> <label> <command> [args...] [--disabled]
 forge mcp enable|disable|remove|health <id> [--json]
+forge mcp register-remote <id> <label> <url> [--transport http|sse] [--headers-file JSON_FILE] [--disabled]
 forge export <session-id> --output PATH (explicit destination; no implicit path)
 forge files list <session-id> [--json]
 forge files save <session-id> <file-id> --output PATH (never overwrites)
@@ -284,6 +287,10 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
       io.stdout(
         `\nChild ${event.childSessionId}: ${event.status}; model=${event.model}\n${event.summary}\n`,
       );
+      return;
+    case "tool_hook":
+      if (event.diagnostic.status !== "ok" && event.diagnostic.status !== "skipped")
+        io.stderr(`${terminalText(`Hook ${event.diagnostic.id}: ${event.diagnostic.reason ?? event.diagnostic.status}`)}\n`);
       return;
     case "title_changed":
     case "step_started":
@@ -525,9 +532,30 @@ export const runCliWithIO = async (
       );
       return 0;
     }
+    if (command === "hooks") {
+      const action = argv[1];
+      const getHooks = service.getToolHooks ?? invalid("Tool hooks are unavailable on this host.");
+      const setHooks = service.setToolHooks ?? invalid("Tool hooks are unavailable on this host.");
+      if (action === "show" && argv.length === 2) {
+        readable(io, await getHooks());
+      } else if (action === "clear" && argv.length === 2) {
+        await setHooks(toolHooksConfigSchema.parse({}));
+        readable(io, { configured: false });
+      } else if (action === "set" && argv.length === 3) {
+        const path = argv[2] ?? invalid("Hook configuration file is required.");
+        let raw: unknown;
+        try { raw = JSON.parse(await readPromptFile(path, controller.signal)); }
+        catch (error) { if (error instanceof SyntaxError) invalid("Hook configuration must be valid JSON."); throw error; }
+        const parsed = toolHooksConfigSchema.safeParse(raw);
+        if (!parsed.success) return invalid("Invalid hook configuration. See docs/TOOL_HOOKS.md.");
+        await setHooks(parsed.data);
+        readable(io, { configured: true });
+      } else invalid("Use forge hooks show, set <json-file>, or clear.");
+      return 0;
+    }
     if (command === "mcp") {
       const action = argv[1];
-      const args = parseArgs(argv.slice(2), [], ["json", "disabled"]);
+      const args = parseArgs(argv.slice(2), action === "register-remote" ? ["transport", "headers-file"] : [], ["json", "disabled"]);
       const parts = args.positional;
       let value: unknown;
       if (action === "list") {
@@ -545,6 +573,19 @@ export const runCliWithIO = async (
             enabled: !flag(args, "disabled"),
           }),
         );
+      } else if (action === "register-remote") {
+        if (parts.length !== 3) invalid("register-remote needs id, label and URL.");
+        const headersFile = stringOption(args, "headers-file");
+        let headers: unknown;
+        if (headersFile) {
+          try { headers = JSON.parse(await readPromptFile(headersFile, controller.signal)); }
+          catch (error) { if (error instanceof SyntaxError) invalid("Headers file must be a JSON object."); throw error; }
+        }
+        const remote = mcpRemoteRegisterInputSchema.safeParse({ id: parts[0], label: parts[1], url: parts[2],
+          transport: stringOption(args, "transport") ?? "http", enabled: !flag(args, "disabled"), ...(headers ? { headers } : {}),
+        });
+        if (!remote.success) invalid("Invalid remote MCP configuration; use an HTTP(S) URL, http or sse transport, and a JSON object of headers.");
+        value = await service.registerMcpServer(remote.data);
       } else {
         if (parts.length !== 1) invalid("MCP operation needs a server id.");
         const id = parts[0] ?? invalid("MCP server id is required.");
