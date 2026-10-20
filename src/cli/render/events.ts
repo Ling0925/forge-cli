@@ -398,6 +398,7 @@ export const createEventRenderer = (
           if (children.has(id) || children.size < 4) children.set(id, child);
           return update([], messageTail, currentStatus);
         }
+        case "agent_progress": // Do not mix the child's reply into parent Markdown.
         case "approval_resolved":
         case "title_changed":
           return { append: [], tail };

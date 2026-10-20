@@ -22,6 +22,15 @@ it("replaces child commands without appending logs or disrupting parent streamin
   expect(r.push(child("failed")).append).toEqual([]);
   expect(text(r.finish().append)).toContain("Parent");
 });
+it("ignores child conversation drafts without corrupting parent Markdown", () => {
+  const renderer = createEventRenderer();
+  const before = renderer.push({ ...base, type: "text_delta", text: "Parent **draft**" });
+  const progress = renderer.push({ ...base, type: "agent_progress", childSessionId: id,
+    text: "child-only live reply", truncated: false, childTurn: 1, childStep: 1 });
+  expect(progress.append).toEqual([]);
+  expect(progress.tail).toEqual(before.tail);
+  expect(text(renderer.finish().append)).not.toContain("child-only");
+});
 it("routes child approval into the current card and clears it at tool finish/cancel", () => {
   const r = createEventRenderer(); r.push(child("running"));
   const request: ApprovalRequest = { ...base, id, childSessionId: id, toolCallId: "t", toolName: "run_command", description: "do not print", command: ["node", "--token", "SECRET"] };

@@ -303,6 +303,7 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
     case "context_compacted":
     // Live reasoning preview is a rich-terminal affordance; plain output stays quiet.
     case "reasoning_delta":
+    case "agent_progress": // Child drafts belong to the child conversation, not parent stdout.
       return;
     default:
       assertNever(event);
