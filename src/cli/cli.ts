@@ -35,6 +35,7 @@ const promptLimit = 1_000_000;
 const keyLimit = 16_386;
 const help = `Forge — shared-core agent CLI
 
+forge devices pair NAME | list | revoke DEVICE_ID (local LAN authorization)
 forge host --socket PATH (optional headless shared host)
 forge attach --socket PATH <command> (connect only; see forge attach --help)
 
