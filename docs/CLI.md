@@ -1,5 +1,7 @@
 # Forge CLI
 
+当前默认权限、plan/build 与审批策略的统一规则见 [后端权限与审批](ARCHITECTURE.md#permission-run-mode-and-cli-approval)：默认 workspace；交互 full-access 是审批应答策略，不会提升工具权限。
+
 ## 使用方式
 
 在终端执行 `forge` 开始当前目录的交互会话；`forge chat --workspace PATH [--session UUID]` 指定工作区或会话。非交互的无参数命令显示帮助，不隐式读取 stdin。
