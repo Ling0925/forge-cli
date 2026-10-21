@@ -49,7 +49,7 @@ forge chat [--workspace PATH] [--session UUID] [--approval full-access|auto|manu
 forge config show
 forge hooks show | set <json-file> | clear
 forge config set [--base-url URL] [--model MODEL] [--api-mode chat-completions|responses|anthropic] [--api-key-stdin]
-                 [--max-output-tokens NUMBER] [--web-search disabled|cached|live] (Responses only; default disabled)
+                 [--max-output-tokens NUMBER]
                  [--reasoning-effort default|none|minimal|low|medium|high|xhigh|max]
                  [--theme system|light|dark] [--permission readonly|workspace|unrestricted]
                  [--timeout-ms NUMBER] [--max-tools NUMBER] [--max-root-tools NUMBER] [--root-timeout-ms NUMBER] [--context-chars NUMBER] [--context-budget-tokens NUMBER|auto]
@@ -445,7 +445,6 @@ export const runCliWithIO = async (
           "base-url",
           "model",
           "api-mode",
-          "web-search",
           "max-output-tokens",
           "reasoning-effort",
           "theme",
@@ -506,9 +505,6 @@ export const runCliWithIO = async (
             : {}),
           ...(stringOption(args, "api-mode") !== undefined
             ? { apiMode: stringOption(args, "api-mode") }
-            : {}),
-          ...(stringOption(args, "web-search") !== undefined
-            ? { webSearch: stringOption(args, "web-search") }
             : {}),
           ...(stringOption(args, "reasoning-effort") !== undefined
             ? { reasoningEffort: stringOption(args, "reasoning-effort") }
