@@ -3,8 +3,8 @@ import { toolPresentation, savedToolResult } from "../../src/cli/render/tool-pre
 import { toolSummaryLines } from "../../src/cli/render/tools";
 import { ToolTranscript } from "../../src/cli/render/tool-transcript";
 import { historyLines } from "../../src/cli/render/history";
-import { sessionSnapshotSchema, type ToolCall } from "../../src/shared/schemas";
-import { createDiffPatch } from "../../src/shared/diff";
+import { sessionSnapshotSchema, type ToolCall } from "@forge/core/shared/schemas";
+import { createDiffPatch } from "@forge/core/shared/diff";
 import { visibleWidth } from "../../src/cli/theme";
 import type { RichLine } from "../../src/cli/ui-contract";
 const text = (rows: readonly RichLine[]) => rows.map(row => row.map(s => s.text).join("")).join("\n");

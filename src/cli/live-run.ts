@@ -1,5 +1,5 @@
-import type { AgentEvent, ApprovalRequest } from "../shared/schemas";
-import { webSearchStatus } from "../shared/web-search-display";
+import type { AgentEvent, ApprovalRequest } from "@forge/core/shared/schemas";
+import { webSearchStatus } from "@forge/core/shared/web-search-display";
 import type { CliIO } from "./cli";
 import { createEventRenderer, previewSummary } from "./render/events";
 import { renderRichLine } from "./render/rich";

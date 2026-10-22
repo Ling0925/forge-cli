@@ -2,8 +2,8 @@ import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import { runCliWithIO, type CliIO } from "../../src/cli/cli";
 import { TerminalReader } from "../../src/cli/terminal";
-import type { HarnessService } from "../../src/shared/contracts";
-import { defaultPublicSettings, publicProviderSourceSchema } from "../../src/shared/schemas";
+import type { HarnessService } from "@forge/core/shared/contracts";
+import { defaultPublicSettings, publicProviderSourceSchema } from "@forge/core/shared/schemas";
 import { reviewSession } from "../fixtures/review-session";
 import { extendedService } from "./service-fixture";
 

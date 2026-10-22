@@ -1,11 +1,11 @@
 import { open, stat } from "node:fs/promises";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { mcpRegisterInputSchema, mcpRemoteRegisterInputSchema } from "../mcp/types";
-import { toolHooksConfigSchema } from "../shared/tool-hooks";
-import { assertNever } from "../shared/contracts";
-import type { HarnessService } from "../shared/contracts";
-import { ForgeError, toErrorInfo } from "../shared/errors";
+import { mcpRegisterInputSchema, mcpRemoteRegisterInputSchema } from "@forge/core/mcp/types";
+import { toolHooksConfigSchema } from "@forge/core/shared/tool-hooks";
+import { assertNever } from "@forge/core/shared/contracts";
+import type { HarnessService } from "@forge/core/shared/contracts";
+import { ForgeError, toErrorInfo } from "@forge/core/shared/errors";
 import {
   configureInputSchema,
   createSessionInputSchema,
@@ -16,11 +16,11 @@ import {
   textPromptSchema,
   sessionSnapshotSchema,
   settingsFields,
-} from "../shared/schemas";
-import type { AgentEvent, SessionStatus } from "../shared/schemas";
-import { webSearchDetails, webSearchStatus } from "../shared/web-search-display";
-import { isPrimarySession } from "../shared/sessions";
-import { collectPublishedFiles, publishedFileIdSchema, publishedFileResponseSchema } from "../shared/published-files";
+} from "@forge/core/shared/schemas";
+import type { AgentEvent, SessionStatus } from "@forge/core/shared/schemas";
+import { webSearchDetails, webSearchStatus } from "@forge/core/shared/web-search-display";
+import { isPrimarySession } from "@forge/core/shared/sessions";
+import { collectPublishedFiles, publishedFileIdSchema, publishedFileResponseSchema } from "@forge/core/shared/published-files";
 
 import { DEFAULT_APPROVAL_MODE, parseApprovalAnswer, parseApprovalMode } from "./approval-policy";
 import { interactive, terminalText } from "./interactive";
@@ -343,6 +343,8 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
         io.stderr(`${terminalText(`Hook ${event.diagnostic.id}: ${event.diagnostic.reason ?? event.diagnostic.status}`)}\n`);
       return;
     case "title_changed":
+    case "generation_started":
+    case "generation_finished":
     case "step_started":
     case "step_finished":
     case "state_changed":

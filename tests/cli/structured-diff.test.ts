@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
-import type { FileChange, ToolCall } from "../../src/shared/schemas";
-import { createDiffPatch } from "../../src/shared/diff";
-import { fileChangeSchema, parseSessionId, sessionSnapshotSchema } from "../../src/shared/schemas";
+import type { FileChange, ToolCall } from "@forge/core/shared/schemas";
+import { createDiffPatch } from "@forge/core/shared/diff";
+import { fileChangeSchema, parseSessionId, sessionSnapshotSchema } from "@forge/core/shared/schemas";
 import { createEventRenderer } from "../../src/cli/render/events";
 import { historyLines } from "../../src/cli/render/history";
 import { diffLines, diffStats } from "../../src/cli/render/diff";

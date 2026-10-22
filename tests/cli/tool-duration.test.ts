@@ -4,12 +4,12 @@ import { createEventRenderer } from "../../src/cli/render/events";
 import { ToolTranscript } from "../../src/cli/render/tool-transcript";
 import { historyLines } from "../../src/cli/render/history";
 import { toolSummaryLines } from "../../src/cli/render/tools";
-import { sessionSnapshotSchema, type AgentEvent, type ToolCall } from "../../src/shared/schemas";
+import { parseSessionId, sessionSnapshotSchema, type AgentEvent, type ToolCall } from "@forge/core/shared/schemas";
 import type { RichLine } from "../../src/cli/ui-contract";
 const text = (rows: readonly RichLine[]) => rows.map(row => row.map(s => s.text).join("")).join("\n");
 const call = (id: string, name = "read_file"): ToolCall => ({ id, type: "function", function: { name, arguments: '{"path":"a.ts"}' } });
 const result = { content: '{"content":"1: a","offset":0,"total_lines":1}', isError: false };
-const base = { sessionId: "12345678-1234-4234-8234-123456789abc", timestamp: "2026-01-01T00:00:00Z" };
+const base = { sessionId: parseSessionId("12345678-1234-4234-8234-123456789abc"), timestamp: "2026-01-01T00:00:00Z" };
 it.each([[0,"0ms"],[999,"999ms"],[1000,"1s"],[1250,"1.2s"],[59999,"59.9s"],[60000,"1m"],[90000,"1.5m"],[3599999,"59.9m"],[3600000,"1h"],[5400000,"1.5h"],[86400000,"1d"],[129600000,"1.5d"],[-1,"?"],[NaN,"?"],[Infinity,"?"]])("formats %s as %s", (ms, expected) => {
   expect(formatDuration(Number(ms))).toBe(expected);
 });

@@ -1,20 +1,20 @@
-import { projectSummary } from "../core/context";
-import { createSlashActions } from "../shared/slash-actions";
-import { sessionPlans } from "../shared/plans";
-import { parseSlashCommand } from "../shared/slash-commands";
-import type { SessionReviewInput } from "../shared/session-review";
-import type { HarnessService } from "../shared/contracts";
-import { budgetUsage, measureContext, resolveContextBudget, resolveContextWindow } from "../shared/context-usage";
-import { ForgeError, toErrorInfo } from "../shared/errors";
+import { projectSummary } from "@forge/core/core/context";
+import { createSlashActions } from "@forge/core/shared/slash-actions";
+import { sessionPlans } from "@forge/core/shared/plans";
+import { parseSlashCommand } from "@forge/core/shared/slash-commands";
+import type { SessionReviewInput } from "@forge/core/shared/session-review";
+import type { HarnessService } from "@forge/core/shared/contracts";
+import { budgetUsage, measureContext, resolveContextBudget, resolveContextWindow } from "@forge/core/shared/context-usage";
+import { ForgeError, toErrorInfo } from "@forge/core/shared/errors";
 import {
   createSessionInputSchema,
   parseSessionId,
   permissionSchema,
   runInputSchema,
   settingsFields,
-} from "../shared/schemas";
-import type { AgentEvent } from "../shared/schemas";
-import { advanceContextDisplay, emptyContextDisplay, replayContextDisplay } from "../shared/context-display";
+} from "@forge/core/shared/schemas";
+import type { AgentEvent } from "@forge/core/shared/schemas";
+import { advanceContextDisplay, emptyContextDisplay, replayContextDisplay } from "@forge/core/shared/context-display";
 import { type ApprovalMode, DEFAULT_APPROVAL_MODE, approvalWarning, parseApprovalAnswer, parseApprovalMode, shouldAutoApprove } from "./approval-policy";
 import type { CliIO } from "./cli";
 import { formatHelp } from "./commands";

@@ -1,6 +1,6 @@
-import { ForgeError } from "../shared/errors";
-import { redactCommandArguments } from "../shared/tool-activity";
-import type { ApprovalRequest, Permission } from "../shared/schemas";
+import { ForgeError } from "@forge/core/shared/errors";
+import { redactCommandArguments } from "@forge/core/shared/tool-activity";
+import type { ApprovalRequest, Permission } from "@forge/core/shared/schemas";
 
 export type ApprovalMode = "full-access" | "manual" | "auto" | "ask";
 export const DEFAULT_APPROVAL_MODE: ApprovalMode = "full-access";

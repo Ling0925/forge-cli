@@ -7,7 +7,7 @@ import type { InkViewState } from "../../src/cli/ink/types";
 import { emptyEditor, setText } from "../../src/cli/ink/input-editor";
 import { initialInput, type InputState } from "../../src/cli/ink/input-state";
 import { stripAnsi, visibleWidth } from "../../src/cli/theme";
-import { measureContext } from "../../src/shared/context-usage";
+import { measureContext } from "@forge/core/shared/context-usage";
 
 const base: InkViewState = {
   columns: 80, rows: 24, tail: [], status: null, context: null, plan: null,

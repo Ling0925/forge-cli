@@ -1,5 +1,5 @@
-import type { ToolCall, ToolResult } from "../../shared/schemas";
-import { toolActivity } from "../../shared/tool-activity";
+import type { ToolCall, ToolResult } from "@forge/core/shared/schemas";
+import { toolActivity } from "@forge/core/shared/tool-activity";
 import { uiSymbols } from "../symbols";
 import type { RichLine, Span, Tone } from "../ui-contract";
 import { diffLines, diffStats } from "./diff";

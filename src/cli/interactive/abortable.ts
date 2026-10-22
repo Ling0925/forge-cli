@@ -1,4 +1,4 @@
-import { ForgeError } from "../../shared/errors";
+import { ForgeError } from "@forge/core/shared/errors";
 
 /** Stop awaiting read-only discovery when its service has no signal parameter. */
 export function abortable<T>(

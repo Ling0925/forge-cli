@@ -20,15 +20,15 @@ import {
   toolStartLine,
 } from "../../src/cli/render/tools";
 import { createTheme, resolveTheme, stringWidth } from "../../src/cli/theme";
-import { createDiffPatch } from "../../src/shared/diff";
+import { createDiffPatch } from "@forge/core/shared/diff";
 import type { TerminalUI } from "../../src/cli/ui-contract";
 import type {
   AgentEvent,
   FileChange,
   ToolCall,
   ToolResult,
-} from "../../src/shared/schemas";
-import { parseSessionId } from "../../src/shared/schemas";
+} from "@forge/core/shared/schemas";
+import { parseSessionId } from "@forge/core/shared/schemas";
 
 it("discards a failed generation tail before displaying its replacement and retry count", () => {
   const renderer = createEventRenderer();

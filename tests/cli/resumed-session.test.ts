@@ -3,9 +3,9 @@ import { afterEach, expect, it, vi } from "vitest";
 import { watchResumedSession } from "../../src/cli/interactive/resumed-session";
 import { pickSession } from "../../src/cli/interactive/pickers";
 import { Controller } from "./legacy/controller";
-import { sessionSnapshotSchema } from "../../src/shared/schemas";
+import { sessionSnapshotSchema } from "@forge/core/shared/schemas";
 import type { CliIO } from "../../src/cli/cli";
-import type { HarnessService } from "../../src/shared/contracts";
+import type { HarnessService } from "@forge/core/shared/contracts";
 import type { PickerSpec } from "../../src/cli/ui-contract";
 const snapshot = sessionSnapshotSchema.parse({
   version: 1, id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", title: "Active task", workspace: "/tmp",
@@ -16,7 +16,7 @@ afterEach(() => vi.useRealTimers());
 
 it("marks running and approval sessions as active in the resume picker", async () => {
   const choose = vi.fn(async (_spec: PickerSpec, _signal: AbortSignal) => null);
-  await pickSession({ listSessions: async () => [snapshot, { ...snapshot, status: "awaiting_approval" }, { ...snapshot, status: "completed" }] } as HarnessService,
+  await pickSession({ listSessions: async () => [snapshot, { ...snapshot, status: "awaiting_approval" }, { ...snapshot, status: "completed" }] } as unknown as HarnessService,
     { ui: { setStatus: () => {}, choose } } as unknown as CliIO, "", new AbortController().signal);
   expect(choose.mock.calls[0]?.[0].items.map(item => item.active === true)).toEqual([true, true, false]);
 });

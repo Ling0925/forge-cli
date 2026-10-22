@@ -1,26 +1,26 @@
 import { open } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { HarnessService } from "../shared/contracts";
-import { ForgeError } from "../shared/errors";
+import type { HarnessService } from "@forge/core/shared/contracts";
+import { ForgeError } from "@forge/core/shared/errors";
 import {
   type ModelAccessRequest,
   type ModelAccessResult,
   type RouteGroup,
   accountPlatformSchema,
   routeGroupSchema,
-} from "../shared/model-access";
-import type { ModelCatalog } from "../shared/model-catalog";
+} from "@forge/core/shared/model-access";
+import type { ModelCatalog } from "@forge/core/shared/model-catalog";
 import {
   configureInputSchema,
   parseSessionId,
   providerSourceOperationSchema,
   publicSettingsSchema,
-} from "../shared/schemas";
+} from "@forge/core/shared/schemas";
 import type {
   ConfigureInput,
   ProviderSourceOperation,
   PublicSettings,
-} from "../shared/schemas";
+} from "@forge/core/shared/schemas";
 
 // Match the existing host RPC envelope rather than adding a smaller CLI cap.
 const privateInputLimit = 16 * 1024 * 1024;

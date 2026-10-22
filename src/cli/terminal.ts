@@ -1,4 +1,4 @@
-import { ForgeError } from "../shared/errors";
+import { ForgeError } from "@forge/core/shared/errors";
 import { parseApprovalAnswer } from "./approval-policy";
 import { terminalText } from "./format";
 import { PlainController } from "./plain-controller";

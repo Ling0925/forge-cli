@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import { runCliWithIO } from "../../src/cli/cli";
 import type { CliIO } from "../../src/cli/cli";
 import type { RunStatus, TerminalUI } from "../../src/cli/ui-contract";
-import type { HarnessService } from "../../src/shared/contracts";
+import type { HarnessService } from "@forge/core/shared/contracts";
 import {
   defaultPublicSettings,
   parseSessionId,
   sessionSnapshotSchema,
   sessionSummarySchema,
-} from "../../src/shared/schemas";
-import type { SessionSummary } from "../../src/shared/schemas";
+} from "@forge/core/shared/schemas";
+import type { SessionSummary } from "@forge/core/shared/schemas";
 import { extendedService } from "./service-fixture";
 
 const id = parseSessionId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");

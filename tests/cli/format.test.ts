@@ -14,7 +14,7 @@ import {
   stringWidth,
   truncate,
 } from "../../src/cli/theme";
-import { type TaskPlan, parseSessionId } from "../../src/shared/schemas";
+import { type TaskPlan, parseSessionId } from "@forge/core/shared/schemas";
 
 describe("Theme utilities", () => {
   it("calculates string width for ASCII, CJK, and emoji", () => {

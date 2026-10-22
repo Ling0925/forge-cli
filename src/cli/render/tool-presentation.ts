@@ -1,4 +1,4 @@
-import { toolResultSchema, type ToolResult } from "../../shared/schemas";
+import { toolResultSchema, type ToolResult } from "@forge/core/shared/schemas";
 import { textLines } from "./envelope";
 
 const object = (value: unknown): Record<string, unknown> | undefined =>

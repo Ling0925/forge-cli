@@ -1,4 +1,4 @@
-import type { ApprovalRequest } from "../../shared/schemas";
+import type { ApprovalRequest } from "@forge/core/shared/schemas";
 import { approvalAuditArguments } from "../approval-policy";
 import { uiSymbols } from "../symbols";
 import type { RichLine } from "../ui-contract";

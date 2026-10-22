@@ -1,7 +1,7 @@
-import { createHarness } from "../core/harness";
-import { createRuntimeHub } from "../host/runtime";
-import { hostError } from "../host/errors";
-import { createLocalHost } from "../host/local-server";
+import { createHarness } from "@forge/core/core/harness";
+import { createRuntimeHub } from "@forge/core/host/runtime";
+import { hostError } from "@forge/core/host/errors";
+import { createLocalHost } from "@forge/core/host/local-server";
 
 export async function runHeadlessHost(
   args: readonly string[],

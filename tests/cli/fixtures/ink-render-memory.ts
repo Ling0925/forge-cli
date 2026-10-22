@@ -5,7 +5,7 @@ import { PassThrough, Writable } from "node:stream";
 import { setImmediate as tick } from "node:timers/promises";
 import { createElement } from "react";
 import { render } from "ink";
-import type { AgentEvent } from "../../../src/shared/schemas";
+import type { AgentEvent } from "@forge/core/shared/schemas";
 import { InkView } from "../../../src/cli/ink/view";
 import { initialInput } from "../../../src/cli/ink/input-state";
 import type { InkViewState } from "../../../src/cli/ink/types";

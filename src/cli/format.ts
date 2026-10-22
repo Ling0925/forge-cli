@@ -2,7 +2,7 @@ import type {
   ApprovalRequest,
   SessionSummary,
   TaskPlan,
-} from "../shared/schemas";
+} from "@forge/core/shared/schemas";
 import { SLASH_COMMANDS } from "./commands";
 import { uiSymbols } from "./symbols";
 import { MarkdownStream } from "./render/markdown";

@@ -1,10 +1,9 @@
 {
-  "name": "forge-desktop-harness",
+  "name": "@forge/cli",
   "version": "0.1.0",
   "private": true,
-  "description": "Original shared desktop and CLI agent harness",
+  "description": "Forge terminal client: Ink chat, one-shot runs, sessions and local-host attach",
   "type": "module",
-  "main": "dist/desktop/main.cjs",
   "bin": {
     "forge": "dist/cli.mjs"
   },
@@ -13,88 +12,33 @@
   },
   "packageManager": "pnpm@11.18.0",
   "scripts": {
+    "build": "node scripts/build-core.mjs",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "test": "vitest run",
-    "build": "node scripts/build.mjs",
-    "desktop": "electron .",
-    "cli": "node dist/cli.mjs",
-    "dev": "node scripts/dev.mjs",
-    "dev:web": "node scripts/dev-web.mjs",
-    "build:web": "node scripts/build-web.mjs",
-    "serve:web": "node dist/web/serve.mjs",
-    "package": "pnpm build && electron-builder --linux --dir",
-    "audit:react": "react-doctor .",
-    "browser:install": "playwright install chromium"
+    "verify:boundaries": "node scripts/check-boundaries.mjs",
+    "check": "pnpm verify:boundaries && pnpm typecheck && pnpm test",
+    "cli": "node dist/cli.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.135.0",
-    "@fontsource-variable/geist": "^5.3.0",
-    "@fontsource-variable/geist-mono": "^5.3.0",
-    "@phosphor-icons/react": "^2.1.7",
+    "@forge/core": "file:../forge-core",
     "cli-highlight": "^2.1.11",
-    "commander": "^13.1.0",
-    "htmlparser2": "^12.0.0",
     "ink": "6.6.0",
-    "ipaddr.js": "^2.5.0",
     "marked": "^15.0.12",
     "marked-terminal": "^7.3.0",
-    "openai": "^7.35.0",
-    "playwright": "^1.51.1",
-    "qrcode": "^1.5.4",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1",
-    "string-width": "8.3.0",
-    "ws": "8.22.0",
-    "zod": "^3.24.2",
-    "zod-to-json-schema": "3.25.2"
+    "string-width": "8.3.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/marked-terminal": "^6.1.1",
     "@types/node": "^22.14.0",
-    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.0.12",
-    "@types/react-dom": "^19.0.4",
-    "@types/ws": "^8.18.2",
-    "@vitejs/plugin-react": "^6.1.2",
-    "electron": "44.7.0",
-    "electron-builder": "^26.0.12",
     "esbuild": "^0.25.3",
-    "react-doctor": "^0.9.18",
-    "react-grab": "^0.2.0",
-    "react-scan": "^0.5.7",
+    "playwright": "^1.51.1",
     "typescript": "^5.8.3",
-    "vite": "^8.3.4",
-    "vitest": "^3.1.2"
-  },
-  "build": {
-    "appId": "org.forge.harness",
-    "productName": "Forge",
-    "asar": true,
-    "asarUnpack": [
-      "node_modules/playwright/**/*",
-      "node_modules/playwright-core/**/*"
-    ],
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "package.json",
-      "node_modules/**/*",
-      "!.build/**/*"
-    ],
-    "npmRebuild": false,
-    "linux": {
-      "target": [
-        "dir"
-      ],
-      "category": "Development",
-      "executableName": "forge-desktop"
-    }
+    "vitest": "^3.1.2",
+    "zod": "^3.24.2"
   }
 }

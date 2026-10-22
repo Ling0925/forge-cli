@@ -10,7 +10,7 @@ import { wrapRichLines } from "../../src/cli/render/rich";
 import { reasoningLine } from "../../src/cli/render/reasoning";
 import { ReadingView, Transcript } from "../../src/cli/ink/transcript";
 import type { InkViewState } from "../../src/cli/ink/types";
-import type { AgentEvent } from "../../src/shared/schemas";
+import type { AgentEvent } from "@forge/core/shared/schemas";
 
 const event = (value: object) => value as AgentEvent;
 afterEach(() => vi.unstubAllEnvs());

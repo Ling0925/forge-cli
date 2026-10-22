@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SessionId } from "../../src/shared/schemas";
-import type { TaskDetail, TaskPage, TaskService, TaskView } from "../../src/shared/task-view";
+import type { SessionId } from "@forge/core/shared/schemas";
+import type { TaskDetail, TaskPage, TaskService, TaskView } from "@forge/core/shared/task-view";
 import type { CliIO } from "../../src/cli/cli";
 import { showTasks } from "../../src/cli/interactive/tasks";
 import type { PickerSpec, TerminalUI } from "../../src/cli/ui-contract";

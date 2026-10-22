@@ -1,5 +1,5 @@
-import type { HarnessService } from "../../shared/contracts";
-import type { SessionSnapshot } from "../../shared/schemas";
+import type { HarnessService } from "@forge/core/shared/contracts";
+import type { SessionSnapshot } from "@forge/core/shared/schemas";
 import { isActiveSession } from "./pickers";
 
 /** Observe persisted state only: never starts, attaches to, or cancels a run. */

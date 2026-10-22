@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SessionCache, cacheRate } from "../../src/cli/interactive/session-cache";
-import { parseSessionId, type AgentEvent, type ContextUsage } from "../../src/shared/schemas";
+import { parseSessionId, type AgentEvent, type ContextUsage } from "@forge/core/shared/schemas";
 
 const id = parseSessionId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
 const other = parseSessionId("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");

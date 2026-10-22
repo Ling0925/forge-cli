@@ -1,5 +1,5 @@
-import { ForgeError } from "../../shared/errors";
-import { textPromptSchema } from "../../shared/schemas";
+import { ForgeError } from "@forge/core/shared/errors";
+import { textPromptSchema } from "@forge/core/shared/schemas";
 import { terminalText } from "../format";
 import { DEFAULT_MAX_QUEUE_BYTES, DEFAULT_MAX_QUEUE_LINES } from "../terminal";
 

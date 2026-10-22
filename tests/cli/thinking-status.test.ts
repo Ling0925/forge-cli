@@ -3,7 +3,7 @@ import { expect, it, vi } from "vitest";
 import { createEventRenderer } from "../../src/cli/render/events";
 import { TerminalReader } from "./legacy/reader";
 import { stripAnsi } from "../../src/cli/theme";
-import type { AgentEvent, ContextUsage } from "../../src/shared/schemas";
+import type { AgentEvent, ContextUsage } from "@forge/core/shared/schemas";
 
 const event = (value: object) => value as AgentEvent;
 const usage = (usedTokens: number, extra: Partial<ContextUsage> = {}) => event({

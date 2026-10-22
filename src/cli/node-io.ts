@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { ForgeError } from "../shared/errors";
-import { historyEligible, openPromptHistory } from "../store/prompt-history";
+import { ForgeError } from "@forge/core/shared/errors";
+import { historyEligible, openPromptHistory } from "@forge/core/store/prompt-history";
 import type { CliIO } from "./cli";
 import { TerminalReader } from "./terminal";
 import { InkController } from "./ink/controller";

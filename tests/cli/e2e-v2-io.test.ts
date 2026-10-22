@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { createNodeIO } from "../../src/cli/node-io";
-import { sessionSnapshotSchema } from "../../src/shared/schemas";
+import { sessionSnapshotSchema } from "@forge/core/shared/schemas";
 
 describe("v2 actual CliIO and persisted fixtures", () => {
   it("validates every resume fixture with the production schema", () => {

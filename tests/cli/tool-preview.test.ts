@@ -3,9 +3,9 @@ import { LiveRun } from "../../src/cli/live-run";
 import { createEventRenderer } from "../../src/cli/render/events";
 import { createTheme } from "../../src/cli/theme";
 import { runCliWithIO, type CliIO } from "../../src/cli/cli";
-import type { AgentEvent, SessionSnapshot } from "../../src/shared/schemas";
-import { defaultPublicSettings, sessionSnapshotSchema } from "../../src/shared/schemas";
-import type { HarnessService } from "../../src/shared/contracts";
+import type { AgentEvent, SessionSnapshot } from "@forge/core/shared/schemas";
+import { defaultPublicSettings, sessionSnapshotSchema } from "@forge/core/shared/schemas";
+import type { HarnessService } from "@forge/core/shared/contracts";
 import { extendedService } from "./service-fixture";
 import type { RichLine } from "../../src/cli/ui-contract";
 

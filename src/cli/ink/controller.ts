@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { Instance } from "ink";
-import type { ApprovalRequest, TaskPlan } from "../../shared/schemas";
+import type { ApprovalRequest, TaskPlan } from "@forge/core/shared/schemas";
 import { approvalLines, terminalText } from "../format";
 import { plainLines } from "../render/rich";
 import { terminalColorDepth } from "../palette";

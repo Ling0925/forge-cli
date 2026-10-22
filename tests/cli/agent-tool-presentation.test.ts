@@ -4,7 +4,7 @@ import { ToolTranscript } from "../../src/cli/render/tool-transcript";
 import { toolSummaryLines } from "../../src/cli/render/tools";
 import type { RichLine } from "../../src/cli/ui-contract";
 import { visibleWidth } from "../../src/cli/theme";
-import type { ToolCall, ToolResult } from "../../src/shared/schemas";
+import type { ToolCall, ToolResult } from "@forge/core/shared/schemas";
 
 const result = (value: unknown, isError = false): ToolResult => ({ content: JSON.stringify(value), isError });
 const text = (rows: readonly RichLine[]) => rows.map(row => row.map(span => span.text).join("")).join("\n");

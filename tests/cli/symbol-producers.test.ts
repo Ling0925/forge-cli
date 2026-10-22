@@ -7,11 +7,11 @@ import { reasoningLine } from "../../src/cli/render/reasoning";
 import { toolRunningLine, toolSummaryLines, toolFinishLines } from "../../src/cli/render/tools";
 import { planLines } from "../../src/cli/format";
 import { stringWidth } from "../../src/cli/render/width";
-import { sessionSnapshotSchema, type ApprovalRequest, type ToolCall, type ToolResult } from "../../src/shared/schemas";
+import { parseSessionId, sessionSnapshotSchema, type ApprovalRequest, type ToolCall, type ToolResult } from "@forge/core/shared/schemas";
 import type { RichLine } from "../../src/cli/ui-contract";
 
 const text = (rows: readonly RichLine[]) => rows.map(row => row.map(s => s.text).join("")).join("\n");
-const id = "12345678-1234-4234-8234-123456789abc";
+const id = parseSessionId("12345678-1234-4234-8234-123456789abc");
 const base = { sessionId: id, timestamp: "2026-01-01T00:00:00Z" };
 const original = "中文 ❯ ✔ ─ 👩‍💻";
 const call: ToolCall = { id: "t", type: "function", function: { name: "run_command", arguments: JSON.stringify({ argv: ["echo", original] }) } };

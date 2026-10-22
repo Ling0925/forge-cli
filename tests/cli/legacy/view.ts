@@ -1,4 +1,4 @@
-import type { TaskPlan } from "../../../src/shared/schemas";
+import type { TaskPlan } from "@forge/core/shared/schemas";
 import { terminalText } from "../../../src/cli/format";
 import { compactTokens } from "../../../src/cli/render/token-count";
 import { wrapRichLines } from "../../../src/cli/render/rich";

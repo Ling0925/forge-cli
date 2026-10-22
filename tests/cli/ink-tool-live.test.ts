@@ -7,7 +7,7 @@ import { initialInput } from "../../src/cli/ink/input-state";
 import { createEventRenderer } from "../../src/cli/render/events";
 import { stripAnsi } from "../../src/cli/render/width";
 import type { InkViewState } from "../../src/cli/ink/types";
-import type { AgentEvent } from "../../src/shared/schemas";
+import type { AgentEvent } from "@forge/core/shared/schemas";
 
 it("paints preparing and running tools in real incremental Ink output before any result arrives", async () => {
   const output = Object.assign(new PassThrough(), { isTTY: true, columns: 100, rows: 24 });

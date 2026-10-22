@@ -1,8 +1,8 @@
 import { expect, it, vi } from "vitest";
 import { runCliWithIO, type CliIO } from "../../src/cli/cli";
-import type { HarnessService } from "../../src/shared/contracts";
-import { defaultPublicSettings, parseSessionId, sessionSnapshotSchema } from "../../src/shared/schemas";
-import type { TaskService } from "../../src/shared/task-view";
+import type { HarnessService } from "@forge/core/shared/contracts";
+import { defaultPublicSettings, parseSessionId, sessionSnapshotSchema } from "@forge/core/shared/schemas";
+import type { TaskService } from "@forge/core/shared/task-view";
 import type { TerminalUI } from "../../src/cli/ui-contract";
 import { extendedService } from "./service-fixture";
 const id = parseSessionId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");

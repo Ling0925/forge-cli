@@ -1,4 +1,4 @@
-import type { ApprovalRequest, TaskPlan } from "../../../src/shared/schemas";
+import type { ApprovalRequest, TaskPlan } from "@forge/core/shared/schemas";
 import { approvalLines, terminalText } from "../../../src/cli/format";
 import { SlashMenu } from "../../../src/cli/slash-menu";
 import { createTheme, resolveTheme } from "../../../src/cli/theme";

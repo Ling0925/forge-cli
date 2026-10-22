@@ -1,6 +1,6 @@
 import { PassThrough } from "node:stream";
 import { expect, it, vi } from "vitest";
-import type { AgentEvent, ToolCall } from "../../src/shared/schemas";
+import type { AgentEvent, ToolCall } from "@forge/core/shared/schemas";
 import { createEventRenderer } from "../../src/cli/render/events";
 import { TerminalReader } from "./legacy/reader";
 import { LiveRun } from "../../src/cli/live-run";

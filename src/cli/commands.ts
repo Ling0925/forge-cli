@@ -1,6 +1,6 @@
 import { type Theme, defaultTheme, getTerminalWidth, truncate } from "./theme";
-import { SLASH_COMMANDS, type SlashCommand } from "../shared/slash-commands";
-export { SLASH_COMMANDS, matchSlashCommands, type SlashCommand } from "../shared/slash-commands";
+import { SLASH_COMMANDS, type SlashCommand } from "@forge/core/shared/slash-commands";
+export { SLASH_COMMANDS, matchSlashCommands, type SlashCommand } from "@forge/core/shared/slash-commands";
 
 export const formatCommandUsage = (): string =>
   `${SLASH_COMMANDS.map((c) => (c.args ? `${c.name} ${c.args}` : c.name)).join(" ")}\nEnd a line with \\ for multiline input. Ctrl+C stops a run; at the prompt the first interrupt clears the current input and returns a fresh prompt, and a second interrupt (without a new line) exits.\n`;

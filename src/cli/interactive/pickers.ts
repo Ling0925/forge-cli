@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
-import type { HarnessService } from "../../shared/contracts";
-import { settingsFields } from "../../shared/schemas";
-import { isPrimarySession } from "../../shared/sessions";
+import type { HarnessService } from "@forge/core/shared/contracts";
+import { settingsFields } from "@forge/core/shared/schemas";
+import { isPrimarySession } from "@forge/core/shared/sessions";
 import type { CliIO } from "../cli";
 import type { PickerSpec } from "../ui-contract";
 import { abortable } from "./abortable";

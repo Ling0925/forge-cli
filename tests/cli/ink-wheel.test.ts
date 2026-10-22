@@ -1,7 +1,7 @@
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { InkController } from "../../src/cli/ink/controller";
-import { TerminalModes } from "../../src/cli/ink/terminal-modes";
+import { TerminalModes, type TerminalInput } from "../../src/cli/ink/terminal-modes";
 import { InputDecoder } from "../../src/cli/terminal/decoder";
 import type { InkViewState } from "../../src/cli/ink/types";
 
@@ -67,7 +67,7 @@ it.each(["opt-out", "screen-reader"])("does not enable or consume wheel reports 
 it("enables reports only in fullscreen and restores them once even if individual resets fail", () => {
   const input = new Input(); const writes: string[] = [];
   let fail = "";
-  const modes = new TerminalModes(input, { isTTY: true, write: (text: string) => {
+  const modes = new TerminalModes(input as unknown as TerminalInput, { isTTY: true, write: (text: string) => {
     writes.push(text); if (text === fail) throw new Error("write failed"); return true;
   } } as NodeJS.WriteStream, () => {});
   modes.configure("dark"); expect(modes.mouseEnabled).toBe(false);
@@ -81,7 +81,7 @@ it("enables reports only in fullscreen and restores them once even if individual
 
 it("cleans reports after a partially successful enable and skips dumb/nonTTY fullscreen", () => {
   const input = new Input(); const writes: string[] = [];
-  const modes = new TerminalModes(input, { isTTY: true, write: (text: string) => {
+  const modes = new TerminalModes(input as unknown as TerminalInput, { isTTY: true, write: (text: string) => {
     writes.push(text); if (text.includes("1000h")) throw new Error("enable failed"); return true;
   } } as NodeJS.WriteStream, () => {});
   modes.configure("dark"); expect(() => modes.enterFullscreen()).toThrow("enable failed");
@@ -89,7 +89,7 @@ it("cleans reports after a partially successful enable and skips dumb/nonTTY ful
   expect(writes).toContain("\x1b[?1049l"); expect(input.isRaw).toBe(false);
   for (const tty of [false, true]) {
     vi.stubEnv("TERM", tty ? "dumb" : "xterm-256color");
-    const write = vi.fn(); const plain = new TerminalModes(input, { isTTY: tty, write } as unknown as NodeJS.WriteStream, () => {});
+    const write = vi.fn(); const plain = new TerminalModes(input as unknown as TerminalInput, { isTTY: tty, write } as unknown as NodeJS.WriteStream, () => {});
     plain.enterFullscreen(); plain.dispose(); expect(write).not.toHaveBeenCalled();
   }
 });

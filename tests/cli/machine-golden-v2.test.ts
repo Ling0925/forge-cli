@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { type CliIO, runCliWithIO } from "../../src/cli/cli";
-import type { HarnessService } from "../../src/shared/contracts";
+import type { HarnessService } from "@forge/core/shared/contracts";
 import {
   type SessionSnapshot,
   defaultPublicSettings,
   parseSessionId,
-} from "../../src/shared/schemas";
+} from "@forge/core/shared/schemas";
 import { extendedService } from "./service-fixture";
 
 const id = parseSessionId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");

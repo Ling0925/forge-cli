@@ -1,6 +1,6 @@
-import { resolveStateDirectory } from "../core/state-directory";
-import { ForgeError } from "../shared/errors";
-import { openDeviceAuthorization } from "../store/devices";
+import { resolveStateDirectory } from "@forge/core/core/state-directory";
+import { ForgeError } from "@forge/core/shared/errors";
+import { openDeviceAuthorization } from "@forge/core/store/devices";
 
 export async function runDevices(
   args: readonly string[],

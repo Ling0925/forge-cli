@@ -10,7 +10,7 @@ import { InputStore } from "../../src/cli/ink/input-store";
 import type { InkViewState } from "../../src/cli/ink/types";
 import { contextFooter } from "../../src/cli/terminal/context-footer";
 import { stripAnsi, stringWidth, truncate } from "../../src/cli/render/width";
-import { measureContext } from "../../src/shared/context-usage";
+import { measureContext } from "@forge/core/shared/context-usage";
 
 afterEach(() => vi.unstubAllEnvs());
 const base: InkViewState = { columns: 80, rows: 24, tail: [], status: null, context: null, plan: null,

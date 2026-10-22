@@ -1,4 +1,4 @@
-import type { AgentEvent, SessionSnapshot } from "../../shared/schemas";
+import type { AgentEvent, SessionSnapshot } from "@forge/core/shared/schemas";
 import { uiSymbols } from "../symbols";
 
 export interface SessionCacheUsage {

@@ -7,25 +7,25 @@ import {
   createEventRenderer,
   providerAttemptLine,
 } from "../../src/cli/render/events";
-import type { HarnessService } from "../../src/shared/contracts";
+import type { HarnessService } from "@forge/core/shared/contracts";
 import type {
   ModelAccessRequest,
   ModelAccessResult,
   ProviderAttempt,
-} from "../../src/shared/model-access";
+} from "@forge/core/shared/model-access";
 import {
   defaultPublicSettings,
   parseSessionId,
   publicProviderSourceSchema,
   publicSettingsSchema,
   sessionSnapshotSchema,
-} from "../../src/shared/schemas";
+} from "@forge/core/shared/schemas";
 import type {
   ConfigureInput,
   CreateSessionInput,
   RunInput,
   SessionSnapshot,
-} from "../../src/shared/schemas";
+} from "@forge/core/shared/schemas";
 import { extendedService } from "./service-fixture";
 
 const id = parseSessionId("20000000-0000-4000-8000-000000000001");

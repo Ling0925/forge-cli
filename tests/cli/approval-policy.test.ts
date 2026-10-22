@@ -11,7 +11,7 @@ import {
   type ApprovalRequest,
   type Permission,
   parseSessionId,
-} from "../../src/shared/schemas";
+} from "@forge/core/shared/schemas";
 
 const baseRequest: ApprovalRequest = {
   id: "20000000-0000-4000-8000-000000000001",

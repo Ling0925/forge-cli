@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { reasoningLine } from "../../src/cli/render/reasoning";
 import { historyLines } from "../../src/cli/render/history";
-import { sessionSnapshotSchema } from "../../src/shared/schemas";
+import { sessionSnapshotSchema } from "@forge/core/shared/schemas";
 
 const text = (lines: readonly (readonly { text: string }[])[]) =>
   lines.map((line) => line.map((span) => span.text).join("")).join("\n");

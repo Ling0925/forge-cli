@@ -4,13 +4,14 @@ import { build } from "esbuild";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 process.chdir(root);
-// Do not remove desktop or renderer outputs produced by another build.
+// The CLI is a separate repository. Keep @forge/core as a package boundary
+// instead of bundling the sibling repository's sources or aliasing its paths.
 await mkdir("dist", { recursive: true });
 await build({
   bundle: true,
   platform: "node",
   target: "node22",
-  external: ["electron", "playwright", "playwright-core", "ink", "react"],
+  external: ["@forge/core", "@forge/core/*", "ink", "react"],
   sourcemap: false,
   legalComments: "eof",
   logLevel: "info",

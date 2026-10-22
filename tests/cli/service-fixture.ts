@@ -1,5 +1,5 @@
-import { mcpRegisterInputSchema } from "../../src/mcp/types";
-import type { HarnessService } from "../../src/shared/contracts";
+import { mcpRegisterInputSchema } from "@forge/core/mcp/types";
+import type { HarnessService } from "@forge/core/shared/contracts";
 
 /** Explicit defaults for the entire public service; tests override only their subject. */
 export const extendedService = (): Pick<

@@ -1,4 +1,4 @@
-import type { ToolResult } from "../../shared/schemas";
+import type { ToolResult } from "@forge/core/shared/schemas";
 import { sanitizeText } from "./sanitize";
 
 const PREVIEW_LINES = 12;

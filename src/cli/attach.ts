@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { hostError } from "../host/errors";
-import { connectLocalHost } from "../host/local-client";
-import { rpcRequestSchema } from "../shared/ipc";
+import { hostError } from "@forge/core/host/errors";
+import { connectLocalHost } from "@forge/core/host/local-client";
+import { rpcRequestSchema } from "@forge/core/shared/ipc";
 import type { CliIO } from "./cli";
 
 export const attachHelp = `forge attach --socket /private/directory/host.sock [--host-id UUID] [--cursor N] <command>

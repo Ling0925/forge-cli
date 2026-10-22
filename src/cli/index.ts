@@ -1,6 +1,6 @@
 import { runDevices } from "./devices";
-import { createHarness } from "../core/harness";
-import { toErrorInfo } from "../shared/errors";
+import { createHarness } from "@forge/core/core/harness";
+import { toErrorInfo } from "@forge/core/shared/errors";
 import { runCli } from "./cli";
 import { runAttach } from "./attach";
 import { runHeadlessHost } from "./host";

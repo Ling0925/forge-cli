@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { expect, it, vi } from "vitest";
-import { historyEligible, openPromptHistory } from "../../src/store/prompt-history";
+import { historyEligible, openPromptHistory } from "@forge/core/store/prompt-history";
 import { createNodeIO } from "../../src/cli/node-io";
 
 it("persists only eligible workspace-scoped prompts and recalls without approving", async () => {

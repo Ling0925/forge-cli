@@ -1,9 +1,9 @@
-import type { ProviderAttempt } from "../../shared/model-access";
-import type { AgentEvent, ApprovalRequest, TaskPlan, ToolCall } from "../../shared/schemas";
+import type { ProviderAttempt } from "@forge/core/shared/model-access";
+import type { AgentEvent, ApprovalRequest, TaskPlan, ToolCall } from "@forge/core/shared/schemas";
 import type { RenderUpdate, RichLine, RunStatus } from "../ui-contract";
-import { estimateTokens } from "../../shared/context-usage";
+import { estimateTokens } from "@forge/core/shared/context-usage";
 import { MarkdownStream, markdownLines } from "./markdown";
-import { webSearchDetails, webSearchStatus } from "../../shared/web-search-display";
+import { webSearchDetails, webSearchStatus } from "@forge/core/shared/web-search-display";
 import { uiSymbols } from "../symbols";
 import { wrapRichLines } from "./rich";
 import { sanitizeText } from "./sanitize";
@@ -460,6 +460,8 @@ export const createEventRenderer = (
         case "agent_progress": // Do not mix the child's reply into parent Markdown.
         case "approval_resolved":
         case "title_changed":
+        case "generation_started":
+        case "generation_finished":
           return { append: [], tail };
         case "permission_changed":
         case "context_compacted":

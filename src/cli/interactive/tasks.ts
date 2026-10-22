@@ -1,5 +1,5 @@
-import type { SessionId } from "../../shared/schemas";
-import type { TaskService, TaskView, TaskPage, TaskDetail } from "../../shared/task-view";
+import type { SessionId } from "@forge/core/shared/schemas";
+import type { TaskService, TaskView, TaskPage, TaskDetail } from "@forge/core/shared/task-view";
 import type { CliIO } from "../cli";
 import { terminalText } from "../format";
 import type { PickerSpec } from "../ui-contract";

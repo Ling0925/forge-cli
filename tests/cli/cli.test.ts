@@ -5,23 +5,23 @@ import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { runCliWithIO } from "../../src/cli/cli";
 import type { CliIO } from "../../src/cli/cli";
-import { mcpRegisterInputSchema } from "../../src/mcp/types";
-import type { HarnessService } from "../../src/shared/contracts";
-import { ForgeError } from "../../src/shared/errors";
+import { mcpRegisterInputSchema } from "@forge/core/mcp/types";
+import type { HarnessService } from "@forge/core/shared/contracts";
+import { ForgeError } from "@forge/core/shared/errors";
 import {
   defaultPublicSettings,
   parseSessionId,
   sessionSnapshotSchema,
-} from "../../src/shared/schemas";
+} from "@forge/core/shared/schemas";
 import type {
   ConfigureInput,
   RunInput,
   SessionStatus,
-} from "../../src/shared/schemas";
+} from "@forge/core/shared/schemas";
 import { extendedService } from "./service-fixture";
-import { createMcpService } from "../../src/mcp/registry";
-import { openToolHooksStore } from "../../src/store/tool-hooks";
-import { mcpRecordDtoSchema, mcpRegisterDtoSchema } from "../../src/shared/ipc";
+import { createMcpService } from "@forge/core/mcp/registry";
+import { openToolHooksStore } from "@forge/core/store/tool-hooks";
+import { mcpRecordDtoSchema, mcpRegisterDtoSchema } from "@forge/core/shared/ipc";
 
 const id = parseSessionId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
 const timestamp = "2026-01-01T00:00:00.000Z";

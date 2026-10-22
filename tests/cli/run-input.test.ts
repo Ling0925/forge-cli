@@ -5,7 +5,7 @@ import { createNodeIO } from "../../src/cli/node-io";
 import { TerminalReader } from "../../src/cli/terminal";
 import { resolveTheme } from "../../src/cli/theme";
 import type { RenderUpdate, TerminalUI } from "../../src/cli/ui-contract";
-import type { AgentEvent } from "../../src/shared/schemas";
+import type { AgentEvent } from "@forge/core/shared/schemas";
 
 class Input extends PassThrough {
   isRaw = false;

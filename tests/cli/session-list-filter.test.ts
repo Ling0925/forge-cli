@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { type CliIO, runCliWithIO } from "../../src/cli/cli";
 import { pickSession } from "../../src/cli/interactive/pickers";
-import type { HarnessService } from "../../src/shared/contracts";
-import { parseSessionId, sessionSummarySchema } from "../../src/shared/schemas";
-import { isPrimarySession } from "../../src/shared/sessions";
-import { createSlashActions } from "../../src/shared/slash-actions";
+import type { HarnessService } from "@forge/core/shared/contracts";
+import { parseSessionId, sessionSummarySchema } from "@forge/core/shared/schemas";
+import { isPrimarySession } from "@forge/core/shared/sessions";
+import { createSlashActions } from "@forge/core/shared/slash-actions";
 
 const parentId = parseSessionId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
 const parent = sessionSummarySchema.parse({
@@ -18,7 +18,7 @@ const archived = sessionSummarySchema.parse({ ...parent,
   id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", title: "Archived main session", archived: true,
 });
 const sessions = [child, parent, archived];
-const service = { listSessions: async () => sessions } as HarnessService;
+const service = { listSessions: async () => sessions } as unknown as HarnessService;
 const host = () => {
   const stdout = vi.fn();
   const io: CliIO = {

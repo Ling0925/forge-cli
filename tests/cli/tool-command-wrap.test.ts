@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { toolSummaryLines } from "../../src/cli/render/tools";
-import type { ToolCall } from "../../src/shared/schemas";
+import type { ToolCall } from "@forge/core/shared/schemas";
 
 const text = (rows: readonly (readonly { text: string }[])[]) =>
   rows.map((row) => row.map((span) => span.text).join("")).join("\n");

@@ -1,5 +1,5 @@
-import { createDiffPatch } from "../../src/shared/diff";
-import { sessionSnapshotSchema, type SessionSnapshot } from "../../src/shared/schemas";
+import { createDiffPatch } from "@forge/core/shared/diff";
+import { sessionSnapshotSchema, type SessionSnapshot } from "@forge/core/shared/schemas";
 
 export function reviewSession(overrides: Partial<SessionSnapshot> = {}): SessionSnapshot {
   return sessionSnapshotSchema.parse({

@@ -1,9 +1,9 @@
 import { expect, it } from "vitest";
 import { createEventRenderer } from "../../src/cli/render/events";
-import { toolActivity } from "../../src/shared/tool-activity";
-import { agentEventSchema, type AgentEvent, type ApprovalRequest } from "../../src/shared/schemas";
+import { toolActivity } from "@forge/core/shared/tool-activity";
+import { agentEventSchema, parseSessionId, type AgentEvent, type ApprovalRequest } from "@forge/core/shared/schemas";
 import type { RichLine } from "../../src/cli/ui-contract";
-const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const id = parseSessionId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
 const base = { sessionId: id, timestamp: "2026-01-01T00:00:00Z" };
 const child = (status: "running" | "completed" | "failed", activity?: string): AgentEvent => ({ ...base, type: "agent_update", childSessionId: id, model: "flash", status, summary: "PRIVATE CHILD OUTPUT", ...(activity ? { currentTool: { name: "run_command", target: activity } } : {}) });
 const text = (rows: readonly RichLine[]) => rows.map(row => row.map(s => s.text).join("")).join("\n");
@@ -48,6 +48,6 @@ it("bounds child cards and parses optional activity while omitting edit bodies",
   expect(toolActivity({ ...call, function: { name: "edit_file", arguments: '{"path":"a.ts","new_text":"PRIVATE"}' } })).toEqual({ name: "edit_file", target: "a.ts" });
   expect(agentEventSchema.parse(child("running", "node"))).toMatchObject({ currentTool: { target: "node" } });
   const r = createEventRenderer({ width: () => 40 });
-  for (let n = 0; n < 8; n++) r.push({ ...child("running"), childSessionId: `${n}aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa` });
+  for (let n = 0; n < 8; n++) r.push({ ...child("running"), childSessionId: parseSessionId(`${n}aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`) } as AgentEvent);
   expect(r.push({ ...base, type: "state_changed", status: "running" }).tail.length).toBeLessThanOrEqual(4);
 });

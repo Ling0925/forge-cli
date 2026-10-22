@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { createEventRenderer } from "../../src/cli/render/events";
-import type { AgentEvent } from "../../src/shared/schemas";
+import type { AgentEvent } from "@forge/core/shared/schemas";
 
 const event = (value: object) => value as AgentEvent;
 const text = (lines: readonly (readonly { text: string }[])[]) =>

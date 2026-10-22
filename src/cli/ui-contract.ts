@@ -1,4 +1,4 @@
-import type { ApprovalRequest, ContextUsage, TaskPlan } from "../shared/schemas";
+import type { ApprovalRequest, ContextUsage, TaskPlan } from "@forge/core/shared/schemas";
 
 /**
  * Typed contract between the CLI's presentation producers (formatting, command

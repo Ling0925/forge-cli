@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { estimateTokens, measureContext, reportedContext, resolveContextWindow } from "../../src/shared/context-usage";
-import { agentEventSchema } from "../../src/shared/schemas";
+import { estimateTokens, measureContext, reportedContext, resolveContextWindow } from "@forge/core/shared/context-usage";
+import { agentEventSchema } from "@forge/core/shared/schemas";
 import { contextFooter } from "../../src/cli/terminal/context-footer";
 
 describe("token window accounting", () => {

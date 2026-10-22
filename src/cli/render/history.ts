@@ -1,5 +1,5 @@
-import type { SessionSnapshot } from "../../shared/schemas";
-import { webSearchDetails } from "../../shared/web-search-display";
+import type { SessionSnapshot } from "@forge/core/shared/schemas";
+import { webSearchDetails } from "@forge/core/shared/web-search-display";
 import { uiSymbols } from "../symbols";
 import type { RichLine } from "../ui-contract";
 import { markdownLines } from "./markdown";
@@ -43,7 +43,10 @@ export const historyLines = (session: SessionSnapshot, width: number, tools = ne
         lines.push([{ text: "Forge", tone: "accent" }]);
         lines.push(...markdownLines(message.content, width));
       }
-      const sources = webSearchDetails(message);
+      const sources = webSearchDetails({
+        ...(message.citations === undefined ? {} : { citations: message.citations }),
+        ...(message.webSearches === undefined ? {} : { webSearches: message.webSearches }),
+      });
       if (sources) lines.push(...markdownLines(sources, width));
       for (const call of message.tool_calls ?? []) {
         tools.start(call, starts.get(call.id));

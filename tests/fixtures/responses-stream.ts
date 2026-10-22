@@ -1,6 +1,6 @@
 import { vi } from "vitest";
-import { createModelProvider } from "../../src/provider/openai";
-import type { Message } from "../../src/shared/schemas";
+import { createModelProvider } from "@forge/core/provider/openai";
+import type { Message } from "@forge/core/shared/schemas";
 
 export const wire = (type: string, fields: object = {}) =>
   `event: ${type}\ndata: ${JSON.stringify({ type, ...fields })}\n\n`;

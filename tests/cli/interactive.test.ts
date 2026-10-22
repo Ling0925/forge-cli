@@ -5,13 +5,13 @@ import { runCliWithIO } from "../../src/cli/cli";
 import type { CliIO } from "../../src/cli/cli";
 import { sessionDetail } from "../../src/cli/interactive/pickers";
 import type { ComposerContext, RunStatus } from "../../src/cli/ui-contract";
-import type { HarnessService } from "../../src/shared/contracts";
+import type { HarnessService } from "@forge/core/shared/contracts";
 import {
   defaultPublicSettings,
   agentEventSchema,
   parseSessionId,
   sessionSnapshotSchema,
-} from "../../src/shared/schemas";
+} from "@forge/core/shared/schemas";
 import { extendedService } from "./service-fixture";
 
 const id = parseSessionId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");

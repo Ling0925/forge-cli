@@ -1,8 +1,8 @@
 import { expect, it } from "vitest";
 import { diffLines, diffStats } from "../../src/cli/render/diff";
 import { editScript } from "../../src/cli/render/edit-script";
-import { createDiffPatch, unavailablePatch } from "../../src/shared/diff";
-import type { FileChange } from "../../src/shared/schemas";
+import { createDiffPatch, unavailablePatch } from "@forge/core/shared/diff";
+import type { FileChange } from "@forge/core/shared/schemas";
 const change = (before: string, after: string): FileChange => ({
   path: "a.ts", kind: "modified", patch: createDiffPatch(before, after),
 });

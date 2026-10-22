@@ -5,8 +5,8 @@ import { Controller } from "./legacy/controller";
 import { contextFooter } from "../../src/cli/terminal/context-footer";
 import { resolveTheme, visibleWidth } from "../../src/cli/theme";
 import type { ComposerContext, RichLine, Tone } from "../../src/cli/ui-contract";
-import { measureContext } from "../../src/shared/context-usage";
-import { contextUsageSchema, type Message } from "../../src/shared/schemas";
+import { measureContext } from "@forge/core/shared/context-usage";
+import { contextUsageSchema, type Message } from "@forge/core/shared/schemas";
 
 const text = (line: RichLine) => line.map((span) => span.text).join("");
 const context: ComposerContext = {
@@ -119,7 +119,9 @@ describe("composer context footer", () => {
     for (const compact of [false, true]) {
       const value = { ...context, model: "test/model", reasoningEffort: "high", sessionTitle: "优化会话👩‍💻" };
       expect(text(contextFooter(value, 100, compact)[0]!)).toContain("test/model (high) · 优化会话👩‍💻");
-      expect(text(contextFooter({ ...value, reasoningEffort: undefined }, 100, compact)[0]!)).toContain("test/model · 优化会话👩‍💻");
+      const withoutEffort = { ...value };
+      Reflect.deleteProperty(withoutEffort, "reasoningEffort");
+      expect(text(contextFooter(withoutEffort, 100, compact)[0]!)).toContain("test/model · 优化会话👩‍💻");
       for (const width of [1, 2, 10, 20, 40, 60, 80]) {
         const row = contextFooter({ ...value, sessionTitle: "超长标题😀".repeat(30) + "\n\t\x1b[2J" }, width, compact)[0]!;
         expect(visibleWidth(text(row))).toBeLessThanOrEqual(width);

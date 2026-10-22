@@ -1,5 +1,5 @@
 import type { ComposerContext, RichLine, RunStatus, UIOptions } from "../ui-contract";
-import type { TaskPlan } from "../../shared/schemas";
+import type { TaskPlan } from "@forge/core/shared/schemas";
 
 /** Output state only. Input focus is an independent React external store. */
 export interface InkViewState {

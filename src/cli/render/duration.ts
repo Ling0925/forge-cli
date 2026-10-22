@@ -1,4 +1,4 @@
-import type { ToolResult } from "../../shared/schemas";
+import type { ToolResult } from "@forge/core/shared/schemas";
 import { uiSymbols } from "../symbols";
 
 /** Floor fractional display values to avoid showing 60s before the m boundary. */

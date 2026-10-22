@@ -2,7 +2,8 @@ import { expect, it } from "vitest";
 import { runCliWithIO, type CliIO } from "../../src/cli/cli";
 import { planLines } from "../../src/cli/format";
 import { extendedService } from "./service-fixture";
-import { defaultPublicSettings, sessionSnapshotSchema } from "../../src/shared/schemas";
+import type { HarnessService } from "@forge/core/shared/contracts";
+import { defaultPublicSettings, sessionSnapshotSchema } from "@forge/core/shared/schemas";
 
 it("lists all independent plans through /plan with titles and IDs", async () => {
   const first = { id: "plan-a", title: "First task", explanation: "A", steps: [{ step: "A done", status: "completed" }] };
@@ -22,7 +23,7 @@ it("lists all independent plans through /plan with titles and IDs", async () => 
   const result = await runCliWithIO(["chat", "--session", snapshot.id], {
     ...extendedService(), getSettings: async () => ({ ...defaultPublicSettings, model: "fixture" }),
     getSession: async () => snapshot, listSessions: async () => [snapshot], run: async () => snapshot,
-  }, io);
+  } as unknown as HarnessService, io);
   expect(result).toBe(0);
   expect(errors).toEqual([]);
   for (const value of ["First task", "Second task", "plan-a", "plan-b", "A done", "B work"])

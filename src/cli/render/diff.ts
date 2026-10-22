@@ -1,5 +1,5 @@
-import type { FileChange } from "../../shared/schemas";
-import { createDiffPatch, unavailablePatch } from "../../shared/diff";
+import type { FileChange } from "@forge/core/shared/schemas";
+import { createDiffPatch, unavailablePatch } from "@forge/core/shared/diff";
 import type { RichLine, Span } from "../ui-contract";
 import { ControlFilter, sanitizeText } from "./sanitize";
 import { graphemes, graphemeWidth, stringWidth, truncate } from "./width";

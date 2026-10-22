@@ -1,4 +1,4 @@
-import type { ApprovalRequest, TaskPlan } from "../shared/schemas";
+import type { ApprovalRequest, TaskPlan } from "@forge/core/shared/schemas";
 import { approvalLines, terminalText } from "./format";
 import { clearEditor, editKey, emptyEditor, insertText, loadHistory, remember, setText, type InputEditor } from "./ink/input-editor";
 import type { TerminalController, TerminalControllerOptions } from "./terminal-controller";

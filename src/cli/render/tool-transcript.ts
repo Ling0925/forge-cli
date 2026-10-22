@@ -1,4 +1,4 @@
-import type { ToolCall, ToolResult } from "../../shared/schemas";
+import type { ToolCall, ToolResult } from "@forge/core/shared/schemas";
 import type { RichLine } from "../ui-contract";
 import { toolArgumentLines, toolFinishLines, toolSummaryLines, toolStartLine } from "./tools";
 import { wrapRichLines } from "./rich";

@@ -1,8 +1,8 @@
 import { expect, it } from "vitest";
 import { runCliWithIO, type CliIO } from "../../src/cli/cli";
 import { contextFooter } from "../../src/cli/terminal/context-footer";
-import { defaultPublicSettings, parseSessionId, sessionSnapshotSchema, type AgentEvent, type SessionSnapshot } from "../../src/shared/schemas";
-import type { HarnessService } from "../../src/shared/contracts";
+import { defaultPublicSettings, parseSessionId, sessionSnapshotSchema, type AgentEvent, type SessionSnapshot } from "@forge/core/shared/schemas";
+import type { HarnessService } from "@forge/core/shared/contracts";
 import type { ComposerContext, TerminalUI } from "../../src/cli/ui-contract";
 import { extendedService } from "./service-fixture";
 
