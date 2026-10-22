@@ -59,7 +59,12 @@ pnpm exec vitest run tests/cli/cli.test.ts tests/cli/provider-management.test.ts
 
 ## Git
 
-本仓库是从原库历史中提取的独立仓库，保留相关路径历史，`origin` 已移除。提交应留在本仓库，不修改父库或其他仓库；本轮为本地提交，不推送。
+本仓库从原库历史中提取，保留相关路径历史。公开仓库为 `Ling0925/forge-cli`，
+`origin` 指向该仓库。既可单独克隆，也作为主仓 `Ling0925/forge` 的
+`repos/forge-cli` 子模块使用；同级仍需有 `forge-core`。
+
+代码变更提交在本仓，不混入主仓或其他仓库的索引。同步主仓版本时，先提交并推送
+本仓，再由主仓维护者提交子模块指针；主仓的普通提交不会提交本仓的未提交文件。
 
 ## 文档状态
 
