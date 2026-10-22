@@ -2,6 +2,7 @@ import { projectSummary } from "../core/context";
 import { createSlashActions } from "../shared/slash-actions";
 import { sessionPlans } from "../shared/plans";
 import { parseSlashCommand } from "../shared/slash-commands";
+import type { SessionReviewInput } from "../shared/session-review";
 import type { HarnessService } from "../shared/contracts";
 import { budgetUsage, measureContext, resolveContextBudget, resolveContextWindow } from "../shared/context-usage";
 import { ForgeError, toErrorInfo } from "../shared/errors";
@@ -472,6 +473,7 @@ export async function interactive(
       if (!line.trim()) continue;
 
       try {
+        let review: SessionReviewInput | undefined;
         if (!fromQueue && line.startsWith("/")) {
           const { command, words, value } = parseSlashCommand(line);
           const actions = createSlashActions(service);
@@ -571,6 +573,19 @@ export async function interactive(
                 changeMode(value);
               } else safe.stdout(`Mode: ${mode}\n`);
               break;
+            case "/review": {
+              const id = requireSession().id;
+              ui?.setBusy(true);
+              active = new AbortController();
+              const clearStatus = showOperation("Preparing session review");
+              try {
+                review = await abortable(actions.review(id, value), active.signal);
+              } finally {
+                clearStatus();
+              }
+              safe.stdout(`Review: ${model} (readonly; current session changes).\n`);
+              break;
+            }
             case "/plan": {
               const snapshot = await actions.export(requireSession().id);
               const plans = sessionPlans(snapshot);
@@ -697,7 +712,7 @@ export async function interactive(
                 "Unknown or unavailable command. /help lists supported actions.\n",
               );
           }
-          continue;
+          if (!review) continue;
         }
 
         if (lifetime.signal.aborted) break;
@@ -712,20 +727,20 @@ export async function interactive(
         clearResumedWatch();
         refreshContext();
         ui?.setBusy(true);
-        active = new AbortController();
+        active ??= new AbortController();
         live = new LiveRun(safe, theme, tools, () => expandReasoning);
         runInProgress = true;
         inputHint();
         offRunInput = io.onRunInput?.(receiveInput);
-        const runMode = currentMode();
-        const runPermission = permission;
+        const runMode = review?.mode ?? currentMode();
+        const runPermission = review?.permission ?? permission;
         session = await service.run(
           runInputSchema.parse({
             sessionId: requireSession().id,
-            prompt: line,
+            prompt: review?.prompt ?? line,
             model,
-            permission,
-            mode,
+            permission: runPermission,
+            mode: runMode,
             ...(pickedSourceId ? { providerSourceId: pickedSourceId } : {}),
           }),
           (event) => {
