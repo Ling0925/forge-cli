@@ -30,7 +30,7 @@ forge run --session UUID 'Continue the task'
 
 终端状态显示当前轮和步，结束摘要分别显示步数、工具调用数和请求重试数。JSONL 新增 `step_started` / `step_finished`，事件通过 `turn` / `step` 关联；`run_finished.steps` 是本轮已结束步数，失败和取消也计入。旧字段 `run_finished.turns` 保留原有模型迭代含义。旧记录没有重试统计时不补造为零。
 
-`--max-turns` 仅保留配置兼容，不再限制执行，也不再出现在 Web 设置表单中。需要限制工具尝试次数时使用 `forge config set --max-tools 100`。
+工具调用次数、子代理累计数量和任务总时长均不设累计预算。`--max-turns`、`--max-tools`、`--max-root-tools`、`--root-timeout-ms` 只保留旧配置兼容，传入时提示已弃用并忽略；已保存的旧值也不会限制新运行。Web 设置不再提供工具预算输入。子代理仍最多同时活跃 4 个，权限审批、手动取消和单次请求/工具超时仍生效。详见 [运行观测与兼容](ROOT_RUN_BUDGET.md)。
 
 ## 文件搜索、条件读取与后台命令
 

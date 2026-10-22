@@ -39,6 +39,19 @@ import type { TerminalUI } from "./ui-contract";
 
 const promptLimit = 1_000_000;
 const keyLimit = 16_386;
+/**
+ * Legacy budget flags stay parseable and their values keep persisting, but they
+ * never limit a run: tool calls, subagent counts and total time are uncapped.
+ */
+const deprecatedLimitFlags = [
+  ["max-turns", "--max-turns is deprecated and ignored: execution steps have no cumulative limit."],
+  ["max-tools", "--max-tools is deprecated and ignored: tool calls have no per-run or cumulative limit."],
+  [
+    "max-root-tools",
+    "--max-root-tools is deprecated and ignored: parent and child tool calls share no cumulative limit.",
+  ],
+  ["root-timeout-ms", "--root-timeout-ms is deprecated and ignored: runs have no cumulative time limit."],
+] as const;
 const help = `Forge — shared-core agent CLI
 
 forge devices pair NAME | list | revoke DEVICE_ID (local LAN authorization)
@@ -52,7 +65,7 @@ forge config set [--base-url URL] [--model MODEL] [--api-mode chat-completions|r
                  [--max-output-tokens NUMBER]
                  [--reasoning-effort default|none|minimal|low|medium|high|xhigh|max]
                  [--theme system|light|dark] [--permission readonly|workspace|unrestricted]
-                 [--timeout-ms NUMBER] [--max-tools NUMBER] [--max-root-tools NUMBER] [--root-timeout-ms NUMBER] [--context-chars NUMBER] [--context-budget-tokens NUMBER|auto]
+                 [--timeout-ms NUMBER] [--context-chars NUMBER] [--context-budget-tokens NUMBER|auto]
                   [--context-tokens NUMBER|auto] (window for --model or current model)
                  [--browser-origins ORIGIN[,ORIGIN...]] [--browser-executable PATH]
                  [--lsp-servers JSON] (array of {id,command,args,extensions}; [] disables)
@@ -61,7 +74,9 @@ optional port; no credentials, path, query, fragment or wildcard; at most 32).
 An empty value clears the list; no origins disables browser tools (default).
 --browser-executable selects a local Chromium/Chrome executable; an empty value
 uses the Playwright default or FORGE_BROWSER_EXECUTABLE.
---max-turns is accepted for compatibility only; it does not limit execution steps.
+--max-turns/--max-tools/--max-root-tools/--root-timeout-ms are accepted for
+compatibility only: stored but ignored, and no cumulative tool-call, subagent
+count or total-time limit applies.
 forge models [--source ID] [--credential ID --details] [--refresh] [--json]
 forge providers list|presets [--json]
 forge providers catalog <source-id> [--credential ID] [--refresh] [--json]
@@ -559,8 +574,8 @@ export const runCliWithIO = async (
             "",
           )
         : undefined;
-      if (settings.settings?.maxTurns !== undefined)
-        io.stderr("--max-turns is deprecated and does not limit execution. Use --max-tools for the tool attempt budget.\n");
+      for (const [name, message] of deprecatedLimitFlags)
+        if (stringOption(args, name) !== undefined) io.stderr(`${message}\n`);
       const input = configureInputSchema.parse({
         ...settings,
         ...(apiKey !== undefined ? { apiKey } : {}),

@@ -208,14 +208,26 @@ describe("Forge CLI", () => {
     expect(f.approvals).toHaveLength(0); expect(f.runs).toHaveLength(0);
   });
 
-  it("configures root task bounds and rejects invalid limits before updating", async () => {
+  it("keeps legacy budget flags storable but warns they are ignored without cumulative limits", async () => {
     const f = fixture("/unused");
     expect(await runCliWithIO(["config", "set", "--max-root-tools", "250", "--root-timeout-ms", "5000"], f.service, f.io)).toBe(0);
     expect(f.updates).toEqual([{ settings: { maxRootToolCalls: 250, rootTimeoutMs: 5000 } }]);
+    let warnings = f.diagnostics.join("");
+    expect(warnings).toContain("--max-root-tools is deprecated and ignored");
+    expect(warnings).toContain("--root-timeout-ms is deprecated and ignored");
+    expect(warnings).toContain("no cumulative limit");
+    expect(warnings).not.toContain("--max-tools");
     for (const [flag, value] of [["--max-root-tools", "0"], ["--max-root-tools", "1000001"], ["--root-timeout-ms", "999"], ["--root-timeout-ms", "86400001"], ["--max-root-tools", "1.5"]]) {
       expect(await runCliWithIO(["config", "set", flag ?? "", value ?? ""], f.service, f.io)).toBe(1);
     }
     expect(f.updates).toHaveLength(1);
+    expect(await runCliWithIO(["config", "set", "--max-tools", "120", "--max-turns", "7"], f.service, f.io)).toBe(0);
+    expect(f.updates.at(-1)).toEqual({ settings: { maxToolCalls: 120, maxTurns: 7 } });
+    warnings = f.diagnostics.join("");
+    expect(warnings).toContain("--max-tools is deprecated and ignored");
+    expect(warnings).toContain("--max-turns is deprecated and ignored");
+    expect(warnings).not.toContain("Use --max-tools");
+    expect(f.updates).toHaveLength(2);
     expect(f.runs).toHaveLength(0);
   });
 
@@ -240,6 +252,19 @@ describe("Forge CLI", () => {
     expect(await runCliWithIO(["--help"], f.service, f.io)).toBe(0);
     expect(f.calls()).toBe(0);
     expect(f.reads()).toBe(0);
+  });
+
+  it("help lists no tool or subagent budget flags and marks the legacy ones ignored", async () => {
+    const f = fixture("/unused");
+    expect(await runCliWithIO(["--help"], f.service, f.io)).toBe(0);
+    const text = f.output.join("");
+    expect(text).not.toContain("--max-tools NUMBER");
+    expect(text).not.toContain("--max-root-tools NUMBER");
+    expect(text).not.toContain("--root-timeout-ms NUMBER");
+    expect(text).not.toContain("Use --max-tools");
+    expect(text).toContain("--timeout-ms NUMBER");
+    expect(text).toContain("no cumulative tool-call, subagent");
+    expect(f.calls()).toBe(0);
   });
 
   it.each([
