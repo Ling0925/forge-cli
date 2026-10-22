@@ -1,4 +1,4 @@
-import { chmod, mkdir } from "node:fs/promises";
+import { chmod, copyFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 
@@ -15,10 +15,12 @@ await build({
   legalComments: "eof",
   logLevel: "info",
   entryPoints: ["src/cli/index.ts"],
-  outfile: "dist/cli.mjs",
+  outfile: "dist/cli-main.mjs",
   format: "esm",
   banner: {
-    js: '#!/usr/bin/env node\nimport { createRequire as forgeCreateRequire } from "node:module"; const require = forgeCreateRequire(import.meta.url);',
+    js: 'import { createRequire as forgeCreateRequire } from "node:module"; const require = forgeCreateRequire(import.meta.url);',
   },
 });
+// Do not bundle this entry: it must select production before any React imports.
+await copyFile("src/cli/bootstrap.mjs", "dist/cli.mjs");
 await chmod("dist/cli.mjs", 0o755);

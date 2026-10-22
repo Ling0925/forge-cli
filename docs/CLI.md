@@ -180,9 +180,11 @@ Hooks 默认关闭；只配置需要的事件即可。配置格式与失败行�
 
 ### 长时间运行与内存
 
+- CLI 入口先将 `NODE_ENV` 设为 `production`，再动态加载主程序；即使从 `NODE_ENV=development` 的 shell 启动，也不会启用 React 开发版逐帧累积的性能记录。无需手动加环境变量，不靠提高堆上限或清空其他组件的性能记录解决泄漏。
+- `src/cli/bootstrap.mjs` 原样生成 `dist/cli.mjs`，主程序打包到同目录的 `dist/cli-main.mjs`；两者必须一起保留。这个独立模块边界不能合并：React/Ink 是外部依赖，静态导入会先于入口模块体执行，仅在打包代码里设置环境变量或使用构建时 `define` 不足以保证加载顺序。本机仍是 `node scripts/build-core.mjs` 后重开 `forge` 生效，无需重装；完整构建也复用同一 CLI 构建步骤。
 - Ink 6.6.0 原有的文字测量/换行缓存无淘汰上限。本仓库通过 `pnpm-workspace.yaml` 的 `patchedDependencies` 固定应用 `patches/ink@6.6.0.patch`：两个缓存分别限制为 2048 项、2 MiB 估算成本，LRU 淘汰；超大文本正常计算但不缓存。该预算不是进程总内存上限。
-- 补丁随 `pnpm install` 应用，不要仅手改 `node_modules`，升级 Ink 时应检查上游修复并重新验证。CLI 当前将 Ink 作为外部依赖，单独复制 `dist/cli.mjs` 并不能携带该修复。
-- 聚焦内存回归：`pnpm exec vitest run tests/cli/ink-memory.test.ts`。测试在隔离子进程中使用合成文本、256 MiB 堆限制和显式 GC，检查连续两批变化后的保留内存，并验证缓存淘汰不改变渲染结果。不读取真实会话，也不生成堆快照。
+- 补丁随 `pnpm install` 应用，不要仅手改 `node_modules`，升级 Ink 时应检查上游修复并重新验证。运行 CLI 仍需安装带补丁的外部 Ink 及 React，单独复制入口和主程序不能携带这些依赖。
+- 聚焦内存回归：先编译 CLI，再运行 `pnpm exec vitest run tests/cli/ink-memory.test.ts tests/cli/ink-render-memory.test.ts`。测试在隔离子进程中使用合成文本、256 MiB 堆限制和显式 GC，检查缓存及完整 Ink 界面连续两批重绘后的保留内存；覆盖未设置环境变量和继承开发模式两种启动方式，并确认既有性能记录不被误清理。不读取真实会话，也不生成堆快照。
 - `heap out of memory` 不等同于会话文件损坏。重启后可用 `forge sessions` / `forge resume UUID` 查看已持久化内容；崩溃前未落盘的增量无法保证恢复，不应自动重跑结果不确定的工具。core dump / heap snapshot 可能含会话内容和凭据，不要直接公开上传。
 
 ## 源码工作区验证
