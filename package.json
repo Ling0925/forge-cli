@@ -15,6 +15,7 @@
     "build": "node scripts/build-core.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:package": "node --test tests/package-smoke.test.mjs",
     "lint": "biome check .",
     "format": "biome check --write .",
     "verify:boundaries": "node scripts/check-boundaries.mjs",

@@ -37,14 +37,19 @@ node dist/cli.mjs chat     # 在当前目录打开交互会话
 
 `dist/cli.mjs` 是独立的 production bootstrap，复制自 `src/cli/bootstrap.mjs`，会在加载 React/Ink 前设置 `NODE_ENV=production`，不要把它打进主 bundle。主 bundle 是 `dist/cli-main.mjs`，`@forge/core` 子路径在构建产物中保持为包导入。
 
-常用检查：
+本机开发默认使用聚焦检查，不要求完整验收：
 
 ```sh
-pnpm typecheck
-pnpm test
 pnpm verify:boundaries     # 检查没有跨仓库相对 src 引用或 tsconfig alias
-pnpm check                 # boundary + typecheck + test
+pnpm test:package          # 构建后，以临时状态运行真实 CLI/Core 包
+pnpm exec vitest run tests/cli/cli.test.ts tests/cli/provider-management.test.ts tests/cli/session-cache-integration.test.ts
 ```
+
+`pnpm typecheck`、`pnpm test` 和 `pnpm check`（完整 boundary + typecheck + test）
+保留为显式扩展检查。本轮构建、类型与边界检查通过，以上三组聚焦测试 64 项通过。
+扩展测试结果为 791 通过、4 未通过：3 项缺外部 xterm QA 附件；另 1 项是
+`ink-view` 的 24×8 dock 顺序断言，已在未拆分的原库同一测试上复现。
+这些未通过项没有被静默跳过，也没有为拆仓而改动既有窄屏布局。
 
 测试使用临时 `FORGE_HOME`，不需要真实配置或密钥。终端模拟器 QA 测试还需要外部提供的 `@xterm/addon-unicode11`（默认查找 `.build/qa-deps/` 或 `XTERM_ROOT`）；仓库不会自动安装它，缺少时这些测试会明确失败。
 

@@ -1,6 +1,8 @@
 # Forge CLI 仓库代理约定
 
-本文件只补充 `repos/forge-cli` 的局部约定；根目录 `AGENTS.md` 仍然适用。
+本文件适用于独立的 Forge CLI 仓库；如果它仍位于旧工作区内，同时遵守外层适用的 `AGENTS.md`。
+
+- 子代理固定使用 `cn:deepseek-v4.1-flash`，除非用户明确指定其他模型；失败不自动切换模型或重放任务。
 
 ## 范围
 
@@ -22,7 +24,7 @@
 - 熟悉入口保留为 `node scripts/build-core.mjs`；它生成 `dist/cli-main.mjs` 并复制 production bootstrap 到 `dist/cli.mjs`。
 - 不要将 `src/cli/bootstrap.mjs` 打进主 bundle，也不要在主 bundle 内设置 `NODE_ENV`；React/Ink 必须在 bootstrap 之后加载。
 - 保留 `patches/ink@6.6.0.patch` 和 pnpm `patchedDependencies`，不要用未打补丁的 Ink 替代。
-- 聚焦验证使用 `pnpm typecheck`、`pnpm test` 和 `pnpm verify:boundaries`；不默认运行桌面构建、Electron 打包、发布校验或安装脚本。
+- 默认只做构建、`pnpm verify:boundaries`、`pnpm test:package` 和本轮涉及的 `pnpm exec vitest run <测试文件>`。不把全量 test/typecheck/lint 作为本机更新的前置门槛，也不默认运行桌面构建、Electron 打包、发布校验或安装脚本。
 - 启动/测试 CLI 时使用临时 `FORGE_HOME`，避免读取真实配置或改动用户会话；测试后清理临时目录。
 - 不把“构建通过”报告成功能全部验证通过；如实说明未覆盖项。
 
