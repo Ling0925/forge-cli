@@ -1,6 +1,6 @@
 # Forge CLI
 
-当前默认权限、plan/build 与审批策略的统一规则见 [后端权限与审批](ARCHITECTURE.md#permission-run-mode-and-cli-approval)：默认 workspace；交互 full-access 是审批应答策略，不会提升工具权限。
+当前权限与 plan/build 规则见 [Core 权限边界](https://github.com/Ling0925/forge-core/blob/master/docs/ARCHITECTURE.md#permission-run-mode-and-cli-approval)：默认 workspace；交互 full-access 是本 CLI 的审批应答策略，不会提升工具权限。
 
 ## 使用方式
 
@@ -30,7 +30,7 @@ forge run --session UUID 'Continue the task'
 
 终端状态显示当前轮和步，结束摘要分别显示步数、工具调用数和请求重试数。JSONL 新增 `step_started` / `step_finished`，事件通过 `turn` / `step` 关联；`run_finished.steps` 是本轮已结束步数，失败和取消也计入。旧字段 `run_finished.turns` 保留原有模型迭代含义。旧记录没有重试统计时不补造为零。
 
-工具调用次数、子代理累计数量和任务总时长均不设累计预算。`--max-turns`、`--max-tools`、`--max-root-tools`、`--root-timeout-ms` 只保留旧配置兼容，传入时提示已弃用并忽略；已保存的旧值也不会限制新运行。Web 设置不再提供工具预算输入。子代理仍最多同时活跃 4 个，权限审批、手动取消和单次请求/工具超时仍生效。详见 [运行观测与兼容](ROOT_RUN_BUDGET.md)。
+工具调用次数、子代理累计数量和任务总时长均不设累计预算。`--max-turns`、`--max-tools`、`--max-root-tools`、`--root-timeout-ms` 只保留旧配置兼容，传入时提示已弃用并忽略；已保存的旧值也不会限制新运行。子代理仍最多同时活跃 4 个，权限审批、手动取消和单次请求/工具超时仍生效。
 
 ## 文件搜索、条件读取与后台命令
 
@@ -58,7 +58,7 @@ forge config set --lsp-servers '[]'
 
 ## 模型协议
 
-设置页的“模型来源 → 协议”可选 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages。CLI 示例（`MODEL_ID` 替换为服务支持的模型）：
+模型来源支持 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages 和原生 Gemini；来源、账号和显式路由组的管理见 [模型接入指南](https://github.com/Ling0925/forge-core/blob/master/docs/MODEL_ACCESS_PORT_STATUS.md#cli-用法)。CLI 示例（`MODEL_ID` 替换为服务支持的模型）：
 
 ```sh
 forge config set --api-mode anthropic --base-url https://api.anthropic.com --model MODEL_ID
@@ -76,7 +76,7 @@ forge config show
 forge config set --reasoning-effort default
 ```
 
-此项持久化为共享 provider 配置，后续 CLI 和桌面模型请求使用该设置。可选值为 `default`、`none`、`minimal`、`low`、`medium`、`high`、`xhigh`；未设置或 `default` 时不发送思考强度字段，使用服务端默认值（`none` 则明确发送禁用值）。Chat Completions 发送 `reasoning_effort`，Responses 发送 `reasoning.effort`。Anthropic 的非默认档位映射为显式 thinking token 预算，`none` 禁用 thinking；具体预算见 [PROVIDERS.md](PROVIDERS.md)。不同模型/网关支持的档位不同，不支持时可能拒绝请求；不会自动降档重试。这不是思考过程显示开关，也不是单次 run 参数。
+此项持久化为共享 provider 配置，后续请求生效。可选值为 `default`、`none`、`minimal`、`low`、`medium`、`high`、`xhigh`；未设置或 `default` 使用服务端默认值，`none` 明确请求禁用。各协议按其能力映射；Anthropic 使用 thinking token 预算，Gemini 使用原生思考配置。不同模型/网关支持的档位不同，不支持时可能拒绝请求，不会自动降档重试。这不是思考过程显示开关，也不是单次 run 参数。
 
 ## 上下文预算
 
@@ -93,7 +93,7 @@ forge config set --reasoning-effort default
 
 缓存优先：已撤销“最近 8 条全文、更旧结果动态摘录”的滑动策略。普通工具结果正文不随年龄改变；成功编辑的预览从首次发送起就固定省略。正常追加消息时，此投影保持历史前缀逐字节稳定；用户消息、助手调用参数及 Responses continuation 不改。摘要请求也使用同一固定精简视图。只有达到既有压缩阈值或显式 /compact 时才集中生成并保存摘要；极端超限仍有既有预算兜底。升级恢复旧会话时投影切换可能造成一次缓存失效，实际命中还受服务商、TTL、模型和工具/指令变更影响，不能承诺缓存命中率或账单降幅。衡量成本应结合 provider 实报输入、cached tokens、未缓存输入与延迟，不只看上下文总量。
 
-模型窗口 80% 自动压缩策略未变，未偷偷更改用户设置。需要更早压缩可显式设置 `forge config set --context-budget-tokens 160000`，`auto` 恢复自动窗口预算。合成 60 次小编辑（每次 before/after 各 8192 字符）估算从 250396 降至 7096 tokens；不是用户真实会话或 provider 实测。
+需要更早压缩可显式设置 `forge config set --context-budget-tokens 160000`，`auto` 恢复自动窗口预算。
 
 ## /tasks 运行任务面板
 
@@ -105,7 +105,7 @@ forge config set --reasoning-effort default
 - 历史子会话来自保存记录；非本进程运行的 `running` 可能过时，标为历史只读，不能接管。后台命令仅保留本进程最近 8 个已结束工具注册表的结果，退出后不恢复这些内存记录；活跃任务不会因历史容量被淘汰。
 - 手动审批优先：先关闭 tasks 面板，再显示审批；不会借选择/停止确认批准其他命令。
 - `/tasks agent UUID`、`/tasks command UUID` 可按完整 ID 查看；`/tasks stop agent UUID` 或 `... command UUID` 仍需富终端二次确认。plain 终端只输出第一页列表/结果及提示，不提供无确认停止。
-- 本轮未实现代理配置 `/agents`、任务重启、直接给子代理发消息或桌面 tasks 面板。
+- 面板用于查看和停止已有任务，不提供代理配置、任务重启或向子代理发消息。
 
 ## TUI 呈现层优化
 
@@ -162,7 +162,7 @@ forge hooks clear
 
 远程 MCP 默认使用 Streamable HTTP。`headers.json` 是请求头对象，例如 `{"Authorization":"Bearer YOUR_TOKEN"}`；值只保存到本机私有目录，不出现在 MCP 列表。注册默认启用，但注册本身不连接；加 `--disabled` 可先保存再启用。普通工具调用沿用当前权限。
 
-Hooks 默认关闭；只配置需要的事件即可。配置格式与失败行为见 [TOOL_HOOKS.md](TOOL_HOOKS.md)。
+Hooks 默认关闭，由宿主显式配置，不从 AGENTS.md 或技能自动加载。配置可包含 `beforeTool`、`afterTool`、`toolError`、`runEnd` 数组，每项使用唯一 `id`、`command` 与 `args`；命令不经 shell。前置 hook 失败会拒绝工具，hook 不能改写参数或提升权限。完整字段见 [Core hook schema](https://github.com/Ling0925/forge-core/blob/master/src/shared/tool-hooks.ts)，执行与清理规则见 [hook service](https://github.com/Ling0925/forge-core/blob/master/src/core/tool-hooks.ts)。
 
 ### 交互命令
 
@@ -176,7 +176,7 @@ Hooks 默认关闭；只配置需要的事件即可。配置格式与失败行�
 - 请求开始等待响应头也受该上限约束；收到响应头、非空响应体数据后重新计时。正文、思考、工具参数、SSE 注释心跳和未拼完的事件数据均算网络活动；界面 Thinking 动画本身不算。
 - 持续有数据的慢模型可以运行超过该时间；断流则报 `idle timeout` 并取消读取，用户 Ctrl+C 仍能取消。每个并发请求独立计时，模型目录查询保留原有总时限，工具执行超时不受此改动影响。
 - 如果模型首包慢、网关缓冲输出，或长时间思考但不发送任何数据，客户端仍无法知道远端是否活跃，可显式增大等待值，例如 `forge config set --timeout-ms 180000`。心跳只证明连接活动，不保证生成进展；持续心跳的请求不会仅因总耗时而终止，可手动取消。HTTP 网关自身的超时仍可能发生。
-- 网络失败、空闲超时、临时 HTTP 错误和不完整流可按运行时策略重试，最多追加 5 次；取消、输出截断、输出超限、无效工具参数及确定性协议错误不原样自动重试。已经执行的工具不重放；响应字节、事件大小和内容长度的安全上限保持不变。
+- runtime 统一管理生成重试预算，最多追加 5 次，是否重试还取决于失败分类和路由状态。显式路由只在明确未执行的容量拒绝（如 429）后允许切换候选；超时、断连、5xx 或已输出内容都不能视为未执行，不自动重放不确定的路由请求。取消、输出截断/超限、无效工具参数及确定性协议错误不原样自动重试；已经执行的工具不重放。
 
 ### 长时间运行与内存
 
@@ -268,7 +268,7 @@ CLI 实时与恢复历史优先消费保存的 patch，不读取当前文件重�
 
 ### CLI 显示与输入历史补充
 
-- CLI Markdown 使用 `marked` + `marked-terminal`（GFM），不再使用手写逐行解析；支持嵌套/任务列表、六级标题、强调/删除线、引用链接与对齐表格。代码块使用语言分隔线与缩进，`cli-highlight` 负责高亮；未知语言纯文本。表格过窄/超过 12 列或整段超过 100000 字符时降级源文本。流式整段更新，在工具/结束边界提交；链接仅显示文本、图片不联网。详见 `MARKDOWN_REQUIREMENTS.md` §12。Diff 显示增删行数；源内容截断时标明 `partial preview`，不是完整文件统计。
+- CLI Markdown 使用 `marked` + `marked-terminal`（GFM）；支持嵌套/任务列表、六级标题、强调/删除线、引用链接与对齐表格。代码块使用语言分隔线与缩进，`cli-highlight` 负责高亮；未知语言纯文本。表格过窄/超过 12 列或整段超过 100000 字符时降级源文本。流式整段更新，在工具/结束边界提交；链接仅显示文本、图片不联网。Diff 显示增删行数；源内容截断时标明 `partial preview`，不是完整文件统计。
 - 动态区域按终端实际高度分配，不再限制为 20 行；编辑区最多 6 行，Slash 建议最多 8 项，剩余空间给流式内容。菜单/选择器打开时保留少量实时输出；矮窗口优先输入。高度 ≤20 行使用紧凑上下文底栏。
 - 复制完全使用终端原生操作，无 OSC52 回执或系统剪贴板程序。`INK_SCREEN_READER=true` 启用 Ink 无障碍路径并关闭 timer-only 动画/未完成 tail，完成内容正常输出；真实读屏软件仍需人工验收。
 - `/history on` 显式开启当前进程的输入历史加载/保存；新进程需再次开启。`/history off` 停止记录并清空当前编辑器历史，保留已保存文件；`/history clear` 清空当前工作区的持久历史并停止记录；`/history status` 查看状态。

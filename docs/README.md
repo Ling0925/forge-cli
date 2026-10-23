@@ -13,7 +13,8 @@
 - [开发约定](../AGENTS.md)：仓库边界、构建与提交要求。
 - [Core 契约归属](https://github.com/Ling0925/forge-core/blob/master/docs/CONTRACT_BOUNDARIES.md)：客户端共享类型与 schema。
 - [Core 输入队列](https://github.com/Ling0925/forge-core/blob/master/docs/INPUT_QUEUE.md)：持久排队与运行时语义。
+- [Core 专题导航](https://github.com/Ling0925/forge-core/blob/master/README.md#深入阅读)：项目上下文、模型接入与运行机制。
 - [Core 权限与审批](https://github.com/Ling0925/forge-core/blob/master/docs/ARCHITECTURE.md#permission-run-mode-and-cli-approval)：权限和交互审批策略。
 - [作者说明](AUTHORSHIP.md)。
 
-部分长篇说明保留了拆仓前的路径与验证记录，尤其桌面/Web 启动方式和外部文档链接。当前代码归属以各仓 README 为准：CLI 源码在本仓，运行时与存储在 Core，浏览器界面在 Web；历史测试结果不表示当前版本已重新验收。
+CLI 源码在本仓，运行时与存储在 Core，浏览器界面在 Web。独立克隆通过上面的仓库链接查阅跨模块文档；在装配主仓内可直接查看相邻子模块。
