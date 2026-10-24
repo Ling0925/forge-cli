@@ -31,6 +31,7 @@ import {
   type ModelAccessCommandContext,
 } from "./model-access";
 import { createNodeIO } from "./node-io";
+import { runPluginsCommand } from "./plugins";
 import { previewSummary } from "./render/events";
 export { createNodeIO, nodeIO } from "./node-io";
 export type { CreateNodeIOOptions } from "./node-io";
@@ -96,6 +97,14 @@ forge checkpoints diff|restore <session-id> <checkpoint-uuid> [--json]
 forge mcp list [--json] | register <id> <label> <command> [args...] [--disabled]
 forge mcp enable|disable|remove|health <id> [--json]
 forge mcp register-remote <id> <label> <url> [--transport http|sse] [--headers-file JSON_FILE] [--disabled]
+forge plugins list|show <id> [--json]
+forge plugins configure <id> --config JSON_FILE [--json] | enable|disable|check <id> [--json]
+Plugin config is read only from the explicit --config file and validated by Core.
+allowedDomains are hostnames (example.com, *.example.com), not exact origins.
+Enabling agent-browser requires non-empty allowedDomains. Plugins are never
+installed, upgraded or granted global permission here; check runs an MCP health
+diagnostic without visiting pages, and changing config or disabling closes the
+browser this Core owns.
 forge export <session-id> --output PATH (explicit destination; no implicit path)
 forge files list <session-id> [--json]
 forge files save <session-id> <file-id> --output PATH (never overwrites)
@@ -436,7 +445,7 @@ export const runCliWithIO = async (
       );
     }
     const scopedHelp =
-      (command === "providers" || command === "routes") &&
+      (command === "providers" || command === "routes" || command === "plugins") &&
       argv.includes("--help");
     if (
       !scopedHelp &&
@@ -622,6 +631,13 @@ export const runCliWithIO = async (
         readable(io, { configured: true });
       } else invalid("Use forge hooks show, set <json-file>, or clear.");
       return 0;
+    }
+    if (command === "plugins") {
+      return await runPluginsCommand(argv.slice(1), {
+        service,
+        signal: controller.signal,
+        stdout: io.stdout,
+      });
     }
     if (command === "mcp") {
       const action = argv[1];

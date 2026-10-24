@@ -164,9 +164,32 @@ forge hooks clear
 
 Hooks 默认关闭，由宿主显式配置，不从 AGENTS.md 或技能自动加载。配置可包含 `beforeTool`、`afterTool`、`toolError`、`runEnd` 数组，每项使用唯一 `id`、`command` 与 `args`；命令不经 shell。前置 hook 失败会拒绝工具，hook 不能改写参数或提升权限。完整字段见 [Core hook schema](https://github.com/Ling0925/forge-core/blob/master/src/shared/tool-hooks.ts)，执行与清理规则见 [hook service](https://github.com/Ling0925/forge-core/blob/master/src/core/tool-hooks.ts)。
 
+### 插件管理
+
+```sh
+forge plugins list
+forge plugins show agent-browser
+forge plugins configure agent-browser --config /path/to/browser-plugin.json
+forge plugins enable agent-browser
+forge plugins disable agent-browser
+forge plugins check agent-browser
+```
+
+插件由 Forge 内置并随版本发布；这些命令不安装、不升级插件，也不授予全局权限。`--config` 只读取显式给出的 JSON 文件，没有默认配置路径，也不读取 `FORGE_HOME` 下的隐式文件；配置内容由 Core 按插件清单校验。`enable` / `disable` 只提交启用状态，`enable` 前需已通过配置写入允许域名，Core 会拒绝空域名。
+
+官方 `agent-browser` 插件默认关闭，配置字段为 `executablePath`（默认 `agent-browser`）、`browserExecutablePath`（空表示使用默认浏览器）和 `allowedDomains`：
+
+```json
+{"executablePath":"agent-browser","browserExecutablePath":"","allowedDomains":["example.com","*.example.org"]}
+```
+
+`allowedDomains` 是主机名，不是 exact HTTP(S) origins：不写协议、凭据、端口、路径、查询、片段，也不支持中间通配；最多 64 项。此授权是新增的独立域名列表，不会复用 `--browser-origins`。
+
+`list` / `show` 只读取插件记录，不启动插件。`check` 显式启动该插件的 MCP 健康诊断，只检查可执行文件与协议，不会打开或访问网页；诊断为 `unavailable` 时命令以非零退出码结束，仍输出结构化结果。运行中修改配置或禁用插件会关闭本 Core 拥有的浏览器会话；插件不会自动安装或升级浏览器。截图等产物以已发布文件形式返回，卡片显示文件名、大小与文件 ID，随后可用 `forge files save <session-id> <file-id> --output PATH` 保存。
+
 ### 交互命令
 
-`/help` 提供当前完整命令列表，包括 mode、plan、model、permission、sessions、resume、new、fork、rename、archive、compact、diagnostics、context、skills、checkpoints、mcp、export、quit。Slash 参数按空白切分，不支持 shell 式引号分组；含空格的路径或参数使用直接命令。shell 对直接命令负责引号分组，MCP 的 `--` 分隔后续服务器参数。
+`/help` 提供当前完整命令列表，包括 mode、plan、model、permission、sessions、resume、new、fork、rename、archive、compact、diagnostics、context、skills、checkpoints、mcp、export、quit。Slash 参数按空白切分，不支持 shell 式引号分组；含空格的路径或参数使用直接命令。shell 对直接命令负责引号分组，MCP 的 `--` 分隔后续服务器参数。浏览器插件管理没有交互 slash 入口，使用 `forge plugins` 直接命令。
 
 `forge config show` 只显示公共配置；`forge config set --api-key-stdin` 避免把 key 放在 argv。不要分享私有配置。`/export` 导出对话，分享前检查。checkpoint restore 会修改文件，先 list/diff。非交互自动审批仅限明确的 unrestricted 权限与 `--yes`；workspace 权限不能自动授权。
 

@@ -94,6 +94,19 @@ printf '%s\n' '概括项目的主要模块' | node dist/cli.mjs run \
 
 配置与会话默认存放在 `~/.local/share/forge`；`FORGE_HOME` 可选择另一份独立状态。不要把真实模型密钥或会话用于测试。模型目录缓存与聊天历史不同：需要联网刷新时明确使用 `models --refresh`。
 
+## 插件与浏览器
+
+官方 `agent-browser` 插件默认关闭，由 Forge 内置并随版本发布；CLI 不安装、升级插件或授予全局权限：
+
+```sh
+node dist/cli.mjs plugins list
+node dist/cli.mjs plugins configure agent-browser --config /path/to/browser-plugin.json
+node dist/cli.mjs plugins enable agent-browser
+node dist/cli.mjs plugins check agent-browser
+```
+
+配置文件只从 `--config` 指定的路径读取，内容由 Core 校验。`allowedDomains` 是主机名（如 `example.com`、`*.example.org`），不是 exact HTTP(S) origins；启用要求允许域名非空。`list` / `show` 不启动插件，`check` 只做 MCP 诊断、不访问网页；运行中修改配置或禁用会关闭本 Core 拥有的浏览器。完整字段与生命周期见 [CLI 文档](docs/CLI.md#插件管理)。
+
 ## 连接已有 Core：attach
 
 `chat`、`run` 和 `resume` 创建进程内运行时，不会自动连接正在运行的 Web/Core。要共享活动任务，需要 Linux 本地 Unix socket：

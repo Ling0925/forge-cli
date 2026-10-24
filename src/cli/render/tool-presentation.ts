@@ -148,7 +148,9 @@ export function toolPresentation(name: string, result: ToolResult): { detail: st
   // reasons. Even transport errors must not echo them into the default card.
   const error = result.isError ? agent ? "Agent tool failed · inspect details" : scalar(r.message) || scalar(r.error) || scalar(object(r.error)?.message)
     || (value === undefined ? first(result.content) : "") : "";
-  const attachmentDetail = name === "publish_file" && !result.isError && result.files?.length
+  // Host-owned publication tools: publish_file and the browser screenshot.
+  const publishable = name === "publish_file" || name === "browser_screenshot";
+  const attachmentDetail = publishable && !result.isError && result.files?.length
     ? result.files.map(file => `${file.name} · ${file.size} bytes · ${file.id}`).join("; ") + " · forge files save <session-id> <file-id> --output PATH"
     : "";
   const detail = error || attachmentDetail || builtinDetail(name, r, value)

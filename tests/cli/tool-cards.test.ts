@@ -74,6 +74,34 @@ it("keeps errors, timeout, truncation and pagination visible", () => {
   expect(toolPresentation("list_models", result({ ids: [], total: 20, nextOffset: 5, truncated: true })).warning).toContain("next offset 5");
   expect(toolPresentation("wait_agents", result([{ status: "failed", errors: [{ error: "offline" }] }])).failed).toBe(true);
 });
+it("shows host-published file attachments for browser screenshots without dumping metadata", () => {
+  const file = {
+    id: "12345678-1234-4234-8234-123456789abc",
+    name: "shot.png",
+    mimeType: "image/png",
+    size: 123,
+    sha256: "a".repeat(64),
+    createdAt: "2026-01-01T00:00:00.000Z",
+    previewKind: "image" as const,
+  };
+  const screenshot = toolPresentation("browser_screenshot", {
+    content: JSON.stringify({ note: "Screenshot published", width: 1280, height: 720 }),
+    isError: false,
+    files: [file],
+  });
+  expect(screenshot.detail).toContain("shot.png · 123 bytes");
+  expect(screenshot.detail).toContain(file.id);
+  expect(screenshot.detail).toContain("forge files save");
+  expect(screenshot.detail).not.toContain("Screenshot published");
+  expect(screenshot.failed).toBe(false);
+  // A screenshot without a published attachment keeps its declared fields.
+  expect(toolPresentation("browser_screenshot", result({ artifact: "shot.png", bytes: 123, width: 1280, height: 720 })).detail)
+    .toContain("shot.png · 123 bytes");
+  // Failed results and unrelated tools never surface the attachment itself.
+  expect(toolPresentation("browser_screenshot", { content: JSON.stringify({ message: "denied" }), isError: true, files: [file] }).detail)
+    .toBe("denied");
+  expect(toolPresentation("read_file", { content: "{}", isError: false, files: [file] }).detail).not.toContain("shot.png");
+});
 it("bounds physical rows and sanitizes hostile values", () => {
   for (const width of [1, 8, 20, 40, 80]) {
     const rows = toolSummaryLines(call("run_command"), result({ stdout: "中文😀".repeat(1000) + "\x1b]52;c;evil\x07", exit_code: 1 }), width, 1);
