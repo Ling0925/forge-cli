@@ -3,7 +3,7 @@ import type {
   SessionSummary,
   TaskPlan,
 } from "@forge/core/shared/schemas";
-import { SLASH_COMMANDS } from "./commands";
+import { SLASH_COMMANDS, commandDescription } from "./commands";
 import { commandGroups } from "./render/labels";
 import { MarkdownStream } from "./render/markdown";
 import { renderRichLine, wrapRichLines } from "./render/rich";
@@ -52,10 +52,10 @@ export interface BannerContext {
 
 const permissionLabel = (permission: string): string =>
   permission === "readonly"
-    ? "只读"
+    ? "readonly"
     : permission === "workspace"
-      ? "工作区审批"
-      : "完全访问";
+      ? "workspace approval"
+      : "full access";
 
 export const bannerLines = (
   context: BannerContext,
@@ -73,7 +73,7 @@ export const bannerLines = (
   // The session id belongs to the identity row, not glued onto the workspace
   // path where it reads as part of the directory.
   const id = context.id ? `  ${sanitizeText(context.id).slice(0, 8)}` : "";
-  const mode = context.mode === "plan" ? "计划" : "执行";
+  const mode = context.mode === "plan" ? "plan" : "build";
   const lines: RichLine[] = [
     [span("Forge", undefined, true), span(version, "muted"), span(id, "muted")],
     [
@@ -86,13 +86,44 @@ export const bannerLines = (
       ),
     ],
     [span(truncate(sanitizeText(context.workspace), width), "muted")],
-    [span(truncate("/ 命令  ·  /help 帮助", width), "muted")],
+    [span(truncate("/ commands  ·  /help", width), "muted")],
   ];
   return lines.slice(0, 4);
 };
 
 const HELP_GAP = 2;
-const HELP_INDENT = "  ";
+
+/**
+ * Word wrap for help prose. The shared wrapper splits per grapheme, which is
+ * right for code and paths but breaks sentences mid-word; help text is prose,
+ * so it wraps on spaces and only splits a token longer than the line.
+ */
+const wordWrap = (text: string, width: number): readonly string[] => {
+  const limit = Math.max(1, width);
+  const rows: string[] = [];
+  let current = "";
+  for (const word of sanitizeText(text).split(/\s+/).filter(Boolean)) {
+    if (!current) {
+      current = word;
+      continue;
+    }
+    if (stringWidth(`${current} ${word}`) <= limit) {
+      current = `${current} ${word}`;
+      continue;
+    }
+    rows.push(current);
+    current = word;
+  }
+  if (current) rows.push(current);
+  // A single token wider than the line still has to be bounded.
+  return rows.flatMap((row) =>
+    stringWidth(row) <= limit
+      ? [row]
+      : wrapRichLines([[span(row)]], limit).map((line) =>
+          line.map((item) => item.text).join(""),
+        ),
+  );
+};
 
 /** Group caption for /help: quiet, so the commands themselves stay scannable. */
 const heading = (title: string): RichLine => [span(title, "muted", true)];
@@ -100,75 +131,89 @@ const heading = (title: string): RichLine => [span(title, "muted", true)];
 const commandUsage = (command: (typeof SLASH_COMMANDS)[number]): string =>
   command.args ? `${command.name} ${command.args}` : command.name;
 
+/**
+ * One help entry, laid out against a shared description column.
+ *
+ * Alignment wins when it fits: the syntax is padded to the column and the
+ * description follows on the same row. Otherwise the entry stacks — syntax on
+ * its own row, description beneath it — so a continuation line never starts
+ * mid-word in whatever narrow strip the column would have left.
+ */
 const helpCommandLines = (
   usage: string,
   description: string,
   width: number,
+  column: number,
 ): readonly RichLine[] => {
   const limit = Math.max(1, Math.floor(width));
-  const command = sanitizeText(usage);
-  const room = limit - stringWidth(command) - HELP_GAP;
-  if (
-    stringWidth(command) <= limit &&
-    stringWidth(description) <= room &&
-    room >= 8
-  ) {
+  // A syntax longer than the terminal cannot be shown as-is.
+  const command = truncate(sanitizeText(usage), limit);
+  const commandWidth = stringWidth(command);
+  const descriptionWidth = stringWidth(description);
+  const aligned = limit - column - HELP_GAP;
+  // Two shapes, in order of preference:
+  //   1. aligned — padded to the shared column, description beside it;
+  //   2. stacked — syntax alone, description wrapped beneath it.
+  // A row is only aligned when the whole description fits: the shared wrapper
+  // splits per grapheme, so wrapping beside a column would break words.
+  if (commandWidth <= column && descriptionWidth <= aligned && aligned >= 8) {
     return [
       [
-        span(command, "accent"),
+        span(padRight(command, column), "accent"),
         span(`${" ".repeat(HELP_GAP)}${description}`, "muted"),
       ],
     ];
   }
-  const wrapped = wrapRichLines(
-    [[span(description, "muted")]],
-    Math.max(1, limit - stringWidth(HELP_INDENT)),
-  );
+  const indent = "  ";
   return [
     [span(command, "accent")],
-    ...wrapped.map((line) => [span(HELP_INDENT, "muted"), ...line]),
+    ...wordWrap(description, Math.max(1, limit - stringWidth(indent))).map(
+      (text) => [span(indent, "muted"), span(text, "muted")],
+    ),
   ];
 };
 
 export const helpLines = (width: number): readonly RichLine[] => {
-  const raw: RichLine[] = commandGroups.flatMap(({ title, category }) => {
-    const group = SLASH_COMMANDS.filter(
-      (command) => command.category === category,
-    );
-    if (group.length === 0) return [];
-    return [
-      heading(title),
-      ...group.flatMap((command) =>
-        helpCommandLines(commandUsage(command), command.description, width),
-      ),
-    ];
-  });
-  // Only aligned rows (command + description) define the column; a group
-  // heading and a wrapped syntax row are single spans and must not widen it.
-  const inline = raw.filter((line) => line.length > 1);
-  const natural = Math.max(
+  const limit = Math.max(1, Math.floor(width));
+  const groups = commandGroups.map(({ title, category }) => ({
+    title,
+    commands: SLASH_COMMANDS.filter((command) => command.category === category),
+  }));
+  // The column is the widest syntax that still leaves room for the longest
+  // description. Entries wider than that stack beneath it, so one long outlier
+  // never widens the column and pushes everyone else off the screen. Keying the
+  // column to the longest description (not to each pairing) keeps it stable and
+  // the list aligned whatever width the terminal has.
+  const widestProse = Math.max(
     0,
-    ...inline.map((line) => stringWidth(line[0]?.text.trimEnd() ?? "")),
+    ...groups.flatMap((group) =>
+      group.commands.map((command) => stringWidth(commandDescription(command))),
+    ),
   );
-  const slack = Math.min(
-    ...inline.map((line) => {
-      const used = line.reduce((sum, item) => sum + stringWidth(item.text), 0);
-      return (
-        Math.max(1, Math.floor(width)) -
-        (used - stringWidth(line[0]?.text.trimEnd() ?? ""))
-      );
-    }),
+  const fits: number[] = [];
+  for (const group of groups) {
+    for (const command of group.commands) {
+      const size = stringWidth(commandUsage(command));
+      if (size + HELP_GAP + widestProse <= limit) fits.push(size);
+    }
+  }
+  const column = Math.max(0, ...fits);
+  const raw: RichLine[] = groups.flatMap(({ title, commands }) =>
+    commands.length === 0
+      ? []
+      : [
+          heading(title),
+          ...commands.flatMap((command) =>
+            helpCommandLines(
+              commandUsage(command),
+              commandDescription(command),
+              limit,
+              column,
+            ),
+          ),
+        ],
   );
-  const column = Math.min(natural, Math.max(0, slack));
-  return raw.map(
-    (line): RichLine =>
-      line.length > 1
-        ? [
-            span(padRight(line[0]?.text.trimEnd() ?? "", column), "accent"),
-            ...line.slice(1),
-          ]
-        : line,
-  );
+  return raw;
 };
 
 const planStatus = (
@@ -254,28 +299,31 @@ export const approvalLines = (
   workspace = "",
 ): readonly RichLine[] => {
   const child = request.childSessionId
-    ? `（子会话 ${request.childSessionId}）`
+    ? ` (child ${request.childSessionId})`
     : "";
   const command = request.command;
   const lines: RichLine[] = [
     [
-      span("需要批准", "warning"),
+      span("Approval required:", "warning"),
       span(` ${sanitizeText(request.toolName)}${child}`, "accent"),
     ],
   ];
-  if (workspace) lines.push(...wrappedField("工作区", workspace, "muted"));
+  if (workspace) lines.push(...wrappedField("Workspace:", workspace, "muted"));
   lines.push(
-    ...wrappedField("说明", approvalDescription(request.description, command)),
+    ...wrappedField(
+      "Description:",
+      approvalDescription(request.description, command),
+    ),
   );
   if (command?.length) {
     lines.push([
-      span("命令", "muted"),
+      span("Command:", "muted"),
       span(` ${command.map(quoteArg).join(" ")}`),
     ]);
   }
   // One prompt, not a warning followed by the same question again. The reader
   // is told what Enter does and what is not protected, then asked once.
-  lines.push([span("Enter 批准 · 命令不在沙箱内运行", "warning")]);
+  lines.push([span("Enter approves; commands are not sandboxed.", "warning")]);
   return wrapRichLines(lines, Math.max(8, width));
 };
 
@@ -299,15 +347,16 @@ export const formatSessions = (
   activeId?: string,
   theme: Theme = defaultTheme,
 ): string => {
-  if (!sessions.length) return theme.dim("暂无历史会话。使用 /new 创建。");
+  if (!sessions.length)
+    return theme.dim("No saved sessions yet. Use /new to create one.");
   const width = getTerminalWidth();
-  const lines: RichLine[] = [[span(`会话 (${sessions.length})`, "accent")]];
+  const lines: RichLine[] = [[span(`Sessions (${sessions.length})`, "accent")]];
   for (const session of sessions.slice(0, 30)) {
     const marker = session.id === activeId ? uiSymbols().bullet : " ";
     lines.push([
       span(
         truncate(
-          `${marker} ${sanitizeText(session.title || "未命名")} · ${session.status}`,
+          `${marker} ${sanitizeText(session.title || "Untitled")} · ${session.status}`,
           width,
         ),
       ),

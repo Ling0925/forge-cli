@@ -49,8 +49,8 @@ it("keeps distinct tool, target and result tones without overflowing tiny widths
   for (const failed of [false, true]) {
     const result = { content: JSON.stringify(failed ? { error: "failed" } : { content: "1: code", offset: 0, total_lines: 1 }), isError: failed };
     const row = toolSummaryLines(call, result, 80)[0]!;
-    expect(row.find(span => span.text === "读取")?.tone).toBe("accent");
-    expect(row.find(span => span.text.includes(failed ? "失败" : "a.ts"))?.tone).toBe(failed ? "error" : undefined);
+    expect(row.find(span => span.text === "read")?.tone).toBe("accent");
+    expect(row.find(span => span.text.includes(failed ? "failed" : "a.ts"))?.tone).toBe(failed ? "error" : undefined);
     expect(row[0]?.tone).toBe(failed ? "error" : "success");
     expect(row.find(span => span.text.includes("a.ts"))?.tone).toBeUndefined();
     for (const width of [1, 4, 8, 40]) expect(stringWidth(text(toolSummaryLines(call, result, width)[0]!))).toBeLessThanOrEqual(width);
@@ -60,7 +60,7 @@ it("preserves whole effort labels ahead of the decorative meter on narrow footer
   const context = { model: "provider/very-long-model-name", reasoningEffort: "high", usage: null };
   for (const compact of [true, false]) {
     const row = text(contextFooter(context, 40, compact)[0]!);
-    expect(row).toContain("(high)"); expect(row).not.toContain("缓存");
+    expect(row).toContain("(high)"); expect(row).not.toContain("cache");
     expect(row).not.toContain("[··"); expect(stringWidth(row)).toBeLessThanOrEqual(40);
     const narrow = text(contextFooter(context, 18, compact)[0]!);
     expect(narrow).not.toContain("(");

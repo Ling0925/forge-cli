@@ -42,12 +42,12 @@ it("merges nearby change hunks without duplicating context or changed rows", () 
 it("reports identical large content as unchanged", () => {
   const same = "unchanged\n".repeat(1000);
   expect(diffStats(change(same, same))).toEqual({ added: 0, removed: 0 });
-  expect(text(change(same, same))).toContain("没有文本变更");
+  expect(text(change(same, same))).toContain("no textual change");
 });
 it("does not invent +/- rows or exact counts from an unavailable patch", () => {
   const value: FileChange = { path: "a.ts", kind: "modified", patch: unavailablePatch() };
   expect(diffStats(value)).toBeNull();
-  expect(text(value)).toContain("精确 diff 不可用");
+  expect(text(value)).toContain("exact diff unavailable");
   expect(text(value)).not.toContain("partial");
   expect(text(value)).not.toContain("[+");
 });
@@ -56,7 +56,7 @@ it("does not invent a full-file replacement when the search budget is exhausted"
   const after = Array.from({ length: 3000 }, (_, i) => `new ${i}`).join("\n");
   const value = change(before, after);
   expect(diffStats(value)).toBeNull();
-  expect(text(value)).toContain("diff 计算超出预算");
+  expect(text(value)).toContain("budget exceeded");
   expect(text(value)).not.toContain("-old 0");
 });
 it("distinguishes final-newline changes and marks missing final newlines", () => {

@@ -92,7 +92,7 @@ export async function interactive(
   };
   const toolCommand = (value: string): void => {
     if (value && !/^[1-9]\d*$/.test(value)) {
-      safe.stderr("用法：/tools [N]，N 为正整数。\n");
+      safe.stderr("Expected /tools [N] (positive tool number).\n");
       return;
     }
     appendLines(value ? tools.detail(Number(value), ui?.columns ?? 80) : tools.list(ui?.columns ?? 80));
@@ -122,7 +122,7 @@ export async function interactive(
     ui?.setContext?.({
       model,
       reasoningEffort: settings.reasoningEffort ?? "default",
-      sessionTitle: session?.title ?? "新会话",
+      sessionTitle: session?.title ?? "New session",
       sessionCache: sessionCache.snapshot(),
       usage: contextDisplay.compacted && !contextUsage ? null
         : { ...currentUsage, ...budgetUsage(resolveContextBudget(resolvedWindow, settings)) },
@@ -166,7 +166,7 @@ export async function interactive(
   const changeMode = (value: "build" | "plan") => {
     mode = value;
     ui?.setMode?.(mode);
-    safe.stdout(`模式：${mode}${runInProgress ? "（下一轮生效，当前运行不变）" : ""}\n`);
+    safe.stdout(`Mode: ${mode}${runInProgress ? " (next run only; current run unchanged)" : ""}\n`);
   };
   ui?.setMode?.(mode);
   const offMode = ui?.onModeToggle?.(() => changeMode(mode === "build" ? "plan" : "build"));
@@ -195,7 +195,7 @@ export async function interactive(
     if (taskPanelWork) return taskPanelWork;
     if (taskApproval || lifetime.signal.aborted) return Promise.resolve();
     if (!service.tasks || !session) {
-      safe.stdout(!session ? "没有活动会话。先发送消息或 /resume 再使用 /tasks。\n" : "当前宿主不提供任务面板。\n");
+      safe.stdout(!session ? "No active session. Start or resume a session before /tasks.\n" : "Task panel is unavailable in this host.\n");
       return Promise.resolve();
     }
     const controller = new AbortController();
@@ -213,7 +213,7 @@ export async function interactive(
   let stopResumedWatch: (() => void) | undefined;
   let resumedStartedAt = 0;
   const resumedStatus = (): RunStatus => ({
-    label: session?.status === "awaiting_approval" ? "会话等待审批" : "会话仍在运行",
+    label: session?.status === "awaiting_approval" ? "session awaiting approval" : "session still running",
     startedAt: resumedStartedAt, toolCount: 0, cancellable: false, observing: true,
   });
   const clearResumedWatch = (): void => {
@@ -235,24 +235,24 @@ export async function interactive(
       ui?.setPlan?.(latest.plan ?? null);
       if (!isActiveSession(latest.status)) {
         clearResumedWatch();
-        safe.stdout(`会话运行已结束（${latest.status}）。\n`);
+        safe.stdout(`Session run finished (${latest.status}).\n`);
       } else if (activeStatus === undefined && !runInProgress) ui?.setStatus(resumedStatus());
     }, () => {
       clearResumedWatch();
-      safe.stderr("会话状态刷新失败，已停止动画；可用 /resume 重新检查。\n");
+      safe.stderr("Session status refresh failed; animation stopped. Use /resume to check again.\n");
     });
   };
 
   const inputHint = (): void => {
     ui?.setInputHint?.(runInProgress
-      ? "Enter 排队 · /steer <内容> 或 Alt+Enter 插话"
-      : queue.length ? `${queue.length} 条待发${queue.paused ? " · 已暂停 · /queue run" : ""} · /queue` : null);
+      ? "Enter queues · /steer <text> or Alt+Enter steers"
+      : queue.length ? `${queue.length} pending${queue.paused ? " · paused · /queue run" : ""} · /queue` : null);
     ui?.setPendingInput?.(queue.preview());
   };
   const addSteering = (text: string): void => {
-    if (!text.trim()) throw new ForgeError("invalid_input", "用法：/steer <内容>。");
+    if (!text.trim()) throw new ForgeError("invalid_input", "Expected /steer <message>.");
     queue.add("steer", text);
-    safe.stdout("插话已接收；将在当前模型/工具交换结束后交给运行。\n");
+    safe.stdout("Steer accepted for this run; waiting for the current model/tool exchange to finish.\n");
   };
   const resetSessionControls = (): void => {
     clearResumedWatch();
@@ -260,17 +260,17 @@ export async function interactive(
     contextDisplay = replayContextDisplay(session?.events ?? []);
     usageModel = session?.model ?? model;
     ui?.setPlan?.(session?.plan ?? null);
-    if (queue.length) safe.stdout("切换会话时已清空待发消息。\n");
+    if (queue.length) safe.stdout("Pending input cleared on session change.\n");
     queue.clear();
     // Preserve an explicit manual choice across /new and /resume in this CLI session.
-    safe.stdout(`命令审批：${approvalMode}（未改变，仅本 CLI 会话）。\n`);
+    safe.stdout(`Command approval: ${approvalMode} (unchanged; CLI session only).\n`);
     inputHint();
   };
   const queueCommand = (value: string): void => {
     if (!value) safe.stdout(queue.describe());
-    else if (value === "clear") { queue.clear(); safe.stdout("已清空队列。\n"); }
-    else if (value === "run" && !runInProgress) { queue.paused = false; safe.stdout("队列已恢复。\n"); }
-    else throw new ForgeError("invalid_input", "用法：/queue [clear|run]；run 只能在空闲提示符下使用。");
+    else if (value === "clear") { queue.clear(); safe.stdout("Queue cleared.\n"); }
+    else if (value === "run" && !runInProgress) { queue.paused = false; safe.stdout("Queue resumed.\n"); }
+    else throw new ForgeError("invalid_input", "Expected /queue [clear|run]; run is available only at the prompt.");
     inputHint();
   };
   const receiveInput = (raw: string, steer = false): void => {
@@ -294,31 +294,31 @@ export async function interactive(
           if (value) {
             if (value !== "plan" && value !== "build") throw Error("Expected plan or build.");
             changeMode(value);
-          } else safe.stdout(`模式：${mode}\n`);
+          } else safe.stdout(`Mode: ${mode}\n`);
         } else if (text === "/permission" || text.startsWith("/permission ")) {
           const value = text.slice(11).trim();
           if (value) permission = permissionSchema.parse(value);
-          safe.stdout(`权限：${permission}\n`);
+          safe.stdout(`Permission: ${permission}\n`);
         } else if (text === "/approval" || text.startsWith("/approval ")) {
           const value = text.slice(9).trim();
           if (value) {
             approvalMode = parseApprovalMode(value);
             safe.stdout(`${approvalWarning(approvalMode)}\n`);
           }
-          safe.stdout(`命令审批：${approvalMode}（仅本会话）。\n`);
+          safe.stdout(`Command approval: ${approvalMode} (session only).\n`);
         } else {
           const size = Buffer.byteLength(text);
           if (pendingCommands.length >= 1_000 || commandBytes + size > 1_000_000)
             throw new ForgeError("invalid_input", "Pending command limit exceeded.");
           pendingCommands.push(text);
           commandBytes += size;
-          safe.stdout("命令已接受；当前运行结束后执行。\n");
+          safe.stdout("Command accepted; will execute after the current run.\n");
         }
       } else if (steer) {
         addSteering(text);
       } else {
         queue.add("follow-up", text);
-        safe.stdout(`已加入队列（${queue.length} 条待发）。\n`);
+        safe.stdout(`Follow-up queued (${queue.length} pending).\n`);
       }
       inputHint();
     } catch (error) {
@@ -377,7 +377,7 @@ export async function interactive(
     // Settings are readonly; replace the local copy so the footer reflects the save.
     settings = { ...settings, reasoningEffort };
     refreshContext();
-    safe.stdout(`思考强度：${reasoningEffort}（已保存）\n`);
+    safe.stdout(`Reasoning effort: ${reasoningEffort} (saved)\n`);
   };
 
   const offClose = io.onClose?.(() => {
@@ -414,7 +414,7 @@ export async function interactive(
       workspace: session?.workspace ?? workspace,
       model,
       reasoningEffort: settings.reasoningEffort ?? "default",
-      sessionTitle: session?.title ?? "新会话",
+      sessionTitle: session?.title ?? "New session",
       permission,
       mode,
       version: "0.1.0",
@@ -429,7 +429,7 @@ export async function interactive(
           workspace: session?.workspace ?? workspace,
           model,
           reasoningEffort: settings.reasoningEffort ?? "default",
-          sessionTitle: session?.title ?? "新会话",
+          sessionTitle: session?.title ?? "New session",
           permission,
           mode,
           version: "0.1.0",
@@ -499,13 +499,13 @@ export async function interactive(
                   (source) => source.model === value,
                 );
                 if (owners.length === 1) pickedSourceId = owners[0]?.id;
-                safe.stdout(`模型：${model}\n`);
+                safe.stdout(`Model: ${model}\n`);
                 refreshContext();
                 if (ui) await changeReasoning();
               } else {
                 active = new AbortController();
                 ui?.setBusy(true);
-                const clearStatus = showOperation("加载模型");
+                const clearStatus = showOperation("Loading models");
                 try {
                   const chosen = await pickModel(
                     service,
@@ -517,7 +517,7 @@ export async function interactive(
                   if (chosen !== null && !active.signal.aborted) {
                     model = chosen.model;
                     pickedSourceId = chosen.sourceId;
-                    safe.stdout(`模型：${model}\n`);
+                    safe.stdout(`Model: ${model}\n`);
                     refreshContext();
                     if (ui) await changeReasoning();
                   }
@@ -528,8 +528,8 @@ export async function interactive(
               break;
             case "/history": {
               const action = value || "status";
-              if (action !== "on" && action !== "off" && action !== "clear" && action !== "status") throw new ForgeError("invalid_input", "用法：/history [on|off|clear|status]。");
-              safe.stdout(`${await io.promptHistory?.(action, session?.workspace ?? workspace) ?? "当前适配器不提供输入历史。"}\n`);
+              if (action !== "on" && action !== "off" && action !== "clear" && action !== "status") throw new ForgeError("invalid_input", "Expected /history [on|off|clear|status].");
+              safe.stdout(`${await io.promptHistory?.(action, session?.workspace ?? workspace) ?? "Prompt history is unavailable in this adapter."}\n`);
               break;
             }
             case "/reasoning":
@@ -544,9 +544,9 @@ export async function interactive(
               } else if (!arg) {
                 expandReasoning = !expandReasoning;
               } else {
-                throw new ForgeError("invalid_input", "用法：/thinking [on|off]。");
+                throw new ForgeError("invalid_input", "Expected /thinking [on|off].");
               }
-              safe.stdout(`思考显示：${expandReasoning ? "展开（流式输出完整思考）" : "精简（单行预览）"}（仅本会话）。\n`);
+              safe.stdout(`Thinking display: ${expandReasoning ? "expanded (stream full thoughts)" : "compact (single-line preview)"} (session only).\n`);
               break;
             }
             case "/approval":
@@ -554,7 +554,7 @@ export async function interactive(
                 approvalMode = parseApprovalMode(value);
                 safe.stdout(`${approvalWarning(approvalMode)}\n`);
               }
-              safe.stdout(`命令审批：${approvalMode}（仅本会话）。\n`);
+              safe.stdout(`Command approval: ${approvalMode} (session only).\n`);
               break;
             case "/queue":
               queueCommand(value);
@@ -564,26 +564,26 @@ export async function interactive(
               break;
             case "/permission":
               if (value) permission = permissionSchema.parse(value);
-              safe.stdout(`权限：${permission}\n`);
+              safe.stdout(`Permission: ${permission}\n`);
               break;
             case "/mode":
               if (value) {
                 if (value !== "plan" && value !== "build")
                   throw Error("Expected plan or build.");
                 changeMode(value);
-              } else safe.stdout(`模式：${mode}\n`);
+              } else safe.stdout(`Mode: ${mode}\n`);
               break;
             case "/review": {
               const id = requireSession().id;
               ui?.setBusy(true);
               active = new AbortController();
-              const clearStatus = showOperation("准备会话审查");
+              const clearStatus = showOperation("Preparing session review");
               try {
                 review = await abortable(actions.review(id, value), active.signal);
               } finally {
                 clearStatus();
               }
-              safe.stdout(`审查：${model}（只读；基于当前会话变更）。\n`);
+              safe.stdout(`Review: ${model} (readonly; current session changes).\n`);
               break;
             }
             case "/plan": {
@@ -605,7 +605,7 @@ export async function interactive(
               active = new AbortController();
               ui?.setBusy(true);
               let clearStatus = showOperation(
-                value ? "加载会话" : "加载会话列表",
+                value ? "Loading session" : "Loading sessions",
               );
               try {
                 const chosen =
@@ -614,7 +614,7 @@ export async function interactive(
                 if (chosen === null || active.signal.aborted) break;
                 if (!value) {
                   clearStatus();
-                  clearStatus = showOperation("加载会话");
+                  clearStatus = showOperation("Loading session");
                 }
                 const resumed = await abortable(
                   service.getSession(parseSessionId(chosen)),
@@ -623,11 +623,11 @@ export async function interactive(
                 if (active.signal.aborted) break;
                 session = resumed;
                 try { await io.promptHistory?.("scope", session.workspace); }
-                catch { safe.stderr("该工作区的输入历史不可用；已关闭记录。\n"); }
+                catch { safe.stderr("Prompt history unavailable for this workspace; recording off.\n"); }
                 tools = new ToolTranscript();
                 resetSessionControls();
                 model = session.model;
-                safe.stdout("已恢复会话。\n");
+                safe.stdout("Session resumed.\n");
                 showHistory();
                 observeResumed();
               } finally {
@@ -639,7 +639,7 @@ export async function interactive(
               session = await actions.newSession(session?.workspace ?? workspace, model);
               tools = new ToolTranscript();
               resetSessionControls();
-              safe.stdout("已创建新会话。\n");
+              safe.stdout("New session created.\n");
               break;
             case "/fork":
               session = await actions.fork(requireSession().id, value);
@@ -647,21 +647,21 @@ export async function interactive(
               resetSessionControls();
               showHistory();
               model = session.model;
-              safe.stdout("已分支会话。\n");
+              safe.stdout("Session forked.\n");
               break;
             case "/rename":
               session = await actions.rename(requireSession().id, value);
-              safe.stdout("已重命名会话。\n");
+              safe.stdout("Session renamed.\n");
               break;
             case "/archive":
               session = await actions.archive(requireSession().id);
-              safe.stdout("已归档会话。\n");
+              safe.stdout("Session archived.\n");
               break;
             case "/compact": {
               ui?.setBusy(true);
               active = new AbortController();
               const signal = active.signal;
-              const clearStatus = showOperation("压缩会话");
+              const clearStatus = showOperation("Compacting session");
               let cancel = (): void => {};
               const aborted = new Promise<never>((_resolve, reject) => {
                 cancel = () =>
@@ -679,7 +679,7 @@ export async function interactive(
                 clearStatus();
               }
               if (!signal.aborted) contextDisplay = replayContextDisplay(session?.events ?? []);
-              if (!signal.aborted) safe.stdout(`已压缩会话 ${requireSession().id}\n`);
+              if (!signal.aborted) safe.stdout(`Compacted ${requireSession().id}\n`);
               break;
             }
             case "/diagnostics":
@@ -695,7 +695,7 @@ export async function interactive(
               const result = await actions.checkpoints(requireSession().id, words);
               if (result.kind === "snapshot") {
                 session = result.snapshot;
-                safe.stdout(`已恢复 ${requireSession().id}\n`);
+                safe.stdout(`Restored ${requireSession().id}\n`);
               } else safe.stdout(`${result.kind === "text" ? result.text : JSON.stringify(result.data, null, 2)}\n`);
               break;
             }
@@ -708,7 +708,7 @@ export async function interactive(
               );
               break;
             default:
-              safe.stderr("未知或不可用的命令。/help 查看支持的操作。\n");
+              safe.stderr("Unknown or unavailable command. /help lists supported actions.\n");
           }
           if (!review) continue;
         }
@@ -771,7 +771,7 @@ export async function interactive(
                 return !signal.aborted && approved;
               }
               const prompt = terminalText(
-                `需要批准 ${request.childSessionId ? `子会话 ${request.childSessionId} ` : ""}${request.toolName}: ${JSON.stringify(request.description)}\n命令: ${JSON.stringify(request.command ?? [])}\nEnter 批准 · 命令不在沙箱内运行\n批准？[Y/n] `,
+                `Approval ${request.childSessionId ? `child ${request.childSessionId} ` : ""}${request.toolName}: ${JSON.stringify(request.description)}\nargv: ${JSON.stringify(request.command ?? [])}\nEnter approves; commands are not sandboxed.\nApprove? [Y/n] `,
               );
               if (io.readApproval) {
                 const approved = await io.readApproval(prompt, signal);
@@ -791,24 +791,24 @@ export async function interactive(
           active.signal,
           { drainSteering: () => {
             const messages = queue.drainSteering();
-            if (messages.length) safe.stdout(`已把 ${messages.length} 条插话交给当前运行；正在准备下一次模型请求。\n`);
+            if (messages.length) safe.stdout(`Steer handed to the active run (${messages.length}); preparing the next model request.\n`);
             inputHint();
             return messages;
           } },
         );
         refreshAutoTitle();
         queue.finish(session.status === "completed" && !active.signal.aborted);
-        if (queue.length && queue.paused) safe.stdout("待发消息已暂停；/queue 查看，/queue run 继续，/queue clear 丢弃。\n");
+        if (queue.length && queue.paused) safe.stdout("Pending input paused; /queue to inspect, /queue run to continue, /queue clear to discard.\n");
       } catch (error) {
         if (runInProgress) {
           queue.finish(false);
-          if (queue.length) safe.stdout("待发消息已暂停；/queue run 继续。\n");
+          if (queue.length) safe.stdout("Pending input paused; /queue run to continue.\n");
         }
         const info = toErrorInfo(error);
         safe.stderr(`${info.code}: ${info.message}\n`);
       } finally {
         await closeTasks();
-        if (runInProgress) safe.stdout(`审批汇总：本轮自动批准 ${autoApprovedCount} 个工具请求。\n`);
+        if (runInProgress) safe.stdout(`Approval summary: ${autoApprovedCount} tool request(s) auto-approved this run.\n`);
         autoApprovedCount = 0;
         offRunInput?.();
         offRunInput = undefined;

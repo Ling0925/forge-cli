@@ -6,10 +6,6 @@ import type {
   TaskPlan,
   ToolCall,
 } from "@forge/core/shared/schemas";
-import {
-  webSearchDetails,
-  webSearchStatus,
-} from "@forge/core/shared/web-search-display";
 import { approvalAuditArguments } from "../approval-policy";
 import { uiSymbols } from "../symbols";
 import type { RenderUpdate, RichLine, RunStatus } from "../ui-contract";
@@ -23,6 +19,7 @@ import { wrapRichLines } from "./rich";
 import { sanitizeText } from "./sanitize";
 import { ToolTranscript } from "./tool-transcript";
 import { compactToolLine, toolRunningLine, toolTarget } from "./tools";
+import { webSearchDetails, webSearchStatus } from "./web-search";
 import { truncate } from "./width";
 
 export interface EventRendererOptions {
@@ -51,8 +48,8 @@ export interface ToolPreview {
   readonly argumentsChars: number;
 }
 
-const PREVIEW_LABEL = "生成参数中";
-const PREVIEW_FALLBACK_NAME = "工具调用";
+const PREVIEW_LABEL = "preparing arguments";
+const PREVIEW_FALLBACK_NAME = "tool call";
 const PREVIEW_MAX_CHARS = 1_000_000;
 
 /** Untrusted name; never echo arguments, only the bounded cumulative size. */
@@ -66,7 +63,7 @@ export const previewChars = (value: number): number =>
 
 /** Single plain-text summary used by both the tail row and append-only stderr. */
 export const previewSummary = (preview: ToolPreview): string =>
-  `${toolVerb(previewName(preview.name))} ${uiSymbols().separator} ${PREVIEW_LABEL} ${uiSymbols().separator} ${previewChars(preview.argumentsChars)} 字符`;
+  `${toolVerb(previewName(preview.name))} ${uiSymbols().separator} ${PREVIEW_LABEL} ${uiSymbols().separator} ${previewChars(preview.argumentsChars)} chars`;
 
 /**
  * One live row per pending tool call: name plus how many argument characters
@@ -74,7 +71,7 @@ export const previewSummary = (preview: ToolPreview): string =>
  */
 export const toolPreviewLine = (preview: ToolPreview, width = 80): RichLine => {
   const symbols = uiSymbols();
-  const suffix = ` ${symbols.separator} ${PREVIEW_LABEL} ${symbols.separator} ${previewChars(preview.argumentsChars)} 字符`;
+  const suffix = ` ${symbols.separator} ${PREVIEW_LABEL} ${symbols.separator} ${previewChars(preview.argumentsChars)} chars`;
   return [
     {
       text: symbols.spinnerFrames[0] ?? symbols.active,
@@ -322,7 +319,7 @@ export const createEventRenderer = (
           return update(
             [],
             [],
-            live(`重试 ${event.attempt}/${event.maxAttempts}`),
+            live(`retry ${event.attempt}/${event.maxAttempts}`),
           );
         case "provider_attempt":
           running = true;
@@ -446,7 +443,7 @@ export const createEventRenderer = (
               [
                 {
                   text: sanitizeText(
-                    `钩子 ${event.diagnostic.id}: ${event.diagnostic.reason ?? event.diagnostic.status}`,
+                    `Hook ${event.diagnostic.id}: ${event.diagnostic.reason ?? event.diagnostic.status}`,
                   ),
                   tone: "error",
                 },

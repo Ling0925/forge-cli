@@ -146,9 +146,9 @@ describe("interactive CLI", () => {
         host.io,
       ),
     ).toBe(0);
-    expect(host.out.join("")).toContain("思考显示：展开");
-    expect(host.out.join("")).toContain("思考显示：精简");
-    expect(host.err.join("")).toContain("用法：/thinking [on|off]");
+    expect(host.out.join("")).toContain("Thinking display: expanded");
+    expect(host.out.join("")).toContain("Thinking display: compact");
+    expect(host.err.join("")).toContain("Expected /thinking [on|off]");
   });
   it("does not open stdin on nonTTY and rejects explicit chat", async () => {
     const host = consoleIO([], false);
@@ -223,7 +223,7 @@ describe("interactive CLI", () => {
     expect(await run).toBe(0);
     expect(captured?.aborted).toBe(true);
     expect(compactCalls).toBe(1);
-    expect(host.out.join("")).toMatch(/No past sessions|暂无|没有/);
+    expect(host.out.join("")).toMatch(/No past sessions|No saved sessions/);
     // User cancellation must surface as cancellation, not an internal failure.
     const stderr = host.err.join("");
     expect(stderr).toContain("cancelled: Compaction cancelled.");
@@ -318,7 +318,7 @@ describe("interactive CLI", () => {
     );
     expect(code).toBe(0);
     const out = host.out.join("");
-    expect(out).toContain("Forge 命令");
+    expect(out).toContain("Forge commands");
     expect(out).toContain("/model");
     expect(out).toContain("/permission");
   });
@@ -410,7 +410,7 @@ describe("rich integration adapters", () => {
       expect(host.statuses).toContainEqual(expect.objectContaining({ observing: true, cancellable: false }));
       expect(host.statuses.at(-1)).toBeNull();
       expect(host.output.join("\n")).not.toContain("本窗口仅观察状态");
-      expect(host.output.join("\n")).toContain("会话运行已结束（completed）");
+      expect(host.output.join("\n")).toContain("Session run finished (completed)");
       expect(getSession).toHaveBeenCalledTimes(2);
     } finally { vi.useRealTimers(); }
   });
@@ -501,7 +501,7 @@ describe("rich integration adapters", () => {
     }, host.io);
     expect(code).toBe(0);
     expect(host.err).toEqual([]);
-    expect(host.contexts[0]?.sessionTitle).toBe("新会话");
+    expect(host.contexts[0]?.sessionTitle).toBe("New session");
     for (const sessionTitle of ["Created task", "Renamed", "Resumed task", "Forked task", "Completed task"]) {
       expect(host.contexts.some(value => value?.sessionTitle === sessionTitle)).toBe(true);
     }
@@ -569,7 +569,7 @@ it("Shift+Tab callback shares /mode state without changing active-run approval s
   });
   await runCliWithIO(["chat", "--approval", "auto"], base, {...host.io, ui: {...ui, setMode: mode => modes.push(mode), onModeToggle: callback => {toggle = callback; return () => {toggle = undefined;};}}});
   expect(modes).toEqual(["build", "plan"]);
-  expect(host.output.join("\n")).toContain("下一轮生效，当前运行不变");
+  expect(host.output.join("\n")).toContain("next run only; current run unchanged");
   expect(toggle).toBeUndefined();
 });
 

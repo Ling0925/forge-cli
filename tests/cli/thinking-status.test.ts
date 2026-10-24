@@ -14,9 +14,9 @@ const usage = (usedTokens: number, extra: Partial<ContextUsage> = {}) => event({
 it("counts only this user turn's output across requests and resets for the next turn", () => {
   const renderer = createEventRenderer();
   expect(renderer.push(event({ type: "run_started" })).status?.tokens).toBe(0);
-  expect(renderer.push(usage(12800)).status).toMatchObject({ label: "思考中", tokens: 0 });
+  expect(renderer.push(usage(12800)).status).toMatchObject({ label: "thinking", tokens: 0 });
   expect(renderer.push(event({ type: "text_delta", text: "abcdefgh" })).status)
-    .toMatchObject({ label: "回复中", tokens: 2, tokensEstimated: true });
+    .toMatchObject({ label: "responding", tokens: 2, tokensEstimated: true });
   expect(renderer.push(usage(12900, { basis: "request-with-output", promptTokens: 12800, completionTokens: 100 })).status)
     .toMatchObject({ tokens: 100, tokensEstimated: false });
   // Another model request in the same user turn: neither context nor tool results count.
@@ -57,14 +57,14 @@ it("animates thinking without tool events, shows k/m tokens and stops repainting
     await reader.ui.configure({ theme: "dark" });
     const renderer = createEventRenderer();
     reader.ui.update!(renderer.push(event({ type: "run_started" })));
-    expect(stripAnsi(bytes)).toContain("⠋ 思考中 · 0s · 0k tokens");
+    expect(stripAnsi(bytes)).toContain("⠋ thinking · 0s · 0k tokens");
     reader.ui.update!(renderer.push(usage(100000)));
     reader.ui.update!(renderer.push(event({ type: "text_delta", text: "a".repeat(51200) })));
     reader.ui.update!(renderer.push(event({ type: "state_changed", status: "running" })));
-    expect(stripAnsi(bytes)).toContain("⠋ 回复中 · 0s · ≈12.8k tokens");
+    expect(stripAnsi(bytes)).toContain("⠋ responding · 0s · ≈12.8k tokens");
     bytes = "";
     vi.advanceTimersByTime(100);
-    expect(stripAnsi(bytes)).toContain("⠙ 思考中 · 0s · ≈12.8k tokens");
+    expect(stripAnsi(bytes)).toContain("⠙ thinking · 0s · ≈12.8k tokens");
     reader.ui.update!(renderer.push(usage(1150000, { basis: "request-with-output", promptTokens: 100000, completionTokens: 1050000 })));
     expect(stripAnsi(bytes)).toContain("1.05m tokens");
     reader.ui.update!(renderer.finish());

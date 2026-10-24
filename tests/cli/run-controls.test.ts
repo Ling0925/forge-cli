@@ -97,7 +97,7 @@ describe("interactive run controls", () => {
       expect(h.listening()).toBe(true);
       if (input.prompt === "first") {
         h.send("second"); h.send("改为只做测试", true); h.send("third"); h.send("/mode plan");
-        expect(h.out.join("")).toContain("模式：plan");
+        expect(h.out.join("")).toContain("Mode: plan");
         steering.push(control?.drainSteering() ?? []);
       }
       running = false; return snapshot;
@@ -106,7 +106,7 @@ describe("interactive run controls", () => {
     expect(steering).toEqual([["改为只做测试"]]);
     expect(modes).toEqual(["build", "plan", "plan"]);
     expect(h.listening()).toBe(false);
-    expect(h.out.join("")).toContain("模式：plan");
+    expect(h.out.join("")).toContain("Mode: plan");
   });
 
   it("routes /steer with ordinary Enter into the active run, not a later prompt", async () => {
@@ -122,7 +122,7 @@ describe("interactive run controls", () => {
     expect(delivered).toEqual(["先停下改动\n只检查测试"]);
     expect(prompts).toEqual(["first"]);
     expect(h.out.join("")).not.toContain("Command accepted");
-    expect(h.out.join("")).toContain("插话交给当前运行");
+    expect(h.out.join("")).toContain("Steer handed to the active run");
   });
 
   it("rejects empty and idle /steer without starting a run", async () => {
@@ -136,7 +136,7 @@ describe("interactive run controls", () => {
     }), h.io);
     expect(prompts).toEqual(["first"]);
     expect(h.out.join("")).toContain("requires an active run");
-    expect(h.out.join("")).toContain("用法：/steer <内容>");
+    expect(h.out.join("")).toContain("Expected /steer <message>");
   });
 
   it("shows and clears pending messages including steering, without dispatching them", async () => {
@@ -151,7 +151,7 @@ describe("interactive run controls", () => {
     expect(prompts).toEqual(["first"]);
     expect(h.out.join("")).toContain("follow-up");
     expect(h.out.join("")).toContain("adjust");
-    expect(h.out.join("")).toContain("已清空队列");
+    expect(h.out.join("")).toContain("Queue cleared");
   });
 
   it("does not auto-dispatch queued messages after failure; explicit queue run resumes them", async () => {
@@ -163,7 +163,7 @@ describe("interactive run controls", () => {
       return snapshot;
     }), h.io);
     expect(prompts).toEqual(["first", "second"]);
-    expect(h.out.join("")).toContain("已暂停");
+    expect(h.out.join("")).toContain("paused");
   });
 
   it("retains late steering and dispatches it only as literal input after explicit resume", async () => {
@@ -175,7 +175,7 @@ describe("interactive run controls", () => {
       return snapshot;
     }), h.io);
     expect(prompts).toEqual(["first", "late adjustment"]);
-    expect(h.out.join("")).toContain("已暂停");
+    expect(h.out.join("")).toContain("paused");
   });
 
   it("does not resume a failed queue just because a new manual prompt succeeds", async () => {
@@ -200,7 +200,7 @@ describe("interactive run controls", () => {
       return { ...snapshot, status: "cancelled" };
     }), h.io);
     expect(calls).toBe(1);
-    expect(h.out.join("")).toContain("队列");
+    expect(h.out.join("")).toContain("Queue limit");
   });
 });
 
@@ -216,9 +216,9 @@ it("default full access audits all requests and live manual switch applies to su
   expect(results).toEqual([true,true,false,true]);
   expect(h.readApproval).toHaveBeenCalledTimes(1);
   expect(h.out.join("")).toContain("FULL ACCESS");
-  expect(h.out.join("")).toContain("自动批准 3 个工具请求");
-  expect(h.out.join("")).toContain("已自动批准 · run_command");
-  expect(h.out.join("")).not.toContain("已自动批准 · mcp_call_tool");
+  expect(h.out.join("")).toContain("3 tool request(s) auto-approved this run");
+  expect(h.out.join("")).toContain("Auto-approved · run_command");
+  expect(h.out.join("")).not.toContain("Auto-approved · mcp_call_tool");
   expect(h.out.join("")).not.toContain(`child ${id}`);
   expect(h.out.join("")).not.toContain(`Auto-approved run_command: [`);
 });

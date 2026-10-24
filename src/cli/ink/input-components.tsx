@@ -1,5 +1,6 @@
 import { Box } from "ink";
 import type { ReactElement } from "react";
+import { commandDescription } from "../commands";
 import type { SlashMenuState } from "../slash-menu";
 import { wrapRichLines } from "../render/rich";
 import { sanitizeText } from "../render/sanitize";
@@ -92,7 +93,7 @@ export function menuRows(menu: SlashMenuState, limit: number): readonly RichLine
   const rows: RichLine[] = items.slice(first, first + count).map((item, i) => [
     { text: first + i === menu.selectedIndex ? `${symbols.prompt} ` : "  ", tone: "accent", inverse: first + i === menu.selectedIndex },
     { text: `${single(item.name)}  `, tone: "accent", inverse: first + i === menu.selectedIndex },
-    { text: single(item.description), tone: "muted", inverse: first + i === menu.selectedIndex },
+    { text: single(commandDescription(item)), tone: "muted", inverse: first + i === menu.selectedIndex },
   ]);
   if (cue) rows.push(line(`${first + 1}${symbols.range}${first + count}/${items.length} ${symbols.separator} ${symbols.move} move ${symbols.separator} type to filter`, "muted"));
   return rows;

@@ -63,7 +63,7 @@ describe("/review CLI", () => {
     expect(run.mock.calls[1]?.[0]).toMatchObject({ prompt: "follow up", mode: "plan", permission: "unrestricted" });
     expect(run.mock.calls[2]?.[0]).toMatchObject({ prompt: "build again", mode: "build", permission: "unrestricted" });
     expect(approveDecisions).toEqual([false, false, true]);
-    expect(h.out.join("")).toContain("审查：picked-model（只读");
+    expect(h.out.join("")).toContain("Review: picked-model (readonly");
     expect(h.out.join("")).toContain("审查结果");
   });
 
@@ -80,7 +80,7 @@ describe("/review CLI", () => {
     expect(getSession).toHaveBeenCalledWith(snapshot.id);
     expect(run.mock.calls[1]?.[0]).toMatchObject({ model: "configured-model", permission: "readonly" });
     expect(run.mock.calls[1]?.[0].prompt).toContain("just-created.ts");
-    expect(h.out.join("")).toContain("当前运行结束后执行");
+    expect(h.out.join("")).toContain("will execute after the current run");
   });
 
   it("cancels preparation without dispatching or replaying a review", async () => {

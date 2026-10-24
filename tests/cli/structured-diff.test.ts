@@ -35,11 +35,11 @@ it("uses the recorded patch consistently for live events and restored history", 
 it("shows creation (including an empty file) and overwrite from real write changes", () => {
   for (const item of [change(null, "one\ntwo\n", "created"), change("old\n", "new\n")]) {
     const output = text(toolSummaryLines(call, { content: '{"written":true}', isError: false, changes: [item] }));
-    expect(output).toContain(item.kind === "created" ? "+2 −0" : "+1 −1");
+    expect(output).toContain(item.kind === "created" ? "+2 -0" : "+1 -1");
     expect(output).toContain(item.kind === "created" ? "2   two" : "1 - old");
     expect(output).toContain(item.kind === "created" ? "1   one" : "1 + new");
   }
-  expect(text(diffLines(change(null, "", "created")))).toContain("已创建空文件");
+  expect(text(diffLines(change(null, "", "created")))).toContain("(empty file created)");
   const noChanges = text(toolSummaryLines(call, { content: '{"written":true}', isError: false }));
   expect(noChanges).not.toContain("DO_NOT_INVENT");
   expect(noChanges).not.toContain("[+0");
@@ -64,7 +64,7 @@ it("migrates legacy before/after previews into a patch and never reports unknown
   // A truncated legacy preview cannot yield an exact diff; label it unavailable.
   const partial = fileChangeSchema.parse({ ...legacy, truncated: true });
   expect(diffStats(partial)).toBeNull();
-  expect(text(diffLines(partial))).toContain("精确 diff 不可用");
+  expect(text(diffLines(partial))).toContain("exact diff unavailable");
   expect(text(diffLines(partial))).not.toContain("[+0");
   // A record with no patch at all is unknown, not zero.
   const missing = fileChangeSchema.parse({ path: "a.ts", kind: "modified" });
@@ -77,7 +77,7 @@ it("keeps a chronological prefix under row budgets, not a later green line", () 
   expect(rows).toHaveLength(8);
   expect(text(rows)).toContain("1 - old 0");
   expect(text(rows)).not.toContain("+ addition at end");
-  expect(text(rows)).toContain("省略");
+  expect(text(rows)).toContain("omitted");
   const result = { content: '{"written":true}', isError: false, changes: [item] };
   const summary = toolSummaryLines(call, result);
   const detail = toolFinishLines(call, result, 80, true);
@@ -134,8 +134,8 @@ it("shows exact totals and a clear omission notice for truncated patches", () =>
   expect(item.patch?.status).toBe("truncated");
   expect(diffStats(item)).toEqual({ added: 600, removed: 0 });
   const output = text(diffLines(item, { maxRows: 700 }));
-  expect(output).toContain("新文件 · 600 行");
-  expect(output).toContain("补丁已截断");
+  expect(output).toContain("new file · 600 lines");
+  expect(output).toContain("patch truncated");
   const short = text(diffLines(item, { maxRows: 5 }));
-  expect(short).toContain("补丁同时被截断");
+  expect(short).toContain("patch also truncated");
 });

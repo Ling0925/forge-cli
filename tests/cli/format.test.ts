@@ -66,7 +66,7 @@ describe("Formatters", () => {
     );
     expect(banner).toContain("Forge");
     expect(banner).toContain("v0.1.0");
-    expect(banner).toContain("工作区审批");
+    expect(banner).toContain("workspace approval");
     expect(banner).toContain("gpt-4o (high) · 优化 CLI");
     expect(banner).not.toContain("┌");
   });
@@ -88,7 +88,7 @@ describe("Formatters", () => {
       "10000000-0000-4000-8000-000000000001",
       theme,
     );
-    expect(output).toContain("会话 (1)");
+    expect(output).toContain("Sessions (1)");
     expect(output).toContain("completed");
     expect(output).toContain("10000000");
     expect(output).toContain("Setup build");
@@ -134,13 +134,13 @@ describe("Formatters", () => {
       theme,
     );
     expect(output).toContain(
-      "需要批准 run_command（子会话 10000000-0000-4000-8000-000000000099）",
+      "Approval required: run_command (child 10000000-0000-4000-8000-000000000099)",
     );
-    expect(output).toContain("工作区");
+    expect(output).toContain("Workspace:");
     expect(output).toContain("Execute bash command");
     expect(output).toContain("npm test");
     expect(output).not.toContain('["npm","test"]');
-    expect(output).toContain("Enter 批准");
+    expect(output).toContain("Enter approves");
   });
 
   it("renders markdown without box-drawing walls", () => {

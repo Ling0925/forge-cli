@@ -65,7 +65,7 @@ describe("ASCII Ink integration", () => {
     expect(output).toContain("> |");
     expect(output).toContain("/ 原文 ❯ ✔ 👩‍💻");
     expect(output).toContain("* Implement");
-    expect(output).toContain("缓存 ~50%");
+    expect(output).toContain("cache ~50%");
     expect(output).not.toMatch(/[⠋⠙⠹─━▏↑↓]/);
     const store = new InputStore(() => {}); store.begin("custom", false); store.end();
     expect(store.getSnapshot().prompt).toBe("> "); store.dispose();

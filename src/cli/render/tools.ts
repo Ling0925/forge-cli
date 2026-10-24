@@ -20,8 +20,6 @@ const COMMAND_ROWS = 6;
 const COMMAND_MIN_WIDTH = 24;
 // A completed card keeps one result row plus a short diff; the rest is /tools N.
 const SUMMARY_DIFF_ROWS = 8;
-// Sub-second timings are noise on a scan row; the exact value stays in /tools N.
-const DURATION_FLOOR_MS = 1000;
 
 const span = (text: string, tone?: Tone): Span => ({
   text: sanitizeText(text),
@@ -122,12 +120,25 @@ const readObject = (raw: string): Record<string, unknown> | null => {
   return null;
 };
 
+// Core's command_task activity label is localized for the web UI. The terminal
+// keeps English, so the CLI translates the action word it receives back.
+const commandTaskActions: Readonly<Record<string, string>> = {
+  等待完成: "wait",
+  读取输出: "read",
+  终止任务: "stop",
+  任务列表: "list",
+};
+
 export const toolTarget = (call: ToolCall): string => {
   // Shared extraction, including name-based command redaction, so the CLI line
   // and the desktop row describe the same thing. Falls back to the name when no
   // scalar target exists, and flags malformed arguments explicitly.
   const { target } = toolActivity(call);
-  if (target) return target;
+  if (target) {
+    if (call.function.name !== "command_task") return target;
+    const [action, ...rest] = target.split(" · ");
+    return [commandTaskActions[action ?? ""] ?? action, ...rest].join(" · ");
+  }
   return readObject(call.function.arguments)
     ? call.function.name
     : "(arguments unavailable)";
@@ -276,17 +287,16 @@ const clipRows = (
   return { shown, hidden };
 };
 
-/** Exact timings stay available on demand; a scan row shows only human-scale ones. */
+/** Every measured duration is shown, including sub-second ones. */
 const summaryDuration = (
   name: string | undefined,
   result: ToolResult,
   elapsed: number | undefined,
-  exact = false,
 ): string => {
   const duration = toolDuration(name, result, elapsed);
-  if (duration === undefined) return "";
-  if (!exact && duration < DURATION_FLOOR_MS) return "";
-  return ` ${uiSymbols().separator} ${formatDuration(duration)}`;
+  return duration === undefined
+    ? ""
+    : ` ${uiSymbols().separator} ${formatDuration(duration)}`;
 };
 
 const editStats = (call: ToolCall | undefined, result: ToolResult): string => {
@@ -305,7 +315,7 @@ const editStats = (call: ToolCall | undefined, result: ToolResult): string => {
     added += stats.added;
     removed += stats.removed;
   }
-  return ` +${added} −${removed}`;
+  return ` +${added} -${removed}`;
 };
 
 export const toolSummaryLines = (
@@ -343,7 +353,6 @@ export const toolSummaryLines = (
     statusTone,
     Math.max(1, width - 2),
   );
-  const safeWidth = Math.max(1, width - 2);
   const fit = (
     value: string,
     tone: Tone,
@@ -364,10 +373,14 @@ export const toolSummaryLines = (
   // It signals clipping by replacing its last row, so a full budget means the
   // diff was cut off and the on-demand view has more.
   const firstChange = result.changes?.[0];
+  // The diff is drawn inside the card's two-cell branch gutter, so its own wrap
+  // width must exclude that gutter or the row would exceed the viewport.
+  const diffIndent = "  ";
+  const diffWidth = Math.max(1, width - stringWidth(diffIndent));
   const diffRows = firstChange
     ? [
         ...diffLines(firstChange, {
-          width: safeWidth,
+          width: diffWidth,
           maxRows: SUMMARY_DIFF_ROWS,
         }),
       ]
@@ -375,7 +388,7 @@ export const toolSummaryLines = (
   const diffClipped = diffRows.length >= SUMMARY_DIFF_ROWS;
   const shownDiff = diffRows
     .slice(1)
-    .map((row) => [{ text: "    ", tone: "muted" as Tone }, ...row]);
+    .map((row) => [{ text: diffIndent, tone: "muted" as Tone }, ...row]);
   // Branch rows share one prefix convention: intermediate rows use the vertical
   // glyph, while the final row closes with the selected branch glyph.
   const branchItems: { value: string; tone: Tone }[] = [
@@ -402,7 +415,7 @@ export const toolSummaryLines = (
   const overflowHint =
     index !== undefined &&
     (diffClipped || Boolean(result.changes && result.changes.length > 1))
-      ? [fit(`/tools ${index} ${symbols.separator} 完整输出`, "muted")]
+      ? [fit(`/tools ${index} ${symbols.separator} full output`, "muted")]
       : [];
   // Preserve semantic hierarchy: status glyph, accent verb, neutral target,
   // success/error outcome. The glyph owns two cells, so the header is truncated
@@ -423,12 +436,7 @@ export const toolSummaryLines = (
     ...branchRows,
     ...shownDiff,
     ...(result.changes && result.changes.length > 1
-      ? [
-          fit(
-            `${symbols.ellipsis} 还有 ${result.changes.length - 1} 个文件变更`,
-            "muted",
-          ),
-        ]
+      ? [fit(`${symbols.ellipsis} more file changes`, "muted")]
       : []),
     ...overflowHint,
   ];
@@ -459,7 +467,7 @@ export const toolFinishLines = (
   const header = compactToolLine(
     toolVerb(name),
     target,
-    `${failed ? ` ${symbols.separator} ${chrome.failed}` : ""}${exit}${summaryDuration(name, result, elapsed, true)}`,
+    `${failed ? ` ${symbols.separator} ${chrome.failed}` : ""}${exit}${summaryDuration(name, result, elapsed)}`,
     status,
     Math.max(1, width - glyphPrefix.length),
   );
@@ -481,7 +489,7 @@ export const toolFinishLines = (
   if (stdoutAll.length > stdout.length) {
     logical.push([
       span(
-        `${symbols.ellipsis} 另有 ${stdoutAll.length - stdout.length} 行`,
+        `${symbols.ellipsis} ${stdoutAll.length - stdout.length} more lines`,
         "muted",
       ),
     ]);
@@ -490,7 +498,7 @@ export const toolFinishLines = (
   const stderr = stderrAll.slice(0, expanded ? 40 : 2);
   for (const item of stderr) logical.push([span(`stderr ${item}`, "error")]);
   if (stderrAll.length > stderr.length) {
-    logical.push([span(`${symbols.ellipsis} 更多 stderr`, "muted")]);
+    logical.push([span(`${symbols.ellipsis} more stderr`, "muted")]);
   }
   const clipped = clipRows(logical, width, expanded ? 180 : PREVIEW_ROWS);
   const rows: RichLine[] = [
@@ -499,7 +507,7 @@ export const toolFinishLines = (
   ];
   if (clipped.hidden > 0) {
     rows.push([
-      span(`${symbols.ellipsis} 另有 ${clipped.hidden} 行预览`, "muted"),
+      span(`${symbols.ellipsis} ${clipped.hidden} more preview lines`, "muted"),
     ]);
   }
   const changes = result.changes ?? [];
@@ -516,7 +524,7 @@ export const toolFinishLines = (
     rows.push([
       span(
         truncate(
-          `${symbols.ellipsis} 还有更多文件变更`,
+          `${symbols.ellipsis} more file changes`,
           Math.max(1, width),
           symbols.ellipsis,
         ),

@@ -156,7 +156,7 @@ it("renders bounded auto approval cards without JSON or untrusted controls", () 
     }
   }
   const body = autoApprovalLines(request({ command: ["node", "a b", ""] }), 120).flat().map(s => s.text).join("\n");
-  expect(body).toContain("已自动批准 · run_command");
+  expect(body).toContain("Auto-approved · run_command");
   expect(body).toContain("node 'a b' ''"); expect(body).not.toContain('["');
   expect(autoApprovalLines(request({ command: undefined, toolName: "mcp_call_tool" }))).toHaveLength(1);
 });

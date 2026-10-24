@@ -69,11 +69,11 @@ describe("Ink view components", () => {
       plan: { explanation: "Migrate TUI", steps: [{ step: "Implement", status: "in_progress" }] }, pendingInput: ["next request"],
       status: { label: "Thinking", startedAt: 0, toolCount: 3, cancellable: true, tokens: 123 },
     });
-    expect(output).toContain("计划 0/1");
+    expect(output).toContain("Plan 0/1");
     expect(output).toContain("exact-model");
     expect(output).toContain("next request");
     expect(output).toContain("0.1k tokens");
-    expect(output).toContain("Ctrl+C 取消");
+    expect(output).toContain("Ctrl+C cancel");
     const observing = frame({ status: { label: "会话仍在运行", startedAt: 0, toolCount: 0, cancellable: false, observing: true } });
     expect(observing).not.toMatch(/tokens|tools|cancel/);
   });
@@ -85,7 +85,7 @@ describe("Ink view components", () => {
       context: { model: "model-id", usage: null },
     }, { ...initialInput(), composer: setText(emptyEditor(), "draft") });
     const rows = output.replace(/\n$/, "").split("\n");
-    const positions = ["计划 0/1", "Thinking", "draft", "model-id"].map(label => rows.findIndex(row => row.includes(label)));
+    const positions = ["Plan 0/1", "Thinking", "draft", "model-id"].map(label => rows.findIndex(row => row.includes(label)));
     expect(positions.every(position => position >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
     expect(new Set(positions).size).toBe(4);
@@ -97,13 +97,13 @@ describe("Ink view components", () => {
       prompt: "Approve? [Y/n] ", focus: { kind: "approval", editor: emptyEditor() } };
     const output = frame({ inputHint: "Enter queues" }, input);
     expect(output).toContain("Approve?");
-    expect(output).not.toMatch(/输入问题|Enter 排队|saved secret draft/);
+    expect(output).not.toMatch(/Ask anything|Enter queues|saved secret draft/);
   });
 
-  it("shows the Chinese composer hint when nothing else overrides it", () => {
+  it("shows the English composer hint when nothing else overrides it", () => {
     const output = frame({});
-    expect(output).toContain("输入问题");
-    expect(output).toContain("/ 命令");
+    expect(output).toContain("Ask anything");
+    expect(output).toContain("/ commands");
   });
 
   it("sanitizes untrusted history, picker and tail spans", () => {

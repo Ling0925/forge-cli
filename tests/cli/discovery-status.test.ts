@@ -181,11 +181,11 @@ describe("discovery loading status", () => {
     );
     expect(await running).toBe(0);
     const status = visible(seen);
-    expect(status.label).toBe("加载模型");
+    expect(status.label).toBe("Loading models");
     expect(host.statuses.at(-1)).toBeNull();
     expect(host.busy.at(-1)).toBe(false);
     expect(host.prompts.at(-1)).toBe("❯ ");
-    expect(host.output.join("\n")).toContain("模型：provider/exact");
+    expect(host.output.join("\n")).toContain("Model: provider/exact");
   });
 
   it("keeps the draft model when discovery is cancelled and does not run the busy draft", async () => {
@@ -203,7 +203,7 @@ describe("discovery loading status", () => {
         }),
         listModels: async (signal) => {
           const status = visible(host.statuses.at(-1));
-          expect(status.label).toBe("加载模型");
+          expect(status.label).toBe("Loading models");
           expect(host.busy.at(-1)).toBe(true);
           host.interrupt();
           expect(signal?.aborted).toBe(true);
@@ -241,7 +241,7 @@ describe("discovery loading status", () => {
       },
       host.io,
     );
-    expect(seen).toEqual(["加载模型", "加载模型"]);
+    expect(seen).toEqual(["Loading models", "Loading models"]);
     expect(model).toBe("test");
     expect(host.statuses.at(-1)).toBeNull();
     expect(
@@ -306,7 +306,7 @@ describe("discovery loading status", () => {
     await Promise.resolve();
     loaded.resolve({ ...snapshot, id: resumed, model: "resumed-model" });
     expect(await running).toBe(0);
-    expect(labels).toEqual(["加载会话列表", "加载会话"]);
+    expect(labels).toEqual(["Loading sessions", "Loading session"]);
     expect(prompt).toBe("still here");
     expect(host.statuses.at(-1)).toBeNull();
     expect(host.busy.at(-1)).toBe(false);
@@ -325,7 +325,7 @@ describe("discovery loading status", () => {
         getSession: async (value) => {
           if (value === id) return snapshot;
           requested = value;
-          expect(visible(host.statuses.at(-1)).label).toBe("加载会话");
+          expect(visible(host.statuses.at(-1)).label).toBe("Loading session");
           started.resolve();
           return loaded.promise;
         },
@@ -337,7 +337,7 @@ describe("discovery loading status", () => {
     loaded.resolve({ ...snapshot, id: resumed, model: "kept-id" });
     expect(await running).toBe(0);
     expect(host.statuses.at(-1)).toBeNull();
-    expect(host.output.join("\n")).toContain("已恢复会话。");
+    expect(host.output.join("\n")).toContain("Session resumed.");
   });
 
   it("clears compact status after cancellation and does not replace a later unrelated run status", async () => {
@@ -361,7 +361,7 @@ describe("discovery loading status", () => {
         }),
         compactSession: async (_id, signal) => {
           expect(visible(host.statuses.at(-1)).label).toBe(
-            "压缩会话",
+            "Compacting session",
           );
           host.interrupt();
           expect(signal?.aborted).toBe(true);
@@ -374,7 +374,7 @@ describe("discovery loading status", () => {
           ...ui,
           setStatus: (status) => {
             host.statuses.push(status);
-            if (status?.label === "思考中") seenThinking.push(status);
+            if (status?.label === "thinking") seenThinking.push(status);
           },
         },
       },
@@ -384,7 +384,7 @@ describe("discovery loading status", () => {
     expect(host.statuses).toContain(null);
     const thinking = seenThinking.at(-1);
     if (!thinking) throw Error("missing thinking status");
-    expect(thinking.label).toBe("思考中");
+    expect(thinking.label).toBe("thinking");
     expect(thinking.toolCount).toBe(0);
     expect(host.statuses.at(-1)).toBeNull();
     expect(host.output.join("\n")).toContain(
@@ -405,7 +405,7 @@ describe("discovery loading status", () => {
           return snapshot;
         }),
         listModels: async (signal) => {
-          expect(visible(host.statuses.at(-1)).label).toBe("加载模型");
+          expect(visible(host.statuses.at(-1)).label).toBe("Loading models");
           expect(host.busy.at(-1)).toBe(true);
           expect(signal?.aborted).toBe(false);
           const promptsAtClose = host.prompts.length;

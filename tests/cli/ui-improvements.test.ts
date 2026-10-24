@@ -74,7 +74,7 @@ it("renders code borders and lossless multicolor tokens identically across every
 });
 it("shows diff statistics and labels an unavailable diff", () => {
   const change: FileChange = {path:"a.ts",kind:"modified",patch:createDiffPatch("a\nb\nc","a\nx\ny\nc")};
-  expect(text(diffLines(change))).toContain("[+2 −1]");
-  expect(text(diffLines({path:"a.ts",kind:"modified",patch:unavailablePatch()}))).toContain("不可用");
+  expect(text(diffLines(change))).toContain("[+2 -1]");
+  expect(text(diffLines({path:"a.ts",kind:"modified",patch:unavailablePatch()}))).toContain("unavailable");
   expect(text(diffLines({path:"a.ts",kind:"modified"}))).not.toContain("[+");
 });

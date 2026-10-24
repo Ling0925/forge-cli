@@ -18,7 +18,7 @@ import {
   settingsFields,
 } from "@forge/core/shared/schemas";
 import type { AgentEvent, SessionStatus } from "@forge/core/shared/schemas";
-import { webSearchDetails, webSearchStatus } from "@forge/core/shared/web-search-display";
+import { webSearchDetails, webSearchStatus } from "./render/web-search";
 import { isPrimarySession } from "@forge/core/shared/sessions";
 import { collectPublishedFiles, publishedFileIdSchema, publishedFileResponseSchema } from "@forge/core/shared/published-files";
 
@@ -299,10 +299,10 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
   switch (event.type) {
     case "retry_reset":
       plainPreviewIds(output).clear();
-      io.stdout("\n本次响应未完成，已丢弃；正在重试。\n");
+      io.stdout("\nThis response was incomplete and was discarded; retrying.\n");
       return;
     case "provider_retry":
-      io.stdout(`重试 ${event.attempt}/${event.maxAttempts}（${event.reason}）\n`);
+      io.stdout(`Retry ${event.attempt}/${event.maxAttempts} (${event.reason})\n`);
       return;
     case "provider_attempt": {
       const attempt = event.selection;
@@ -334,11 +334,11 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
       io.stdout(event.text);
       return;
     case "tool_started":
-      io.stdout(`\n工具: ${toolVerb(event.call.function.name)}\n`);
+      io.stdout(`\nTool: ${toolVerb(event.call.function.name)}\n`);
       return;
     case "tool_finished":
       io.stdout(
-        `\n工具 ${event.toolCallId}: ${event.result.isError ? "失败" : "完成"}\n${event.result.content}\n`,
+        `\nTool ${event.toolCallId}: ${event.result.isError ? "failed" : "finished"}\n${event.result.content}\n`,
       );
       return;
     case "error":
@@ -346,25 +346,25 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
       return;
     case "run_finished":
       io.stdout(
-        `\n运行 ${event.status}; ${event.turn === undefined ? "" : `第 ${event.turn} 轮, `}${event.steps ?? event.turns} 步, ${event.toolCalls} 次工具调用${event.retries === undefined ? "" : `, ${event.retries} 次重试`}\n`,
+        `\nRun ${event.status}; ${event.turn === undefined ? "" : `turn=${event.turn}, `}steps=${event.steps ?? event.turns}, tools=${event.toolCalls}${event.retries === undefined ? "" : `, retries=${event.retries}`}\n`,
       );
       return;
     case "run_started":
       io.stdout(
-        `会话 ${event.sessionId}; 模型=${event.model}; 权限=${event.permission}\n`,
+        `Session ${event.sessionId}; model=${event.model}; permission=${event.permission}\n`,
       );
       return;
     case "plan_updated":
-      io.stdout(`计划: ${JSON.stringify(event.plan)}\n`);
+      io.stdout(`Plan: ${JSON.stringify(event.plan)}\n`);
       break;
     case "agent_update":
       io.stdout(
-        `\n子代理 ${event.childSessionId}: ${event.status}; 模型=${event.model}\n${event.summary}\n`,
+        `\nChild ${event.childSessionId}: ${event.status}; model=${event.model}\n${event.summary}\n`,
       );
       return;
     case "tool_hook":
       if (event.diagnostic.status !== "ok" && event.diagnostic.status !== "skipped")
-        io.stderr(`${terminalText(`钩子 ${event.diagnostic.id}: ${event.diagnostic.reason ?? event.diagnostic.status}`)}\n`);
+        io.stderr(`${terminalText(`Hook ${event.diagnostic.id}: ${event.diagnostic.reason ?? event.diagnostic.status}`)}\n`);
       return;
     case "title_changed":
     case "generation_started":

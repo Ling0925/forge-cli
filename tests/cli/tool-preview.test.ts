@@ -21,18 +21,18 @@ it("updates one preparing row without counting or committing a tool and replaces
   renderer.push({ ...base, type: "text_delta", text: "Answer stays" } as AgentEvent);
   const preparing = renderer.push(preview());
   expect(text(preparing.tail)).toContain("Answer stays");
-  expect(text(preparing.tail)).toContain("生成参数中");
+  expect(text(preparing.tail)).toContain("preparing arguments");
   expect(preparing.status?.toolCount).toBe(0);
   expect(preparing.append).toEqual([]);
   const update = renderer.push(preview("1:0:0", 123));
-  expect(text(update.tail).match(/生成参数中/g)).toHaveLength(1);
+  expect(text(update.tail).match(/preparing arguments/g)).toHaveLength(1);
   expect(text(update.tail)).toContain("123");
   const running = renderer.push(start);
-  expect(text(running.tail)).toContain("写入 a.ts");
-  expect(text(running.tail)).not.toContain("生成参数中");
+  expect(text(running.tail)).toContain("write a.ts");
+  expect(text(running.tail)).not.toContain("preparing arguments");
   expect(running.status?.toolCount).toBe(1);
   const completed = renderer.push(finish);
-  expect(text(completed.append)).toContain("写入 a.ts");
+  expect(text(completed.append)).toContain("write a.ts");
   expect(completed.tail).toEqual([]);
 });
 
@@ -45,9 +45,9 @@ it.each([
   const renderer = createEventRenderer();
   renderer.push(preview());
   const update = renderer.push(raw as AgentEvent);
-  expect(text(update.tail)).not.toContain("生成参数中");
+  expect(text(update.tail)).not.toContain("preparing arguments");
   expect(text(update.append)).not.toContain("done");
-  expect(text(renderer.finish().append)).not.toContain("生成参数中");
+  expect(text(renderer.finish().append)).not.toContain("preparing arguments");
 });
 
 it("prints one immediate preparation notice per call in append-only mode, not one per chunk", () => {
@@ -57,14 +57,14 @@ it("prints one immediate preparation notice per call in append-only mode, not on
   const live = new LiveRun(io, createTheme({ isTTY: false }));
   live.event(preview());
   for (let i = 6; i < 100; i++) live.event(preview("1:0:0", i));
-  expect(err.match(/生成参数中/g)).toHaveLength(1);
+  expect(err.match(/preparing arguments/g)).toHaveLength(1);
   expect(out).toBe("");
   live.event(start); live.event(finish);
   live.event({ ...base, type: "retry_reset" } as AgentEvent);
   live.event(preview());
-  expect(err.match(/生成参数中/g)).toHaveLength(2);
+  expect(err.match(/preparing arguments/g)).toHaveLength(2);
   // A successful tool card has no status word; the result row is the record.
-  expect(out.match(/写入 a\.ts/g)).toHaveLength(1);
+  expect(out.match(/write a\.ts/g)).toHaveLength(1);
   live.dispose();
 });
 
@@ -86,6 +86,6 @@ it("handles the new events in the standalone plain CLI without flooding or losin
     readStdin: async () => "", onInterrupt: () => () => {} };
   const code = await runCliWithIO(["run", "go", "--workspace", "/tmp"], service, io);
   expect(code).toBe(0);
-  expect(err.match(/生成参数中/g)).toHaveLength(1);
-  expect(out).toContain("完成");
+  expect(err.match(/preparing arguments/g)).toHaveLength(1);
+  expect(out).toContain("Tool ");
 });

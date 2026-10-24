@@ -58,7 +58,7 @@ describe("SlashCommands metadata", () => {
   it("formats help without heavy boxes", () => {
     const theme = createTheme({ forceColor: false });
     const helpText = formatHelp(theme);
-    expect(helpText).toContain("Forge 命令");
+    expect(helpText).toContain("Forge commands");
     expect(helpText).toContain("/model");
     expect(helpText).toContain("/help");
     expect(helpText).not.toContain("╭──");
@@ -85,7 +85,7 @@ describe("SlashCommands metadata", () => {
       description: "选择会话恢复，也可指定完整 ID",
     });
     expect(formatHelp(createTheme({ forceColor: false }))).toContain(
-      "选择会话恢复",
+      "Resume a session",
     );
   });
 });

@@ -6,10 +6,10 @@ import { truncate, visibleWidth } from "../theme";
 import type { ComposerContext, RichLine, Span, Tone } from "../ui-contract";
 
 const categories = [
-  ["instructions", "指令", "contextInstructions"],
-  ["memory", "记忆", "contextMemory"],
-  ["conversation", "对话", "contextConversation"],
-  ["tools", "工具", "contextTools"],
+  ["instructions", "instr", "contextInstructions"],
+  ["memory", "memory", "contextMemory"],
+  ["conversation", "conv", "contextConversation"],
+  ["tools", "tools", "contextTools"],
 ] as const;
 
 function formatModelSpans(
@@ -63,14 +63,16 @@ export function contextFooter(context: ComposerContext, columns: number, compact
   const ratio = usage?.windowTokens ? usage.usedTokens / usage.windowTokens : 0;
   const percentage = usage?.windowTokens ? `${usage.estimated ? symbols.approximate : ""}${(ratio * 100).toFixed(1)}%` : "?%";
   const count = usage?.windowTokens ? compactTokens(usage.windowTokens) : "?";
-  const basis = context.compacted ? "压缩后预估 " : usage?.basis === "request" ? "实报输入 " : "预估 ";
+  // Keep the basis word short: at 24 columns every cell here competes with the
+  // model identifier, which must stay readable.
+  const basis = context.compacted ? "compacted " : usage?.basis === "request" ? "reported " : "est. ";
   // Keep the compact footer stable on narrow terminals; wide terminals can
   // also show the separate local estimate without replacing the input report.
   const projection = width >= 120 && context.projectedTokens !== undefined && usage?.basis === "request"
-    ? ` ${symbols.separator} 本地${symbols.approximate}${compactTokens(context.projectedTokens)}` : "";
+    ? ` ${symbols.separator} local${symbols.approximate}${compactTokens(context.projectedTokens)}` : "";
   // No context usage means no cache ratio to report: an "缓存 0%" there reads
   // as a measurement instead of the absence of one.
-  const cache = usage ? ` ${symbols.separator} 缓存 ${cacheRate(context.sessionCache)}` : "";
+  const cache = usage ? ` ${symbols.separator} cache ${cacheRate(context.sessionCache)}` : "";
   const summaryText = `${basis}${percentage}${cache} ${symbols.separator} ${count}${projection}`;
   if (compact) {
     // Decorative meter yields to model/effort on narrow terminals.

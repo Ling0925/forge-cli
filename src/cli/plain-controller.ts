@@ -58,7 +58,7 @@ export class PlainController implements TerminalController {
   approve(request: ApprovalRequest, signal: AbortSignal): Promise<boolean> {
     if (this.disposed || signal.aborted) return Promise.resolve(false);
     this.append(approvalLines(request, this.columns).slice(0, -1));
-    return this.options.approval("批准？[Y/n] ", signal);
+    return this.options.approval("Approve? [Y/n] ", signal);
   }
   loadHistory(entries: readonly string[]): void {
     if (!this.fresh) this.editor = loadHistory(this.editor, entries);

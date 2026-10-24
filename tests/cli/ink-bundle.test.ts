@@ -31,7 +31,7 @@ it.each(["none", "light", "dark"] as const)("starts the built Ink chat with %s c
   let sent = false;
   const onData = (chunk: Buffer) => {
     output += chunk.toString();
-    if (!sent && output.includes("输入问题")) {
+    if (!sent && output.includes("Ask anything")) {
       sent = true;
       child.stdin.write("/quit\r");
     }

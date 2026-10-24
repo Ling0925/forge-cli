@@ -27,14 +27,14 @@ it("paints preparing and running tools in real incremental Ink output before any
     app.rerender(createElement(InkView, { state: { ...base, tail: preparing.tail, status: preparing.status ?? null }, input: initialInput() }));
     await settle();
     expect(stripAnsi(bytes)).toContain("write_file");
-    expect(stripAnsi(bytes)).toContain("生成参数中");
+    expect(stripAnsi(bytes)).toContain("preparing arguments");
     expect(stripAnsi(bytes)).toContain("123");
     expect(stripAnsi(bytes)).not.toContain("done");
     bytes = "";
     const started = producer.push({ type: "tool_started", previewId: "1:0:0", call: { id: "call", type: "function", function: { name: "write_file", arguments: '{"path":"a.ts","content":"ready"}' } } } as AgentEvent);
     app.rerender(createElement(InkView, { state: { ...base, tail: started.tail, status: started.status ?? null }, input: initialInput() }));
     await settle();
-    expect(stripAnsi(bytes)).toContain("写入 a.ts");
+    expect(stripAnsi(bytes)).toContain("write a.ts");
     expect(stripAnsi(bytes)).not.toContain("done");
   } finally { app.unmount(); app.cleanup(); }
 });

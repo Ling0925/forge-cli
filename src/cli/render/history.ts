@@ -1,5 +1,5 @@
 import type { SessionSnapshot } from "@forge/core/shared/schemas";
-import { webSearchDetails } from "@forge/core/shared/web-search-display";
+import { webSearchDetails } from "./web-search";
 import { uiSymbols } from "../symbols";
 import type { RichLine } from "../ui-contract";
 import { markdownLines } from "./markdown";
@@ -26,11 +26,11 @@ export const historyLines = (session: SessionSnapshot, width: number, tools = ne
   const messages = session.messages.filter((message) => message.role !== "system");
   const completed = new Set(messages.filter((message) => message.role === "tool").map((message) => message.tool_call_id));
   if (!messages.length) return lines;
-  lines.push([{ text: `历史 ${symbols.separator} ${sanitizeText(session.title)}`, tone: "accent" }]);
+  lines.push([{ text: `History ${symbols.separator} ${sanitizeText(session.title)}`, tone: "accent" }]);
   for (const message of messages) {
     if (message.role === "user") {
-      lines.push([{ text: message.origin === "agent_reconciliation" ? `${symbols.branch} 子代理结果` : `${symbols.prompt} 你`, tone: "accent" }]);
-      if (message.origin === "agent_reconciliation") lines.push([{ text: "  子代理结果保留在会话中；主历史省略细节。", tone: "muted" }]);
+      lines.push([{ text: message.origin === "agent_reconciliation" ? `${symbols.branch} Agent results` : `${symbols.prompt} You`, tone: "accent" }]);
+      if (message.origin === "agent_reconciliation") lines.push([{ text: "  Child results retained in session; details omitted from main history.", tone: "muted" }]);
       else lines.push(...markdownLines(message.content, width));
     } else if (message.role === "assistant") {
       // Persisted display-only reasoning is shown again after a resume, collapsed
@@ -59,6 +59,6 @@ export const historyLines = (session: SessionSnapshot, width: number, tools = ne
       lines.push(...tools.summary(message.tool_call_id, savedToolResult(message.content), width, finishes.get(message.tool_call_id)));
     }
   }
-  lines.push([{ text: "历史结束", tone: "muted" }]);
+  lines.push([{ text: "End of history", tone: "muted" }]);
   return wrapRichLines(lines, width);
 };

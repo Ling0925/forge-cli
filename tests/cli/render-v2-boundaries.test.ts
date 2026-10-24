@@ -47,7 +47,7 @@ describe("v2 incremental boundaries", () => {
       }),
       isError: false,
     });
-    expect(text(lines)).toContain("失败 · exit 9");
+    expect(text(lines)).toContain("failed · exit 9");
     expect(text(lines)).toContain("error reason");
   });
 });
