@@ -168,16 +168,16 @@ Hooks 默认关闭，由宿主显式配置，不从 AGENTS.md 或技能自动加
 
 ```sh
 forge plugins list
-forge plugins show agent-browser
-forge plugins configure agent-browser --config /path/to/browser-plugin.json
-forge plugins enable agent-browser
-forge plugins disable agent-browser
-forge plugins check agent-browser
+forge plugins show browser
+forge plugins configure browser --config /path/to/browser-plugin.json
+forge plugins enable browser
+forge plugins disable browser
+forge plugins check browser
 ```
 
 插件由 Forge 内置并随版本发布；这些命令不安装、不升级插件，也不授予全局权限。`--config` 只读取显式给出的 JSON 文件，没有默认配置路径，也不读取 `FORGE_HOME` 下的隐式文件；配置内容由 Core 按插件清单校验。`enable` / `disable` 只提交启用状态，`enable` 前需已通过配置写入允许域名，Core 会拒绝空域名。
 
-官方 `agent-browser` 插件默认关闭，配置字段为 `executablePath`（默认 `agent-browser`）、`browserExecutablePath`（空表示使用默认浏览器）和 `allowedDomains`：
+官方浏览器插件 ID 为 `browser`，后端为 `agent-browser`；默认关闭，配置字段为 `executablePath`（默认 `agent-browser`）、`browserExecutablePath`（空表示使用默认浏览器）和 `allowedDomains`：
 
 ```json
 {"executablePath":"agent-browser","browserExecutablePath":"","allowedDomains":["example.com","*.example.org"]}

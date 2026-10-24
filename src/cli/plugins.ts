@@ -1,3 +1,4 @@
+import { constants } from "node:fs";
 import { open } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { HarnessService } from "@forge/core/shared/contracts";
@@ -14,8 +15,8 @@ forge plugins enable|disable <id> [--json]
 forge plugins check <id> [--json]
 
 Plugins are installed and versioned by Forge. This command never installs,
-upgrades or grants global permissions. The official agent-browser plugin is
-disabled by default; enabling it requires a non-empty allowedDomains grant.
+upgrades or grants global permissions. The official agent-browser plugin has
+id "browser" and is disabled by default; enabling it requires a non-empty allowedDomains grant.
 allowedDomains are hostnames such as example.com or *.example.com, not exact
 HTTP(S) origins: no scheme, credentials, port, path, query, fragment or
 wildcard in the middle. At most 64 domains. --config accepts only the plugin's
@@ -119,7 +120,7 @@ const readPluginConfig = async (
   signal: AbortSignal,
 ): Promise<PluginConfig> => {
   if (signal.aborted) throw new ForgeError("cancelled", "Input cancelled.");
-  const file = await open(resolve(path), "r").catch(() =>
+  const file = await open(resolve(path), constants.O_RDONLY | constants.O_NONBLOCK).catch(() =>
     invalid("Plugin config file could not be opened."),
   );
   try {
@@ -129,9 +130,18 @@ const readPluginConfig = async (
     if (!info.isFile()) invalid("Plugin config must be a regular file.");
     if (info.size > configLimit) invalid("Plugin config file exceeds 1 MiB.");
     if (signal.aborted) throw new ForgeError("cancelled", "Input cancelled.");
-    const text = await file
-      .readFile({ encoding: "utf8" })
-      .catch(() => invalid("Plugin config file could not be read."));
+    // A size check alone is insufficient when the file grows during reading.
+    const bytes = Buffer.alloc(configLimit + 1);
+    let length = 0;
+    while (length < bytes.length) {
+      if (signal.aborted) throw new ForgeError("cancelled", "Input cancelled.");
+      const { bytesRead } = await file.read(bytes, length, bytes.length - length, length)
+        .catch(() => invalid("Plugin config file could not be read."));
+      if (!bytesRead) break;
+      length += bytesRead;
+    }
+    if (length > configLimit) invalid("Plugin config file exceeds 1 MiB.");
+    const text = bytes.subarray(0, length).toString("utf8");
     if (signal.aborted) throw new ForgeError("cancelled", "Input cancelled.");
     let raw: unknown;
     try {

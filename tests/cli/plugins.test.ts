@@ -12,7 +12,7 @@ import { type CliIO, runCliWithIO } from "../../src/cli/cli";
 import { extendedService } from "./service-fixture";
 
 const browserManifest: PluginRecord["manifest"] = {
-  id: "agent-browser",
+  id: "browser",
   name: "Agent Browser",
   version: "1.0.0",
   apiVersion: 1,
@@ -59,8 +59,10 @@ const dangerousCache: readonly PluginRecord[] = [
 ];
 
 const temporary: string[] = [];
+const originalHome = process.env.FORGE_HOME;
 afterEach(async () => {
-  process.env.FORGE_HOME = undefined;
+  if (originalHome === undefined) delete process.env.FORGE_HOME;
+  else process.env.FORGE_HOME = originalHome;
   await Promise.all(
     temporary
       .splice(0)
@@ -199,13 +201,13 @@ describe("forge plugins", () => {
     const show = ioFixture();
     expect(
       await runCliWithIO(
-        ["plugins", "show", "agent-browser"],
+        ["plugins", "show", "browser"],
         service,
         show.io,
       ),
     ).toBe(0);
     expect(JSON.parse(show.output())).toMatchObject({
-      manifest: { id: "agent-browser", builtin: true },
+      manifest: { id: "browser", builtin: true },
       status: "disabled",
       activeSessions: 0,
     });
@@ -244,12 +246,12 @@ describe("forge plugins", () => {
     const path = await writeConfig(home, config);
     expect(
       await runCliWithIO(
-        ["plugins", "configure", "agent-browser", "--config", path, "--json"],
+        ["plugins", "configure", "browser", "--config", path, "--json"],
         service,
         f.io,
       ),
     ).toBe(0);
-    expect(state.configured).toEqual([{ pluginId: "agent-browser", config }]);
+    expect(state.configured).toEqual([{ pluginId: "browser", config }]);
     expect(JSON.parse(f.output())).toMatchObject({ enabled: false, config });
     expect((await readdir(home)).sort()).toEqual(["plugin-config.json"]);
     expect(f.diagnostics()).toBe("");
@@ -260,13 +262,13 @@ describe("forge plugins", () => {
     const f = ioFixture();
     const { service, state } = serviceFixture();
     const run = (argv: readonly string[]) => runCliWithIO(argv, service, f.io);
-    expect(await run(["plugins", "configure", "agent-browser"])).toBe(1);
+    expect(await run(["plugins", "configure", "browser"])).toBe(1);
     expect(f.diagnostics()).toContain("--config JSON_FILE");
     expect(
       await run([
         "plugins",
         "configure",
-        "agent-browser",
+        "browser",
         "--config",
         join(home, "absent.json"),
       ]),
@@ -274,14 +276,14 @@ describe("forge plugins", () => {
     expect(f.diagnostics()).toContain("could not be opened");
     expect(f.diagnostics()).not.toContain(home);
     expect(
-      await run(["plugins", "configure", "agent-browser", "--config", home]),
+      await run(["plugins", "configure", "browser", "--config", home]),
     ).toBe(1);
     expect(f.diagnostics()).toContain("regular file");
     for (const value of ["not-json", "[]", '"text"', "null"]) {
       const path = join(home, "invalid.json");
       await writeFile(path, value);
       expect(
-        await run(["plugins", "configure", "agent-browser", "--config", path]),
+        await run(["plugins", "configure", "browser", "--config", path]),
       ).toBe(1);
     }
     expect(state.configured).toEqual([]);
@@ -293,7 +295,7 @@ describe("forge plugins", () => {
         [
           "plugins",
           "configure",
-          "agent-browser",
+          "browser",
           "--config",
           "x",
           "--config",
@@ -306,12 +308,23 @@ describe("forge plugins", () => {
     expect(invalid.diagnostics()).toContain("more than once");
   });
 
+  it("rejects over-limit configuration files without forwarding them to Core", async () => {
+    const home = await directory("plugins-large-config");
+    const path = join(home, "large.json");
+    await writeFile(path, `{"value":"${"x".repeat(1024 * 1024)}"}`);
+    const f = ioFixture();
+    const { service, state } = serviceFixture();
+    expect(await runCliWithIO(["plugins", "configure", "browser", "--config", path], service, f.io)).toBe(1);
+    expect(f.diagnostics()).toContain("exceeds 1 MiB");
+    expect(state.configured).toEqual([]);
+  });
+
   it("forwards enable and disable as enabled-only updates so Core validates the domains", async () => {
     const f = ioFixture();
     const { service, state } = serviceFixture([enabledRecord]);
     expect(
       await runCliWithIO(
-        ["plugins", "disable", "agent-browser", "--json"],
+        ["plugins", "disable", "browser", "--json"],
         service,
         f.io,
       ),
@@ -323,15 +336,15 @@ describe("forge plugins", () => {
     f.reset();
     expect(
       await runCliWithIO(
-        ["plugins", "enable", "agent-browser", "--json"],
+        ["plugins", "enable", "browser", "--json"],
         service,
         f.io,
       ),
     ).toBe(0);
     expect(JSON.parse(f.output())).toMatchObject({ enabled: true });
     expect(state.configured).toEqual([
-      { pluginId: "agent-browser", enabled: false },
-      { pluginId: "agent-browser", enabled: true },
+      { pluginId: "browser", enabled: false },
+      { pluginId: "browser", enabled: true },
     ]);
     expect(state.checked).toEqual([]);
   });
@@ -346,7 +359,7 @@ describe("forge plugins", () => {
       );
     };
     expect(
-      await runCliWithIO(["plugins", "enable", "agent-browser"], service, f.io),
+      await runCliWithIO(["plugins", "enable", "browser"], service, f.io),
     ).toBe(1);
     expect(f.diagnostics()).toBe(
       "invalid_input: agent-browser requires non-empty allowedDomains.\n",
@@ -358,17 +371,17 @@ describe("forge plugins", () => {
     const { service, state } = serviceFixture(dangerousCache);
     expect(
       await runCliWithIO(
-        ["plugins", "check", "agent-browser", "--json"],
+        ["plugins", "check", "browser", "--json"],
         service,
         f.io,
       ),
     ).toBe(0);
     expect(JSON.parse(f.output())).toEqual({
-      pluginId: "agent-browser",
+      pluginId: "browser",
       status: "ready",
       message: "agent-browser 1.0.0",
     });
-    expect(state.checked).toEqual(["agent-browser"]);
+    expect(state.checked).toEqual(["browser"]);
     expect(state.configured).toEqual([]);
   });
 
@@ -382,7 +395,7 @@ describe("forge plugins", () => {
     });
     expect(
       await runCliWithIO(
-        ["plugins", "check", "agent-browser", "--json"],
+        ["plugins", "check", "browser", "--json"],
         service,
         f.io,
       ),
@@ -404,7 +417,7 @@ describe("forge plugins", () => {
     expect(f.diagnostics()).toContain("Plugins are unavailable on this host.");
     expect(
       await runCliWithIO(
-        ["plugins", "check", "agent-browser"],
+        ["plugins", "check", "browser"],
         unavailable,
         f.io,
       ),
@@ -416,7 +429,7 @@ describe("forge plugins", () => {
     const f = ioFixture();
     const { service } = serviceFixture();
     expect(
-      await runCliWithIO(["plugins", "remove", "agent-browser"], service, f.io),
+      await runCliWithIO(["plugins", "remove", "browser"], service, f.io),
     ).toBe(1);
     expect(f.diagnostics()).toContain("Unknown plugins command");
     expect(
