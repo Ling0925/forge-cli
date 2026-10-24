@@ -101,8 +101,9 @@ forge plugins list|show <id> [--json]
 forge plugins configure <id> --config JSON_FILE [--json] | enable|disable|check <id> [--json]
 Plugin config is read only from the explicit --config file and validated by Core.
 allowedDomains are hostnames (example.com, *.example.com), not exact origins.
+Set allowedDomains to ["*"] to explicitly allow all HTTP(S) hosts; empty grants no access.
 Enabling agent-browser requires non-empty allowedDomains. Plugins are never
-installed, upgraded or granted global permission here; check runs an MCP health
+installed or upgraded here; Forge's execution permissions are unchanged. check runs an MCP health
 diagnostic without visiting pages, and changing config or disabling closes the
 browser this Core owns.
 forge export <session-id> --output PATH (explicit destination; no implicit path)

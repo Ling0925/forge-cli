@@ -15,12 +15,14 @@ forge plugins enable|disable <id> [--json]
 forge plugins check <id> [--json]
 
 Plugins are installed and versioned by Forge. This command never installs,
-upgrades or grants global permissions. The official agent-browser plugin has
+upgrades or changes Forge's execution permissions. The official agent-browser plugin has
 id "browser" and is disabled by default; enabling it requires a non-empty allowedDomains grant.
 allowedDomains are hostnames such as example.com or *.example.com, not exact
 HTTP(S) origins: no scheme, credentials, port, path, query, fragment or
-wildcard in the middle. At most 64 domains. --config accepts only the plugin's
-config object and no file is read unless --config is supplied; there is no
+wildcard in the middle. Set allowedDomains to ["*"] to explicitly allow all
+HTTP(S) hosts, including localhost and LAN hosts; an empty list grants no access.
+At most 64 entries. --config accepts only the plugin's config object and no
+file is read unless --config is supplied; there is no
 default config path. Core validates the object against the plugin manifest.
 
 For agent-browser, an explicit configuration looks like:

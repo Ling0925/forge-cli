@@ -183,7 +183,7 @@ forge plugins check browser
 {"executablePath":"agent-browser","browserExecutablePath":"","allowedDomains":["example.com","*.example.org"]}
 ```
 
-`allowedDomains` 是主机名，不是 exact HTTP(S) origins：不写协议、凭据、端口、路径、查询、片段，也不支持中间通配；最多 64 项。此授权是新增的独立域名列表，不会复用 `--browser-origins`。
+`allowedDomains` 是主机名，不是 exact HTTP(S) origins：不写协议、凭据、端口、路径、查询、片段，也不支持中间通配；最多 64 项。也可显式设置 `"allowedDomains": ["*"]` 允许任意 HTTP(S) 主机，包括本机、局域网、重定向与子资源所需的主机；`*` 与具体条目混合时仍表示全部允许。空列表不授权，不能启用；该设置不绕过 Forge 审批或导航 URL 校验。此授权是新增的独立域名列表，不会复用 `--browser-origins`。
 
 `list` / `show` 只读取插件记录，不启动插件。`check` 显式启动该插件的 MCP 健康诊断，只检查可执行文件与协议，不会打开或访问网页；诊断为 `unavailable` 时命令以非零退出码结束，仍输出结构化结果。运行中修改配置或禁用插件会关闭本 Core 拥有的浏览器会话；插件不会自动安装或升级浏览器。截图等产物以已发布文件形式返回，卡片显示文件名、大小与文件 ID，随后可用 `forge files save <session-id> <file-id> --output PATH` 保存。
 

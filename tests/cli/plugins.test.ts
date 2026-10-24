@@ -453,6 +453,8 @@ describe("forge plugins", () => {
     expect(text).toContain("never installs");
     expect(text).toContain("closes browser sessions");
     expect(text).toContain("never opens or visits pages");
+    expect(text).toContain('allowedDomains to ["*"]');
+    expect(text).toContain("an empty list grants no access");
     expect(text).toContain('"allowedDomains":["example.com"]');
     expect(state.starts).toBe(0);
 
@@ -463,6 +465,7 @@ describe("forge plugins", () => {
       "forge plugins configure <id> --config JSON_FILE",
     );
     expect(top.output()).toContain("not exact origins");
+    expect(top.output()).toContain('allowedDomains to ["*"]');
     expect(state.starts).toBe(0);
   });
 });
