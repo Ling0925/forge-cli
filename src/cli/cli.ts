@@ -53,6 +53,21 @@ const deprecatedLimitFlags = [
   ],
   ["root-timeout-ms", "--root-timeout-ms is deprecated and ignored: runs have no cumulative time limit."],
 ] as const;
+/**
+ * Browser configuration belongs to the built-in browser plugin. These global
+ * flags are rejected instead of silently ignored so stale scripts fail loudly
+ * without persisting settings.
+ */
+const removedBrowserConfigFlags: ReadonlyMap<string, string> = new Map([
+  [
+    "--browser-origins",
+    "configure allowedDomains with forge plugins configure browser --config JSON_FILE.",
+  ],
+  [
+    "--browser-executable",
+    "configure browserExecutablePath with forge plugins configure browser --config JSON_FILE.",
+  ],
+]);
 const help = `Forge — shared-core agent CLI
 
 forge devices pair NAME | list | revoke DEVICE_ID (local LAN authorization)
@@ -68,13 +83,11 @@ forge config set [--base-url URL] [--model MODEL] [--api-mode chat-completions|r
                  [--theme system|light|dark] [--permission readonly|workspace|unrestricted]
                  [--timeout-ms NUMBER] [--context-chars NUMBER] [--context-budget-tokens NUMBER|auto]
                   [--context-tokens NUMBER|auto] (window for --model or current model)
-                 [--browser-origins ORIGIN[,ORIGIN...]] [--browser-executable PATH]
                  [--lsp-servers JSON] (array of {id,command,args,extensions}; [] disables)
---browser-origins accepts exact canonical HTTP(S) origins only (scheme, host,
-optional port; no credentials, path, query, fragment or wildcard; at most 32).
-An empty value clears the list; no origins disables browser tools (default).
---browser-executable selects a local Chromium/Chrome executable; an empty value
-uses the Playwright default or FORGE_BROWSER_EXECUTABLE.
+Browser access is configured only through the built-in browser plugin:
+forge plugins configure browser --config JSON_FILE (allowedDomains, browserExecutablePath).
+--browser-origins and --browser-executable were removed and are rejected; they never
+write settings. Existing Playwright-era browser settings are ignored.
 --max-turns/--max-tools/--max-root-tools/--root-timeout-ms are accepted for
 compatibility only: stored but ignored, and no cumulative tool-call, subagent
 count or total-time limit applies.
@@ -466,6 +479,15 @@ export const runCliWithIO = async (
         return 0;
       }
       if (subcommand !== "set") invalid("Expected config show or config set.");
+      // Reject removed global browser flags before parsing so nothing is written
+      // and stale scripts get a pointer to the plugin configuration instead.
+      for (const arg of argv.slice(2)) {
+        if (arg === "--") break;
+        const name = arg.split("=", 1)[0] ?? arg;
+        const hint = removedBrowserConfigFlags.get(name);
+        if (hint !== undefined)
+          invalid(`${name} was removed: browser settings belong to the browser plugin; ${hint}`);
+      }
       const args = parseArgs(
         argv.slice(2),
         [
@@ -484,8 +506,6 @@ export const runCliWithIO = async (
           "context-chars",
           "context-tokens",
           "context-budget-tokens",
-          "browser-origins",
-          "browser-executable",
           "lsp-servers",
         ],
         ["api-key-stdin"],
@@ -500,13 +520,6 @@ export const runCliWithIO = async (
             ? Number(value)
             : Number.NaN;
       };
-      const origins = stringOption(args, "browser-origins");
-      if (origins !== undefined && origins !== "") {
-        // Clear CLI-side diagnostics before schema validation; never echo input values.
-        const list = origins.split(",").map((value) => value.trim());
-        if (list.some((value) => value === "") || list.length > 32)
-          invalid("--browser-origins expects up to 32 exact HTTP(S) origins.");
-      }
       const lspText = stringOption(args, "lsp-servers");
       let lspServers: unknown;
       if (lspText !== undefined) {
@@ -564,19 +577,6 @@ export const runCliWithIO = async (
           ...(tokenBudget !== undefined ? { contextBudgetTokens: tokenBudget === "auto" ? null : Number(tokenBudget) } : {}),
           ...(numeric("context-chars") !== undefined
             ? { contextBudgetChars: numeric("context-chars") }
-            : {}),
-          ...(origins !== undefined
-            ? {
-                browserAllowedOrigins:
-                  origins === ""
-                    ? []
-                    : origins.split(",").map((value) => value.trim()),
-              }
-            : {}),
-          ...(stringOption(args, "browser-executable") !== undefined
-            ? {
-                browserExecutablePath: stringOption(args, "browser-executable"),
-              }
             : {}),
         },
       });

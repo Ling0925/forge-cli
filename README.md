@@ -107,6 +107,8 @@ node dist/cli.mjs plugins check browser
 
 配置文件只从 `--config` 指定的路径读取，内容由 Core 校验。`allowedDomains` 是主机名（如 `example.com`、`*.example.org`），不是 exact HTTP(S) origins；也可显式设置 `["*"]` 允许全部 HTTP(S) 网站（含本机和局域网）。空列表仍不授权，不能启用。`list` / `show` 不启动插件，`check` 只做 MCP 诊断、不访问网页；运行中修改配置或禁用会关闭本 Core 拥有的浏览器。完整字段与生命周期见 [CLI 文档](docs/CLI.md#插件管理)。
 
+浏览器配置只属于该插件：旧版 Playwright 后端的 `config set --browser-origins` / `--browser-executable` 已移除，传入会报错且不写入设置；插件配置中的 `browserExecutablePath` 保持不变。
+
 ## 连接已有 Core：attach
 
 `chat`、`run` 和 `resume` 创建进程内运行时，不会自动连接正在运行的 Web/Core。要共享活动任务，需要 Linux 本地 Unix socket：

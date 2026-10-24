@@ -255,6 +255,27 @@ describe("forge plugins", () => {
     expect(JSON.parse(f.output())).toMatchObject({ enabled: false, config });
     expect((await readdir(home)).sort()).toEqual(["plugin-config.json"]);
     expect(f.diagnostics()).toBe("");
+
+    // The plugin path keeps browserExecutablePath and the explicit "*" grant.
+    const allHosts = {
+      executablePath: "agent-browser",
+      browserExecutablePath: "/usr/bin/chromium",
+      allowedDomains: ["*"],
+    };
+    const allHostsPath = await writeConfig(home, allHosts);
+    f.reset();
+    expect(
+      await runCliWithIO(
+        ["plugins", "configure", "browser", "--config", allHostsPath, "--json"],
+        service,
+        f.io,
+      ),
+    ).toBe(0);
+    expect(state.configured[1]).toEqual({
+      pluginId: "browser",
+      config: allHosts,
+    });
+    expect(JSON.parse(f.output())).toMatchObject({ config: allHosts });
   });
 
   it("rejects missing, non-regular and non-object configuration before calling Core", async () => {

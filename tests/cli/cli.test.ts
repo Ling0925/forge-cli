@@ -264,6 +264,15 @@ describe("Forge CLI", () => {
     expect(text).not.toContain("Use --max-tools");
     expect(text).toContain("--timeout-ms NUMBER");
     expect(text).toContain("no cumulative tool-call, subagent");
+    expect(text).not.toContain("[--browser-origins");
+    expect(text).not.toContain("[--browser-executable");
+    expect(text).not.toContain("FORGE_BROWSER_EXECUTABLE");
+    expect(text).toContain(
+      "Browser access is configured only through the built-in browser plugin",
+    );
+    expect(text).toContain(
+      "--browser-origins and --browser-executable were removed and are rejected",
+    );
     expect(f.calls()).toBe(0);
   });
 
@@ -750,65 +759,48 @@ describe("Forge CLI", () => {
     expect(settled).toBe(true);
   });
 
-  it("configures browser origins and executable with clear validation", async () => {
+  it("rejects removed global browser flags without writing settings", async () => {
     const f = fixture("/unused");
-    expect(
-      await runCliWithIO(
-        [
-          "config",
-          "set",
-          "--browser-origins",
-          "http://127.0.0.1:4173, https://example.invalid",
-          "--browser-executable",
-          "/usr/bin/chromium",
-        ],
-        f.service,
-        f.io,
-      ),
-    ).toBe(0);
-    expect(f.updates[0]).toEqual({
-      settings: {
-        browserAllowedOrigins: [
-          "http://127.0.0.1:4173",
-          "https://example.invalid",
-        ],
-        browserExecutablePath: "/usr/bin/chromium",
-      },
-    });
-    expect(
-      await runCliWithIO(
-        ["config", "set", "--browser-origins", "", "--browser-executable", ""],
-        f.service,
-        f.io,
-      ),
-    ).toBe(0);
-    expect(f.updates[1]).toEqual({
-      settings: { browserAllowedOrigins: [], browserExecutablePath: "" },
-    });
+    for (const argv of [
+      ["config", "set", "--browser-origins", "https://example.invalid"],
+      ["config", "set", "--browser-executable", "/usr/bin/chromium"],
+      ["config", "set", "--browser-origins=https://example.invalid"],
+      [
+        "config",
+        "set",
+        "--browser-origins",
+        "https://example.invalid",
+        "--browser-executable",
+        "/usr/bin/chromium",
+      ],
+      ["config", "set", "--theme", "dark", "--browser-origins", ""],
+      ["config", "set", "--browser-executable", ""],
+    ] as const) {
+      expect(await runCliWithIO(argv, f.service, f.io)).toBe(1);
+    }
+    expect(f.updates).toHaveLength(0);
+    expect(f.calls()).toBe(0);
+    expect(f.output).toHaveLength(0);
+    const diagnostics = f.diagnostics.join("");
+    expect(diagnostics).toContain("--browser-origins was removed");
+    expect(diagnostics).toContain("--browser-executable was removed");
+    expect(diagnostics).toContain("forge plugins configure browser --config JSON_FILE");
+    expect(diagnostics).not.toContain("user:pass");
   });
 
-  it.each([
-    ["*"],
-    ["https://*"],
-    ["https://*.example.invalid"],
-    ["https://user:pass@example.invalid"],
-    ["https://example.invalid/path"],
-    ["https://example.invalid?x=1"],
-    ["https://example.invalid#x"],
-    ["ftp://example.invalid"],
-    ["example.invalid"],
-    ["https://example.invalid,,https://b.invalid"],
-  ])("rejects masquerading browser origin %s", async (value) => {
+  it("keeps global settings writable and points browser access at the plugin", async () => {
     const f = fixture("/unused");
     expect(
       await runCliWithIO(
-        ["config", "set", "--browser-origins", value],
+        ["config", "set", "--theme", "dark", "--context-chars", "5000"],
         f.service,
         f.io,
       ),
-    ).toBe(1);
-    expect(f.updates).toHaveLength(0);
-    expect(f.diagnostics.join("")).not.toContain("user:pass");
+    ).toBe(0);
+    expect(f.updates).toEqual([
+      { settings: { theme: "dark", contextBudgetChars: 5000 } },
+    ]);
+    expect(f.diagnostics.join("")).toBe("");
   });
 
   it("provider errors are safe and go only to stderr", async () => {
