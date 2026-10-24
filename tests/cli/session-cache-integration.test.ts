@@ -71,7 +71,7 @@ it("refreshes the session average on each request, survives model/compact/resume
   expect(questions.find(q => q.command === "/new")?.cache).toEqual({ promptTokens: 2000, cachedPromptTokens: 900, partial: false });
   expect(questions.at(-1)?.cache).toEqual({ promptTokens: 0, cachedPromptTokens: 0, partial: false });
   const footers = contexts.map(context => contextFooter(context, 100)[0]!.map(span => span.text).join(""));
-  expect(footers.some(text => text.includes("R90%"))).toBe(true);
-  expect(footers.some(text => text.includes("R45%"))).toBe(true);
+  expect(footers.some(text => text.includes("缓存 90%"))).toBe(true);
+  expect(footers.some(text => text.includes("缓存 45%"))).toBe(true);
   expect(footers.join("\n")).not.toContain("R—");
 });

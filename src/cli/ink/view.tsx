@@ -1,6 +1,7 @@
 import { Box } from "ink";
 import { useMemo, type ReactElement } from "react";
 import { compactTokens } from "../render/token-count";
+import { chrome } from "../render/labels";
 import { wrapRichLines } from "../render/rich";
 import { spinnerFrame, uiSymbols } from "../symbols";
 import { contextFooter } from "../terminal/context-footer";
@@ -19,9 +20,15 @@ function statusLine(state: InkViewState): RichLine | null {
   const frame = state.screenReader ? "" : spinnerFrame(state.now);
   const tokens = status.tokens === undefined ? "?" : `${status.tokensEstimated ? symbols.approximate : ""}${compactTokens(status.tokens)}`;
   const seconds = Math.max(0, Math.floor((state.now - status.startedAt) / 1000));
-  const activity = `${single(status.label)}${frame && (status.observing || status.cancellable) ? ` ${frame}` : ""}`;
+  const position = status.step === undefined ? "" : `第 ${status.turn ?? "?"} 轮 · 第 ${status.step} 步 · `;
+  const activity = `${position}${single(status.label)}${frame ? ` ${frame}` : ""}`;
   if (status.observing || state.screenReader) return line(activity, "muted");
-  return line(`${activity} ${symbols.separator} ${tokens} tokens ${symbols.separator} ${seconds}s ${symbols.separator} ${status.toolCount} tools${status.cancellable ? ` ${symbols.separator} Ctrl+C cancel` : ""}`, "muted");
+  // Narrow rows keep the activity and elapsed time; token/tool counters and the
+  // cancel reminder return as soon as there is room.
+  const head = `${activity} ${symbols.separator} ${seconds}s`;
+  if (state.columns < 72) return line(head, "muted");
+  const detail = `${head} ${symbols.separator} ${tokens} ${chrome.tokens} ${symbols.separator} ${status.toolCount} ${chrome.tools}${status.cancellable ? ` ${symbols.separator} ${chrome.cancelHint}` : ""}`;
+  return line(detail, "muted");
 }
 function planLine(state: InkViewState): RichLine | null {
   if (!state.plan) return null;
@@ -29,7 +36,13 @@ function planLine(state: InkViewState): RichLine | null {
   const steps = state.plan.steps;
   const current = steps.find(step => step.status === "in_progress") ?? steps.find(step => step.status === "pending");
   const done = steps.filter(step => step.status === "completed").length;
-  return line(`Plan ${done}/${steps.length} ${symbols.separator} ${current ? `${current.status === "in_progress" ? symbols.active : symbols.pending} ${single(current.step)}` : `${symbols.success} done`} ${symbols.separator} /plan`,
+  const progress = `计划 ${done}/${steps.length}`;
+  // Below the room for progress + step + hint, keep the step itself and drop
+  // the reminder; the plan stays readable without a command hint on every row.
+  const body = current ? `${current.status === "in_progress" ? symbols.active : symbols.pending} ${single(current.step)}` : `${symbols.success} 已完成`;
+  const tail = ` ${symbols.separator} /plan`;
+  const narrow = `${progress} ${symbols.separator} ${body}`;
+  return line(state.columns < 56 ? narrow : `${narrow}${tail}`,
     current?.status === "in_progress" ? "warning" : "muted");
 }
 
@@ -46,7 +59,7 @@ export function InkView({ state, input }: { state: InkViewState; input: InputSta
   const editorRoom = Math.max(1, Math.min(6, Math.floor(limit / 3) || 1));
   const editorProps = {
     editor, prefix: input.prompt,
-    hint: fresh ? null : state.inputHint ?? `Ask anything ${symbols.separator} / commands ${symbols.separator} PgUp read`,
+    hint: fresh ? null : state.inputHint ?? `输入问题 ${symbols.separator} / 命令 ${symbols.separator} PgUp 阅读`,
     tone: fresh || state.mode === "plan" ? "warning" as const : "accent" as const,
     width, maxLines: limit ? editorRoom : 0, appearance,
   };
@@ -71,7 +84,7 @@ export function InkView({ state, input }: { state: InkViewState; input: InputSta
   let visibleTail = wrappedTail.slice(-geometry.tail);
   if (!geometry.tail) visibleTail = [];
   else if (wrappedTail.length > geometry.tail && geometry.tail >= 2)
-    visibleTail = [line(`${symbols.up} ${wrappedTail.length - geometry.tail + 1} earlier lines ${symbols.separator} PgUp read`, "muted"), ...wrappedTail.slice(-(geometry.tail - 1))];
+    visibleTail = [line(`${symbols.up} 上翻 ${wrappedTail.length - geometry.tail + 1} 行 ${symbols.separator} PgUp 阅读`, "muted"), ...wrappedTail.slice(-(geometry.tail - 1))];
   const reading = state.reading;
   const readRows = Math.max(0, limit - 1);
   const readingRows = reading ? reading.lines.slice(Math.max(0, reading.end - readRows), reading.end) : [];
@@ -88,7 +101,7 @@ export function InkView({ state, input }: { state: InkViewState; input: InputSta
         <Box flexDirection="column" flexGrow={1} flexShrink={1} overflowY="hidden">
           {readingRows.map((spans, index) => <RichRow key={`read-${index}`} spans={spans} appearance={{ ...appearance, now: 0 }} width={width} />)}
         </Box>
-        {limit > 0 && <RichRow spans={line(`Reading ${Math.max(1, reading.end - readRows + 1)}${symbols.range}${reading.end}/${reading.lines.length} ${symbols.separator} Wheel/PgUp/PgDn ${symbols.separator} End/Esc live`, "muted")} appearance={appearance} width={width} />}
+        {limit > 0 && <RichRow spans={line(`阅读 ${Math.max(1, reading.end - readRows + 1)}${symbols.range}${reading.end}/${reading.lines.length} ${symbols.separator} 滚轮/PgUp/PgDn ${symbols.separator} End/Esc 返回`, "muted")} appearance={appearance} width={width} />}
       </> : <>
         <Box flexDirection="column" flexGrow={1} flexShrink={1} overflowY="hidden">
           {history.map((spans, index) => <RichRow key={`history-${index}`} spans={spans} appearance={appearance} width={width} />)}

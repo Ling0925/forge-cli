@@ -68,6 +68,10 @@ export function markdownLines(source: string, columns = 80, cache = true): RichL
   const tableOptions: { style: { head: string[]; border: string[] }; wordWrap: boolean; colWidths?: number[]; colAligns?: ("left" | "center" | "right")[] } = { style: { head: [], border: [] }, wordWrap: true };
   const extension = markedTerminal({
     width, reflowText: false, tab: 2, emoji: false,
+    // Headings are emphasis, not syntax: the terminal has no font sizes, so the
+    // `#` prefix the library adds by default would be shown to the reader as
+    // literal Markdown. Level is conveyed by weight/style through `heading`.
+    showSectionPrefix: false,
     code: style(33, 39), blockquote: style(90, 39),
     html: identity, heading: style(1, 22), firstHeading: style(1, 22),
     hr: identity, listitem: identity, table: identity, paragraph: identity,

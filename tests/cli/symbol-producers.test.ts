@@ -24,13 +24,13 @@ describe("UI-owned producer symbols", () => {
     expect(toolRunningLine(call)[0]).toMatchObject({ text: "|", animation: "spinner" });
     const summary = text(toolSummaryLines(call, result, 120));
     expect(summary).toContain(original);
-    expect(summary).toContain("| done | exit 0 | 1s");
+    expect(summary).toContain("| 1s");
     expect(summary).toContain("  + ");
     expect(text(toolFinishLines(call, result, 120, true))).toContain(original);
     const request: ApprovalRequest = { ...base, id, childSessionId: id, toolCallId: "t", toolName: "run_command", description: "", command: ["echo", original] };
     const approval = text(autoApprovalLines(request, 120));
-    expect(approval).toContain("Auto-approved | run_command");
-    expect(approval).toContain("  | child"); expect(approval).toContain("  + echo");
+    expect(approval).toContain("已自动批准 | run_command");
+    expect(approval).toContain("  | 子会话"); expect(approval).toContain("  + echo");
     expect(approval).toContain(original);
     vi.stubEnv("FORGE_SYMBOLS", "unicode");
     expect(text(toolSummaryLines(call, result, 120))).toContain("  ╰ ");
@@ -45,7 +45,7 @@ describe("UI-owned producer symbols", () => {
       createdAt: base.timestamp, updatedAt: base.timestamp, status: "completed", events: [], changes: [],
       messages: [{ role: "user", content: original }, { role: "assistant", content: "done", reasoning: original }] });
     const history = text(historyLines(session, 120));
-    expect(history).toContain("> You"); expect(history).toContain(original); expect(history).toContain(`* ${original}`);
+    expect(history).toContain("> 你"); expect(history).toContain(original); expect(history).toContain(`* ${original}`);
     const renderer = createEventRenderer({ width: () => 120, expandReasoning: true });
     const child = renderer.push({ ...base, type: "agent_update", childSessionId: id, model: "m", status: "running", summary: "" });
     expect(text(child.tail)).toContain(" | Agent");

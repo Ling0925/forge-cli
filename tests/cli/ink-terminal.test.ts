@@ -65,7 +65,7 @@ describe("Ink terminal migration", () => {
     f.reader.ui.setTail(Array.from({ length: 80 }, (_, i) => [{ text: `live-line-${i}` }]));
     f.input.write("draft\x1b[5~");
     await settle();
-    expect(stripAnsi(f.bytes())).toContain("Reading");
+    expect(stripAnsi(f.bytes())).toContain("阅读");
     const before = f.bytes();
     f.reader.ui.update!({ append: [[{ text: "completed-while-reading" }]], tail: [], status: null });
     await settle();

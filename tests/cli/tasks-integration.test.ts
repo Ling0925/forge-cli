@@ -28,7 +28,7 @@ it("/tasks without a session does not create one or call a model", async () => {
   const h = host(["/tasks", "/quit"]);
   expect(await runCliWithIO(["chat"], s, h.io)).toBe(0);
   expect(run).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled(); expect(tasks.listTasks).not.toHaveBeenCalled();
-  expect(h.out.join("")).toContain("No active session");
+  expect(h.out.join("")).toContain("没有活动会话");
 });
 it("/tasks runs immediately during an active model turn rather than being queued", async () => {
   const tasks = emptyTasks(); const h = host(["work", "/quit"]);

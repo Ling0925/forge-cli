@@ -33,6 +33,7 @@ import {
 import { createNodeIO } from "./node-io";
 import { runPluginsCommand } from "./plugins";
 import { previewSummary } from "./render/events";
+import { toolVerb } from "./render/labels";
 export { createNodeIO, nodeIO } from "./node-io";
 export type { CreateNodeIOOptions } from "./node-io";
 import type { QuestionOptions } from "./terminal";
@@ -301,7 +302,7 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
       io.stdout("\n本次响应未完成，已丢弃；正在重试。\n");
       return;
     case "provider_retry":
-      io.stdout(`重试 ${event.attempt}/${event.maxAttempts} (${event.reason})\n`);
+      io.stdout(`重试 ${event.attempt}/${event.maxAttempts}（${event.reason}）\n`);
       return;
     case "provider_attempt": {
       const attempt = event.selection;
@@ -333,11 +334,11 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
       io.stdout(event.text);
       return;
     case "tool_started":
-      io.stdout(`\nTool: ${event.call.function.name}\n`);
+      io.stdout(`\n工具: ${toolVerb(event.call.function.name)}\n`);
       return;
     case "tool_finished":
       io.stdout(
-        `\nTool ${event.toolCallId}: ${event.result.isError ? "failed" : "finished"}\n${event.result.content}\n`,
+        `\n工具 ${event.toolCallId}: ${event.result.isError ? "失败" : "完成"}\n${event.result.content}\n`,
       );
       return;
     case "error":
@@ -345,25 +346,25 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
       return;
     case "run_finished":
       io.stdout(
-        `\nRun ${event.status}; ${event.turn === undefined ? "" : `turn=${event.turn}, `}steps=${event.steps ?? event.turns}, tools=${event.toolCalls}${event.retries === undefined ? "" : `, retries=${event.retries}`}\n`,
+        `\n运行 ${event.status}; ${event.turn === undefined ? "" : `第 ${event.turn} 轮, `}${event.steps ?? event.turns} 步, ${event.toolCalls} 次工具调用${event.retries === undefined ? "" : `, ${event.retries} 次重试`}\n`,
       );
       return;
     case "run_started":
       io.stdout(
-        `Session ${event.sessionId}; model=${event.model}; permission=${event.permission}\n`,
+        `会话 ${event.sessionId}; 模型=${event.model}; 权限=${event.permission}\n`,
       );
       return;
     case "plan_updated":
-      io.stdout(`Plan: ${JSON.stringify(event.plan)}\n`);
+      io.stdout(`计划: ${JSON.stringify(event.plan)}\n`);
       break;
     case "agent_update":
       io.stdout(
-        `\nChild ${event.childSessionId}: ${event.status}; model=${event.model}\n${event.summary}\n`,
+        `\n子代理 ${event.childSessionId}: ${event.status}; 模型=${event.model}\n${event.summary}\n`,
       );
       return;
     case "tool_hook":
       if (event.diagnostic.status !== "ok" && event.diagnostic.status !== "skipped")
-        io.stderr(`${terminalText(`Hook ${event.diagnostic.id}: ${event.diagnostic.reason ?? event.diagnostic.status}`)}\n`);
+        io.stderr(`${terminalText(`钩子 ${event.diagnostic.id}: ${event.diagnostic.reason ?? event.diagnostic.status}`)}\n`);
       return;
     case "title_changed":
     case "generation_started":
@@ -379,6 +380,8 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
     // Live reasoning preview is a rich-terminal affordance; plain output stays quiet.
     case "reasoning_delta":
     case "agent_progress": // Child drafts belong to the child conversation, not parent stdout.
+    // Host-internal adaptation phases are not reader-facing run output.
+    case "harness_adaptation":
       return;
     default:
       assertNever(event);

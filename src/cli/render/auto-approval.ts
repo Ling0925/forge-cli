@@ -17,8 +17,8 @@ export function autoApprovalLines(request: ApprovalRequest, columns = 80): reado
     return !value || /[\s"'\\]/.test(value) ? `'${value.replaceAll("'", "'\\''")}'` : value;
   }).join(" ");
   return [
-    [{ text: truncate(`Auto-approved ${symbols.separator} ${clean(request.toolName)}`, width, symbols.ellipsis), tone: "warning" }],
-    ...(request.childSessionId ? [[{ text: truncate(`  ${symbols.vertical} child ${clean(request.childSessionId)}`, width, symbols.ellipsis), tone: "muted" as const }]] : []),
+    [{ text: truncate(`已自动批准 ${symbols.separator} ${clean(request.toolName)}`, width, symbols.ellipsis), tone: "muted" }],
+    ...(request.childSessionId ? [[{ text: truncate(`  ${symbols.vertical} 子会话 ${clean(request.childSessionId)}`, width, symbols.ellipsis), tone: "muted" as const }]] : []),
     ...(argv ? [[{ text: truncate(`  ${symbols.endBranch} ${argv}`, width, symbols.ellipsis), tone: "muted" as const }]] : []),
   ];
 }

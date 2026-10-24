@@ -29,7 +29,7 @@ describe("token window accounting", () => {
     expect(reported.basis).toBe("request-with-output");
     const line = contextFooter({ model: "test", usage: reported, sessionCache: { promptTokens: 5000, cachedPromptTokens: 4500, partial: false } }, 100)[0]!.map(span => span.text).join("");
     expect(line).toContain("4.1%");
-    expect(line).toContain("≈4.1% · R90% · 128k");
+    expect(line).toContain("预估 ≈4.1% · 缓存 90% · 128k");
     const next = reportedContext(projection, { promptTokens: 6000, completionTokens: 100, totalTokens: 6100 }, { role: "assistant", content: "next" });
     expect(next.usedTokens).toBe(6100);
     expect(reported.cachedPromptTokens).toBe(4500);
@@ -45,6 +45,6 @@ describe("token window accounting", () => {
     if (event.type !== "context_usage") throw Error("wrong event");
     expect(event.usage.windowTokens).toBeNull();
     expect(event.usage.usedTokens).toBe(0);
-    expect(contextFooter({ model: "unknown", usage: event.usage }, 80)[0]!.map(span => span.text).join("")).toContain("?% · R0% · ?");
+    expect(contextFooter({ model: "unknown", usage: event.usage }, 80)[0]!.map(span => span.text).join("")).toContain("预估 ?% · 缓存 0% · ?");
   });
 });

@@ -91,9 +91,9 @@ const previewFromObject = (parsed: Record<string, unknown>): Envelope => {
       parsed.total_lines !== undefined
         ? `${String(parsed.total_lines)} lines`
         : "",
-      boolField(parsed, "truncated") ? "truncated" : "",
-      boolField(parsed, "partial_line") ? "partial line" : "",
-      boolField(parsed, "cache_hit") ? "cached" : "",
+      boolField(parsed, "truncated") ? "已截断" : "",
+      boolField(parsed, "partial_line") ? "末行不完整" : "",
+      boolField(parsed, "cache_hit") ? "缓存命中" : "",
     ].filter(Boolean);
     return {
       stdout: "",
@@ -109,7 +109,7 @@ const previewFromObject = (parsed: Record<string, unknown>): Envelope => {
       stderr: "",
       exitCode: null,
       body: parsed.text,
-      note: boolField(parsed, "truncated") ? "truncated" : "",
+      note: boolField(parsed, "truncated") ? "已截断" : "",
     };
   }
   if (typeof parsed.error === "string") {
@@ -158,7 +158,7 @@ const previewFromObject = (parsed: Record<string, unknown>): Envelope => {
       stderr: "",
       exitCode: null,
       body: names.join("\n"),
-      note: `${parsed.entries.length} entries${boolField(parsed, "truncated") ? " · truncated" : ""}`,
+      note: `${parsed.entries.length} 项${boolField(parsed, "truncated") ? " · 已截断" : ""}`,
     };
   }
   if (Array.isArray(parsed.matches)) {
@@ -182,7 +182,7 @@ const previewFromObject = (parsed: Record<string, unknown>): Envelope => {
       stderr: "",
       exitCode: null,
       body: names.join("\n"),
-      note: `${parsed.matches.length} matches${boolField(parsed, "truncated") ? " · truncated" : ""}`,
+      note: `${parsed.matches.length} 处匹配${boolField(parsed, "truncated") ? " · 已截断" : ""}`,
     };
   }
   return {

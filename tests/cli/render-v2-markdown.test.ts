@@ -9,7 +9,8 @@ it("uses GFM for nested/task lists, six headings, emphasis, strike and reference
   const source = '# Title\n\n###### Deep\n\n- parent\n  - child\n- [x] done\n- [ ] pending\n\n**bold** *emphasis* ~~removed~~ `code`\n\n[docs][ref]\n\n[ref]: https://example.com\n';
   const lines = markdownLines(source);
   const body = text(lines);
-  for (const value of ["# Title", "###### Deep", "parent", "child", "[X]", "[ ]", "bold", "emphasis", "removed", "code", "https://example.com"]) expect(body).toContain(value);
+  for (const value of ["Title", "Deep", "parent", "child", "[X]", "[ ]", "bold", "emphasis", "removed", "code", "https://example.com"]) expect(body).toContain(value);
+  expect(body).not.toContain("# Title");
   expect(body).not.toContain("**bold**");
   expect(lines.flat().some(span => span.bold && span.text.includes("bold"))).toBe(true);
 });

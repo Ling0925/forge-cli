@@ -34,7 +34,7 @@ it("paints preparing and running tools in real incremental Ink output before any
     const started = producer.push({ type: "tool_started", previewId: "1:0:0", call: { id: "call", type: "function", function: { name: "write_file", arguments: '{"path":"a.ts","content":"ready"}' } } } as AgentEvent);
     app.rerender(createElement(InkView, { state: { ...base, tail: started.tail, status: started.status ?? null }, input: initialInput() }));
     await settle();
-    expect(stripAnsi(bytes)).toContain("running");
+    expect(stripAnsi(bytes)).toContain("写入 a.ts");
     expect(stripAnsi(bytes)).not.toContain("done");
   } finally { app.unmount(); app.cleanup(); }
 });

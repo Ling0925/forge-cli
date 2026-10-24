@@ -146,9 +146,9 @@ describe("interactive CLI", () => {
         host.io,
       ),
     ).toBe(0);
-    expect(host.out.join("")).toContain("Thinking display: expanded");
-    expect(host.out.join("")).toContain("Thinking display: compact");
-    expect(host.err.join("")).toContain("Expected /thinking [on|off]");
+    expect(host.out.join("")).toContain("思考显示：展开");
+    expect(host.out.join("")).toContain("思考显示：精简");
+    expect(host.err.join("")).toContain("用法：/thinking [on|off]");
   });
   it("does not open stdin on nonTTY and rejects explicit chat", async () => {
     const host = consoleIO([], false);
@@ -569,7 +569,7 @@ it("Shift+Tab callback shares /mode state without changing active-run approval s
   });
   await runCliWithIO(["chat", "--approval", "auto"], base, {...host.io, ui: {...ui, setMode: mode => modes.push(mode), onModeToggle: callback => {toggle = callback; return () => {toggle = undefined;};}}});
   expect(modes).toEqual(["build", "plan"]);
-  expect(host.output.join("\n")).toContain("next run only; current run unchanged");
+  expect(host.output.join("\n")).toContain("下一轮生效，当前运行不变");
   expect(toggle).toBeUndefined();
 });
 

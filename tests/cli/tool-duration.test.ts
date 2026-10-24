@@ -23,9 +23,10 @@ it("times concurrent tools independently and freezes completed list/detail durat
   renderer.push({ ...base, type: "tool_started", call: a });
   now = 1250;
   expect(text(renderer.push({ ...base, type: "tool_finished", toolCallId: "a", result }).append)).toContain("1.2s");
-  expect(text(renderer.push({ ...base, type: "tool_finished", toolCallId: "b", result }).append)).toContain("250ms");
+  // A sub-second tool is noise on the scan row; its exact time stays in /tools.
+  expect(text(renderer.push({ ...base, type: "tool_finished", toolCallId: "b", result }).append)).not.toContain("250ms");
   now = 999999;
-  expect(text(tools.list(120))).toContain("250ms"); expect(text(tools.detail(1, 120))).toContain("1.2s");
+  expect(text(tools.list(120))).not.toContain("250ms"); expect(text(tools.detail(1, 120))).toContain("1.2s");
   expect(text(tools.summary("a", result, 120, now))).toContain("1.2s");
 });
 it("restores event timing, falls back to command duration, and omits missing timing", () => {

@@ -28,11 +28,11 @@ it("updates one preparing row without counting or committing a tool and replaces
   expect(text(update.tail).match(/生成参数中/g)).toHaveLength(1);
   expect(text(update.tail)).toContain("123");
   const running = renderer.push(start);
-  expect(text(running.tail)).toContain("running");
+  expect(text(running.tail)).toContain("写入 a.ts");
   expect(text(running.tail)).not.toContain("生成参数中");
   expect(running.status?.toolCount).toBe(1);
   const completed = renderer.push(finish);
-  expect(text(completed.append)).toContain("done");
+  expect(text(completed.append)).toContain("写入 a.ts");
   expect(completed.tail).toEqual([]);
 });
 
@@ -63,7 +63,8 @@ it("prints one immediate preparation notice per call in append-only mode, not on
   live.event({ ...base, type: "retry_reset" } as AgentEvent);
   live.event(preview());
   expect(err.match(/生成参数中/g)).toHaveLength(2);
-  expect(out.match(/done/g)).toHaveLength(1);
+  // A successful tool card has no status word; the result row is the record.
+  expect(out.match(/写入 a\.ts/g)).toHaveLength(1);
   live.dispose();
 });
 
@@ -86,5 +87,5 @@ it("handles the new events in the standalone plain CLI without flooding or losin
   const code = await runCliWithIO(["run", "go", "--workspace", "/tmp"], service, io);
   expect(code).toBe(0);
   expect(err.match(/生成参数中/g)).toHaveLength(1);
-  expect(out).toContain("finished");
+  expect(out).toContain("完成");
 });

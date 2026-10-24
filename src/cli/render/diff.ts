@@ -120,16 +120,17 @@ export const diffLines = (change: FileChange, options: DiffOptions = {}): readon
   function* render(): Generator<RichLine> {
     const stats = diffStats(change);
     const created = change.kind === "created";
-    yield meta(stats ? created ? `${change.path} · new file · ${stats.added} lines` : `${change.path} [+${stats.added} -${stats.removed}]` : `${change.path} · changed`);
+    yield meta(stats ? created ? `${change.path} · 新文件 · ${stats.added} 行` : `${change.path} [+${stats.added} −${stats.removed}]` : `${change.path} · 有变更`);
     if (patch.status === "unavailable") {
-      yield meta(`(exact diff unavailable; ${patch.reason === "budget" ? "diff computation budget exceeded" : "full content unavailable"})`, "warning");
+      yield meta(`（精确 diff 不可用：${patch.reason === "budget" ? "diff 计算超出预算" : "完整内容不可用"}）`, "warning");
       return;
     }
     if (patch.hunks.length === 0 && patch.status === "complete") {
-      yield meta(change.kind === "created" ? "(empty file created)" : "(no textual change)");
+      yield meta(change.kind === "created" ? "（已创建空文件）" : "（没有文本变更）");
     }
     for (const hunk of patch.hunks) {
-      if (!created) yield meta(`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`);
+      // Each row carries its own line number, so a `@@` header would only
+      // repeat it in a format the reader has to decode.
       const highlights = emphasis(hunk.lines);
       const digits = String(Math.max(hunk.oldStart + hunk.oldLines, hunk.newStart + hunk.newLines)).length;
       let oldLine = hunk.oldStart;
@@ -150,14 +151,14 @@ export const diffLines = (change: FileChange, options: DiffOptions = {}): readon
       }
     }
     if (patch.status === "truncated") {
-      yield meta(`… patch truncated: ${patch.omittedLines} lines / ${patch.omittedHunks} hunks omitted`, "warning");
+      yield meta(`… 补丁已截断：省略 ${patch.omittedLines} 行 / ${patch.omittedHunks} 段`, "warning");
     }
   }
   const rows: RichLine[] = [];
   for (const item of render()) {
     if (rows.length === maxRows) {
       // Keep an honest prefix of the diff. Never swap a later green row into it.
-      rows[maxRows - 1] = meta(`… more diff content omitted${patch.status === "truncated" ? " (patch also truncated)" : ""}`, "warning");
+      rows[maxRows - 1] = meta(`… 其余差异已省略${patch.status === "truncated" ? "（补丁同时被截断）" : ""}`, "warning");
       break;
     }
     rows.push(item);

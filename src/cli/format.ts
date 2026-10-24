@@ -4,10 +4,11 @@ import type {
   TaskPlan,
 } from "@forge/core/shared/schemas";
 import { SLASH_COMMANDS } from "./commands";
-import { uiSymbols } from "./symbols";
+import { commandGroups } from "./render/labels";
 import { MarkdownStream } from "./render/markdown";
 import { renderRichLine, wrapRichLines } from "./render/rich";
 import { sanitizeText } from "./render/sanitize";
+import { uiSymbols } from "./symbols";
 import {
   type Theme,
   defaultTheme,
@@ -64,13 +65,17 @@ export const bannerLines = (
   const effort = context.reasoningEffort
     ? ` (${sanitizeText(context.reasoningEffort)})`
     : "";
-  const title = sanitizeText(context.sessionTitle ?? "").replace(/[\n\t]/g, " ").trim();
+  const title = sanitizeText(context.sessionTitle ?? "")
+    .replace(/[\n\t]/g, " ")
+    .trim();
   const model = `${modelName}${effort}${title ? ` · ${title}` : ""}`;
   const version = context.version ? ` v${sanitizeText(context.version)}` : "";
-  const id = context.id ? ` · ${sanitizeText(context.id).slice(0, 8)}` : "";
+  // The session id belongs to the identity row, not glued onto the workspace
+  // path where it reads as part of the directory.
+  const id = context.id ? `  ${sanitizeText(context.id).slice(0, 8)}` : "";
   const mode = context.mode === "plan" ? "计划" : "执行";
   const lines: RichLine[] = [
-    [span("Forge", undefined, true), span(version, "muted")],
+    [span("Forge", undefined, true), span(version, "muted"), span(id, "muted")],
     [
       span(
         truncate(
@@ -80,7 +85,7 @@ export const bannerLines = (
         "muted",
       ),
     ],
-    [span(truncate(`${sanitizeText(context.workspace)}${id}`, width), "muted")],
+    [span(truncate(sanitizeText(context.workspace), width), "muted")],
     [span(truncate("/ 命令  ·  /help 帮助", width), "muted")],
   ];
   return lines.slice(0, 4);
@@ -88,6 +93,9 @@ export const bannerLines = (
 
 const HELP_GAP = 2;
 const HELP_INDENT = "  ";
+
+/** Group caption for /help: quiet, so the commands themselves stay scannable. */
+const heading = (title: string): RichLine => [span(title, "muted", true)];
 
 const commandUsage = (command: (typeof SLASH_COMMANDS)[number]): string =>
   command.args ? `${command.name} ${command.args}` : command.name;
@@ -123,10 +131,21 @@ const helpCommandLines = (
 };
 
 export const helpLines = (width: number): readonly RichLine[] => {
-  const raw = SLASH_COMMANDS.map((command) =>
-    helpCommandLines(commandUsage(command), command.description, width),
-  );
-  const inline = raw.flat().filter((line) => line.length > 1);
+  const raw: RichLine[] = commandGroups.flatMap(({ title, category }) => {
+    const group = SLASH_COMMANDS.filter(
+      (command) => command.category === category,
+    );
+    if (group.length === 0) return [];
+    return [
+      heading(title),
+      ...group.flatMap((command) =>
+        helpCommandLines(commandUsage(command), command.description, width),
+      ),
+    ];
+  });
+  // Only aligned rows (command + description) define the column; a group
+  // heading and a wrapped syntax row are single spans and must not widen it.
+  const inline = raw.filter((line) => line.length > 1);
   const natural = Math.max(
     0,
     ...inline.map((line) => stringWidth(line[0]?.text.trimEnd() ?? "")),
@@ -134,25 +153,22 @@ export const helpLines = (width: number): readonly RichLine[] => {
   const slack = Math.min(
     ...inline.map((line) => {
       const used = line.reduce((sum, item) => sum + stringWidth(item.text), 0);
-      const command = stringWidth(line[0]?.text.trimEnd() ?? "");
-      return Math.max(1, Math.floor(width)) - (used - command);
+      return (
+        Math.max(1, Math.floor(width)) -
+        (used - stringWidth(line[0]?.text.trimEnd() ?? ""))
+      );
     }),
   );
   const column = Math.min(natural, Math.max(0, slack));
-  const lines: RichLine[] = [[span("命令", "accent")]];
-  for (const group of raw) {
-    lines.push(
-      ...group.map((line) =>
-        line.length > 1
-          ? [
-              span(padRight(line[0]?.text.trimEnd() ?? "", column), "accent"),
-              ...line.slice(1),
-            ]
-          : line,
-      ),
-    );
-  }
-  return lines;
+  return raw.map(
+    (line): RichLine =>
+      line.length > 1
+        ? [
+            span(padRight(line[0]?.text.trimEnd() ?? "", column), "accent"),
+            ...line.slice(1),
+          ]
+        : line,
+  );
 };
 
 const planStatus = (
@@ -169,7 +185,16 @@ export const planLines = (
   width: number,
 ): readonly RichLine[] => {
   if (!plan) return [[span("No active execution plan.", "muted")]];
-  const lines: RichLine[] = [[span(plan.title ? `Execution Plan: ${sanitizeText(plan.title)}` : "Execution Plan", "accent")]];
+  const lines: RichLine[] = [
+    [
+      span(
+        plan.title
+          ? `Execution Plan: ${sanitizeText(plan.title)}`
+          : "Execution Plan",
+        "accent",
+      ),
+    ],
+  ];
   if (plan.id) lines.push([span(`ID: ${sanitizeText(plan.id)}`, "muted")]);
   if (plan.explanation)
     lines.push([
@@ -229,30 +254,28 @@ export const approvalLines = (
   workspace = "",
 ): readonly RichLine[] => {
   const child = request.childSessionId
-    ? ` (child ${request.childSessionId})`
+    ? `（子会话 ${request.childSessionId}）`
     : "";
   const command = request.command;
   const lines: RichLine[] = [
     [
-      span("Approval required:", "warning"),
+      span("需要批准", "warning"),
       span(` ${sanitizeText(request.toolName)}${child}`, "accent"),
     ],
   ];
-  if (workspace) lines.push(...wrappedField("Workspace:", workspace, "muted"));
+  if (workspace) lines.push(...wrappedField("工作区", workspace, "muted"));
   lines.push(
-    ...wrappedField(
-      "Description:",
-      approvalDescription(request.description, command),
-    ),
+    ...wrappedField("说明", approvalDescription(request.description, command)),
   );
   if (command?.length) {
     lines.push([
-      span("Command:", "muted"),
+      span("命令", "muted"),
       span(` ${command.map(quoteArg).join(" ")}`),
     ]);
   }
-  lines.push([span("Enter approves; commands are not sandboxed.", "warning")]);
-  lines.push([span("Approve? [Y/n]", "warning")]);
+  // One prompt, not a warning followed by the same question again. The reader
+  // is told what Enter does and what is not protected, then asked once.
+  lines.push([span("Enter 批准 · 命令不在沙箱内运行", "warning")]);
   return wrapRichLines(lines, Math.max(8, width));
 };
 

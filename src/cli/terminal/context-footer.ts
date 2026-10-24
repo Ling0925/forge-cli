@@ -68,7 +68,10 @@ export function contextFooter(context: ComposerContext, columns: number, compact
   // also show the separate local estimate without replacing the input report.
   const projection = width >= 120 && context.projectedTokens !== undefined && usage?.basis === "request"
     ? ` ${symbols.separator} 本地${symbols.approximate}${compactTokens(context.projectedTokens)}` : "";
-  const summaryText = `${basis}${percentage} ${symbols.separator} R${cacheRate(context.sessionCache)} ${symbols.separator} ${count}${projection}`;
+  // No context usage means no cache ratio to report: an "缓存 0%" there reads
+  // as a measurement instead of the absence of one.
+  const cache = usage ? ` ${symbols.separator} 缓存 ${cacheRate(context.sessionCache)}` : "";
+  const summaryText = `${basis}${percentage}${cache} ${symbols.separator} ${count}${projection}`;
   if (compact) {
     // Decorative meter yields to model/effort on narrow terminals.
     const miniWidth = width >= 72 ? 6 : 0;

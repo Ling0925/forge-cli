@@ -30,9 +30,9 @@ it("wraps a long run_command onto a hanging branch with status and exit on the h
   for (const width of [80, 40]) {
     const rows = toolSummaryLines(command(long), done(), width);
     const header = text([rows[0]!]);
-    expect(header).toContain("run_command");
-    expect(header).toContain("done");
-    expect(header).toContain("exit 0");
+    expect(header).toContain("运行");
+    // A successful exit is the expected case and no longer printed.
+    expect(header).not.toContain("exit 0");
     expect(header).not.toContain("…");
     // The command is split across branch rows instead of being squeezed away.
     const body = text(rows);
@@ -51,8 +51,8 @@ it("wraps a long run_command onto a hanging branch with status and exit on the h
 it("keeps a short run_command on one header line", () => {
   const rows = toolSummaryLines(command(["ls", "-la"]), done(), 80);
   const header = text([rows[0]!]);
-  expect(header).toContain("run_command ls -la");
-  expect(header.endsWith("· done · exit 0")).toBe(true);
+  expect(header).toContain("运行 ls -la");
+  expect(header.endsWith("运行 ls -la")).toBe(true);
   expect(text(rows)).not.toContain("│ ls");
 });
 

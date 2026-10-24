@@ -199,7 +199,7 @@ export class InkController implements TerminalController {
   approve(request: ApprovalRequest, signal: AbortSignal): Promise<boolean> {
     this.reading.close();
     this.append(approvalLines(request, this.columns).slice(0, -1));
-    return this.options.approval("Approve? [Y/n] ", signal);
+    return this.options.approval("批准？[Y/n] ", signal);
   }
   dispose(): void {
     if (this.disposed) return;

@@ -75,6 +75,10 @@ export type RunStatus = Readonly<{
   /** Generated output in this user turn, across model requests; excludes input/history. */
   readonly tokens?: number;
   readonly tokensEstimated?: boolean;
+  /** Position within the run; the dock keeps them separate from the label so it
+   * can shed them on a narrow row without inventing a different sentence. */
+  readonly turn?: number;
+  readonly step?: number;
 }>;
 
 export type PickerItem = Readonly<{

@@ -1,17 +1,29 @@
-import type { ProviderAttempt } from "@forge/core/shared/model-access";
-import type { AgentEvent, ApprovalRequest, TaskPlan, ToolCall } from "@forge/core/shared/schemas";
-import type { RenderUpdate, RichLine, RunStatus } from "../ui-contract";
 import { estimateTokens } from "@forge/core/shared/context-usage";
-import { MarkdownStream, markdownLines } from "./markdown";
-import { webSearchDetails, webSearchStatus } from "@forge/core/shared/web-search-display";
+import type { ProviderAttempt } from "@forge/core/shared/model-access";
+import type {
+  AgentEvent,
+  ApprovalRequest,
+  TaskPlan,
+  ToolCall,
+} from "@forge/core/shared/schemas";
+import {
+  webSearchDetails,
+  webSearchStatus,
+} from "@forge/core/shared/web-search-display";
+import { approvalAuditArguments } from "../approval-policy";
 import { uiSymbols } from "../symbols";
+import type { RenderUpdate, RichLine, RunStatus } from "../ui-contract";
+import { chrome, toolVerb } from "./labels";
+import { MarkdownStream, markdownLines } from "./markdown";
+import {
+  REASONING_KEEP,
+  reasoningLine as buildReasoningLine,
+} from "./reasoning";
 import { wrapRichLines } from "./rich";
 import { sanitizeText } from "./sanitize";
-import { REASONING_KEEP, reasoningLine as buildReasoningLine } from "./reasoning";
-import { truncate } from "./width";
-import { approvalAuditArguments } from "../approval-policy";
 import { ToolTranscript } from "./tool-transcript";
 import { compactToolLine, toolRunningLine, toolTarget } from "./tools";
+import { truncate } from "./width";
 
 export interface EventRendererOptions {
   readonly width?: () => number;
@@ -54,18 +66,15 @@ export const previewChars = (value: number): number =>
 
 /** Single plain-text summary used by both the tail row and append-only stderr. */
 export const previewSummary = (preview: ToolPreview): string =>
-  `${previewName(preview.name)} ${uiSymbols().separator} ${PREVIEW_LABEL} ${uiSymbols().separator} ${previewChars(preview.argumentsChars)} chars`;
+  `${toolVerb(previewName(preview.name))} ${uiSymbols().separator} ${PREVIEW_LABEL} ${uiSymbols().separator} ${previewChars(preview.argumentsChars)} 字符`;
 
 /**
  * One live row per pending tool call: name plus how many argument characters
  * have arrived. The metadata is never a tool call and carries no arguments.
  */
-export const toolPreviewLine = (
-  preview: ToolPreview,
-  width = 80,
-): RichLine => {
+export const toolPreviewLine = (preview: ToolPreview, width = 80): RichLine => {
   const symbols = uiSymbols();
-  const suffix = ` ${symbols.separator} ${PREVIEW_LABEL} ${symbols.separator} ${previewChars(preview.argumentsChars)} chars`;
+  const suffix = ` ${symbols.separator} ${PREVIEW_LABEL} ${symbols.separator} ${previewChars(preview.argumentsChars)} 字符`;
   return [
     {
       text: symbols.spinnerFrames[0] ?? symbols.active,
@@ -74,7 +83,7 @@ export const toolPreviewLine = (
     },
     { text: " " },
     ...compactToolLine(
-      previewName(preview.name),
+      toolVerb(previewName(preview.name)),
       "",
       suffix,
       "muted",
@@ -174,7 +183,9 @@ export const createEventRenderer = (
       parts.forEach((part, index) => {
         if (index > 0) appends.push([]);
         if (part) {
-          appends.push([{ text: `${uiSymbols().reasoning} ${part}`, tone: "muted" }]);
+          appends.push([
+            { text: `${uiSymbols().reasoning} ${part}`, tone: "muted" },
+          ]);
         }
       });
       return appends;
@@ -184,15 +195,35 @@ export const createEventRenderer = (
       merged.length > REASONING_KEEP ? merged.slice(-REASONING_KEEP) : merged;
     // A streamed newline/indent is not a new visible thought. Keep the previous
     // preview until text arrives; otherwise the entire history viewport jumps.
-    reasoningLine = buildReasoningLine(reasoningAccumulator, options.width?.() ?? 80, true) ?? reasoningLine;
+    reasoningLine =
+      buildReasoningLine(reasoningAccumulator, options.width?.() ?? 80, true) ??
+      reasoningLine;
     return [];
   };
-  const children = new Map<string, { model: string; status: string; activity: string }>();
+  const children = new Map<
+    string,
+    { model: string; status: string; activity: string }
+  >();
   const settled = new Set<string>();
-  const childLine = (id: string, child: { model: string; status: string; activity: string }): RichLine => [{
-    text: truncate(sanitizeText(`  ${uiSymbols().vertical} Agent ${id.slice(0, 8)} ${uiSymbols().separator} ${child.model} ${uiSymbols().separator} ${child.status}${child.activity ? ` ${uiSymbols().separator} ${child.activity}` : ""}`).replace(/\s+/g, " "), options.width?.() ?? 80),
-    tone: child.status === "failed" ? "error" : child.status === "completed" ? "success" : "muted",
-  }];
+  const childLine = (
+    id: string,
+    child: { model: string; status: string; activity: string },
+  ): RichLine => [
+    {
+      text: truncate(
+        sanitizeText(
+          `  ${uiSymbols().vertical} Agent ${id.slice(0, 8)} ${uiSymbols().separator} ${child.model} ${uiSymbols().separator} ${child.status}${child.activity ? ` ${uiSymbols().separator} ${child.activity}` : ""}`,
+        ).replace(/\s+/g, " "),
+        options.width?.() ?? 80,
+      ),
+      tone:
+        child.status === "failed"
+          ? "error"
+          : child.status === "completed"
+            ? "success"
+            : "muted",
+    },
+  ];
   const stopChildren = (): RichLine[] => {
     const lines = [...children].map(([id, child]) => {
       settled.add(id);
@@ -208,10 +239,17 @@ export const createEventRenderer = (
   const clearPreviews = (): void => {
     previews.clear();
   };
-  const stopTools = (label = "interrupted"): RichLine[] => {
-    const lines = [...active.values()].map((call) => compactToolLine(
-      call.function.name, toolTarget(call), ` ${uiSymbols().separator} ${label}`, "warning", options.width?.() ?? 80,
-    ));
+  const stopTools = (label: string = chrome.interrupted): RichLine[] => {
+    const lines = [...active.values()].map((call) => [
+      { text: `${uiSymbols().failure} `, tone: "warning" as const },
+      ...compactToolLine(
+        toolVerb(call.function.name),
+        toolTarget(call),
+        ` ${uiSymbols().separator} ${label}`,
+        "warning",
+        Math.max(1, (options.width?.() ?? 80) - 2),
+      ),
+    ]);
     active.clear();
     return [...lines, ...stopChildren()];
   };
@@ -231,15 +269,20 @@ export const createEventRenderer = (
     currentStatus = status ? withTokens(status) : null;
     const width = options.width?.() ?? 80;
     messageTail = nextTail;
-    tail = wrapRichLines([
-      // While arguments are still being generated, the pending-tool rows take
-      // the transient slot: reasoning is a lower-value duplicate there.
-      ...(reasoningLine && previews.size === 0 ? [reasoningLine] : []),
-      ...nextTail,
-      ...[...active.values()].map((call) => toolRunningLine(call, width)),
-      ...[...previews.values()].map((preview) => toolPreviewLine(preview, width)),
-      ...[...children].map(([id, child]) => childLine(id, child)),
-    ], width);
+    tail = wrapRichLines(
+      [
+        // While arguments are still being generated, the pending-tool rows take
+        // the transient slot: reasoning is a lower-value duplicate there.
+        ...(reasoningLine && previews.size === 0 ? [reasoningLine] : []),
+        ...nextTail,
+        ...[...active.values()].map((call) => toolRunningLine(call, width)),
+        ...[...previews.values()].map((preview) =>
+          toolPreviewLine(preview, width),
+        ),
+        ...[...children].map(([id, child]) => childLine(id, child)),
+      ],
+      width,
+    );
     return {
       append: wrapRichLines(append, width),
       tail,
@@ -248,8 +291,13 @@ export const createEventRenderer = (
   };
 
   const live = (label: string): RunStatus => {
-    const position = stepNumber === undefined ? "" : `第 ${turnNumber} 轮 · 第 ${stepNumber} 步 · `;
-    currentStatus = withTokens(statusFor(`${position}${label}`, startedAt, toolCount, true));
+    // Round/step position stays structured, not baked into the label: the dock
+    // decides how much of it a narrow row can afford.
+    currentStatus = withTokens({
+      ...statusFor(label, startedAt, toolCount, true),
+      ...(turnNumber === undefined ? {} : { turn: turnNumber }),
+      ...(stepNumber === undefined ? {} : { step: stepNumber }),
+    });
     return currentStatus;
   };
 
@@ -259,7 +307,7 @@ export const createEventRenderer = (
         case "step_started":
           turnNumber = event.turn;
           stepNumber = event.step;
-          return update([], messageTail, live("thinking"));
+          return update([], messageTail, live(chrome.thinking));
         case "step_finished":
           return { append: [], tail };
         case "retry_reset":
@@ -269,9 +317,13 @@ export const createEventRenderer = (
           reasoningAccumulator = "";
           reasoningStreamed = "";
           clearPreviews();
-          return update([], [], live("retrying"));
+          return update([], [], live(chrome.retrying));
         case "provider_retry":
-          return update([], [], live(`重试 ${event.attempt}/${event.maxAttempts}`));
+          return update(
+            [],
+            [],
+            live(`重试 ${event.attempt}/${event.maxAttempts}`),
+          );
         case "provider_attempt":
           running = true;
           return update(
@@ -295,15 +347,25 @@ export const createEventRenderer = (
           reasoningStreamed = "";
           running = true;
           clearPreviews();
-          return update(flushText(), [], live("thinking"));
+          return update(flushText(), [], live(chrome.thinking));
         case "web_search":
           return update([], messageTail, live(webSearchStatus(event.search)));
         case "web_search_result":
-          return update([...flushText(), ...markdownLines(webSearchDetails(event), options.width?.() ?? 80)], [], live("thinking"));
+          return update(
+            [
+              ...flushText(),
+              ...markdownLines(
+                webSearchDetails(event),
+                options.width?.() ?? 80,
+              ),
+            ],
+            [],
+            live(chrome.thinking),
+          );
         case "reasoning_delta": {
           running = true;
           const appended = updateReasoning(event.text);
-          return update(appended, messageTail, live("thinking"));
+          return update(appended, messageTail, live(chrome.thinking));
         }
         case "text_delta": {
           running = true;
@@ -313,7 +375,7 @@ export const createEventRenderer = (
           reasoningStreamed = "";
           streamedText += event.text;
           const chunk = markdown.push(event.text);
-          return update(chunk.append, chunk.tail, live("responding"));
+          return update(chunk.append, chunk.tail, live(chrome.responding));
         }
         case "tool_call_preview": {
           running = true;
@@ -332,7 +394,11 @@ export const createEventRenderer = (
         }
         case "tool_preview_reset":
           clearPreviews();
-          return update([], messageTail, running ? live("thinking") : null);
+          return update(
+            [],
+            messageTail,
+            running ? live(chrome.thinking) : null,
+          );
         case "tool_started": {
           running = true;
           // A tool call ends the reasoning phase for this request.
@@ -347,7 +413,9 @@ export const createEventRenderer = (
           return update(
             flushText(),
             [],
-            live(event.call.function.name),
+            // The tail row already names the running tool, so the status keeps
+            // the neutral activity word instead of repeating the verb.
+            live(chrome.thinking),
           );
         }
         case "tool_finished": {
@@ -355,20 +423,43 @@ export const createEventRenderer = (
           return update(
             [
               ...flushText(),
-              ...tools.summary(event.toolCallId, event.result, options.width?.() ?? 80, now()),
+              ...tools.summary(
+                event.toolCallId,
+                event.result,
+                options.width?.() ?? 80,
+                now(),
+              ),
             ],
             [],
-            live("thinking"),
+            live(chrome.thinking),
           );
         }
         case "tool_hook":
-          if (event.diagnostic.status === "ok" || event.diagnostic.status === "skipped") return update([], [], live("thinking"));
-          return update([...flushText(), [{ text: sanitizeText(`Hook ${event.diagnostic.id}: ${event.diagnostic.reason ?? event.diagnostic.status}`), tone: "error" }]], [], live("thinking"));
+          if (
+            event.diagnostic.status === "ok" ||
+            event.diagnostic.status === "skipped"
+          )
+            return update([], [], live(chrome.thinking));
+          return update(
+            [
+              ...flushText(),
+              [
+                {
+                  text: sanitizeText(
+                    `钩子 ${event.diagnostic.id}: ${event.diagnostic.reason ?? event.diagnostic.status}`,
+                  ),
+                  tone: "error",
+                },
+              ],
+            ],
+            [],
+            live(chrome.thinking),
+          );
         case "plan_updated":
           return update(
             [...flushText(), ...planEventLines(event.plan)],
             [],
-            live("thinking"),
+            live(chrome.thinking),
           );
         case "error":
           running = false;
@@ -397,11 +488,34 @@ export const createEventRenderer = (
               : event.status === "failed"
                 ? "error"
                 : "warning";
+          const outcome =
+            event.status === "completed"
+              ? chrome.completed
+              : event.status === "failed"
+                ? chrome.failed
+                : event.status === "cancelled"
+                  ? chrome.cancelled
+                  : chrome.interrupted;
+          // One quiet closing row: outcome, work done, and retries only when they happened.
+          const facts = [
+            `${event.steps ?? event.turns} ${chrome.steps}`,
+            `${event.toolCalls} ${chrome.toolCalls}`,
+          ];
+          if (event.retries) facts.push(`${event.retries} ${chrome.retries}`);
           return update(
             [
               ...flushText(),
-              ...stopTools(event.status === "cancelled" ? "cancelled" : "interrupted"),
-              [{ text: `${event.status} · ${event.steps ?? event.turns} 步 · ${event.toolCalls} tools${event.retries ? ` · ${event.retries} 次请求重试` : ""}`, tone }],
+              ...stopTools(
+                event.status === "cancelled"
+                  ? chrome.cancelled
+                  : chrome.interrupted,
+              ),
+              [
+                {
+                  text: `${uiSymbols().separator} ${outcome} ${uiSymbols().separator} ${facts.join(` ${uiSymbols().separator} `)}`,
+                  tone,
+                },
+              ],
             ],
             [],
             null,
@@ -419,12 +533,16 @@ export const createEventRenderer = (
             reasoningLine = undefined;
             reasoningAccumulator = "";
             clearPreviews();
-            return update([...flushText(), ...stopTools("cancelled")], [], null);
+            return update(
+              [...flushText(), ...stopTools(chrome.cancelled)],
+              [],
+              null,
+            );
           }
           return {
             append: [],
             tail,
-            ...(running ? { status: live("thinking") } : {}),
+            ...(running ? { status: live(chrome.thinking) } : {}),
           };
         case "context_usage": {
           if (!running) return { append: [], tail };
@@ -447,12 +565,26 @@ export const createEventRenderer = (
         case "agent_update": {
           const id = event.childSessionId;
           if (settled.has(id)) return { append: [], tail };
-          const child = { model: event.model, status: event.status,
-            activity: event.currentTool ? `${event.currentTool.name} ${event.currentTool.target}`.trim() : "thinking" };
-          if (["completed", "failed", "cancelled", "interrupted"].includes(event.status)) {
-            children.delete(id); settled.add(id);
+          const child = {
+            model: event.model,
+            status: event.status,
+            activity: event.currentTool
+              ? `${event.currentTool.name} ${event.currentTool.target}`.trim()
+              : "thinking",
+          };
+          if (
+            ["completed", "failed", "cancelled", "interrupted"].includes(
+              event.status,
+            )
+          ) {
+            children.delete(id);
+            settled.add(id);
             // Do not dump the child's summary/logs or finalize parent Markdown.
-            return update([childLine(id, { ...child, activity: "" })], messageTail, currentStatus);
+            return update(
+              [childLine(id, { ...child, activity: "" })],
+              messageTail,
+              currentStatus,
+            );
           }
           if (children.has(id) || children.size < 4) children.set(id, child);
           return update([], messageTail, currentStatus);
@@ -462,13 +594,16 @@ export const createEventRenderer = (
         case "title_changed":
         case "generation_started":
         case "generation_finished":
+        // Harness adaptation is a host-internal phase report; it is not a
+        // reader-facing message, so the transcript stays unchanged.
+        case "harness_adaptation":
           return { append: [], tail };
         case "permission_changed":
         case "context_compacted":
           return {
             append: [],
             tail,
-            ...(running ? { status: live("thinking") } : {}),
+            ...(running ? { status: live(chrome.thinking) } : {}),
           };
         default: {
           const _exhaustive: never = event;
@@ -480,10 +615,16 @@ export const createEventRenderer = (
       const id = request.childSessionId;
       if (!id || settled.has(id)) return { append: [], tail };
       const previous = children.get(id);
-      if (previous || children.size < 4) children.set(id, {
-        model: previous?.model ?? "", status: "auto-approved",
-        activity: `${request.toolName} ${approvalAuditArguments(request).join(" ")}`.slice(0, 2048),
-      });
+      if (previous || children.size < 4)
+        children.set(id, {
+          model: previous?.model ?? "",
+          status: "auto-approved",
+          activity:
+            `${request.toolName} ${approvalAuditArguments(request).join(" ")}`.slice(
+              0,
+              2048,
+            ),
+        });
       return update([], messageTail, currentStatus);
     },
     finish(): RenderUpdate {
@@ -497,7 +638,9 @@ export const createEventRenderer = (
 };
 
 const planEventLines = (plan: TaskPlan): RichLine[] => {
-  const rows: RichLine[] = [[{ text: plan.title ? `Plan: ${plan.title}` : "Plan", tone: "accent" }]];
+  const rows: RichLine[] = [
+    [{ text: plan.title ? `Plan: ${plan.title}` : "Plan", tone: "accent" }],
+  ];
   if (plan.explanation) rows.push([{ text: plan.explanation, tone: "muted" }]);
   for (const [index, step] of plan.steps.entries()) {
     const tone =

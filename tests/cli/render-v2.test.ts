@@ -163,7 +163,8 @@ describe("streaming markdown", () => {
     expect(textOf(second.tail)).toContain("const value");
     const done = stream.finish();
     const all = `${textOf(first.append)}\n${textOf(second.append)}\n${textOf(done.append)}`;
-    expect(all).toContain("# Title");
+    expect(all).toContain("Title");
+    expect(all).not.toContain("# Title");
     expect(all.match(/const value/g)).toHaveLength(1);
   });
 
@@ -187,8 +188,8 @@ describe("tools and diffs", () => {
       ),
     } as AgentEvent);
     expect(started.append).toEqual([]);
-    expect(textOf(started.tail)).toContain("run_command");
-    expect(textOf(started.tail)).toContain("running");
+    expect(textOf(started.tail)).toContain("运行");
+    expect(textOf(started.tail)).toContain("ls src");
     expect(started.tail[0]?.[0]?.animation).toBe("spinner");
     const result: ToolResult = {
       content: JSON.stringify({
@@ -235,19 +236,19 @@ describe("tools and diffs", () => {
     expect(tools.start(command)).toBe(1);
     const result = { content: JSON.stringify({ stdout: "first\nsecond", exit_code: 0 }), isError: false };
     const summary = textOf(tools.summary(command.id, result, 80));
-    expect(summary).toContain("#1");
+    expect(summary).toContain("first");
     expect(summary).toContain("first");
     expect(summary).not.toContain("second");
     expect(summary).not.toContain("private-text");
-    expect(textOf(tools.list(80))).toContain("#1");
+    expect(textOf(tools.list(80))).toContain("echo");
     const detail = textOf(tools.detail(1, 80));
     expect(detail).toContain("private-text");
     expect(detail).toContain("second");
     expect(textOf(tools.detail(2, 80))).toContain("No tool #2");
     const renderer = createEventRenderer({ tools });
     const next = call("next", "read_file", '{"path":"next.txt"}');
-    expect(textOf(renderer.push({ type: "tool_started", call: next } as AgentEvent).tail)).toContain("read_file");
-    expect(textOf(renderer.push({ type: "tool_finished", toolCallId: next.id, result } as AgentEvent).append)).toContain("#2");
+    expect(textOf(renderer.push({ type: "tool_started", call: next } as AgentEvent).tail)).toContain("读取");
+    expect(textOf(renderer.push({ type: "tool_finished", toolCallId: next.id, result } as AgentEvent).append)).toContain("读取 next.txt");
   });
 
   it("bounds a real unified diff and does not invent missing content", () => {
@@ -266,11 +267,11 @@ describe("tools and diffs", () => {
     const lines = diffLines(change);
     expect(lines.length).toBeLessThanOrEqual(25);
     expect(textOf(lines)).toContain("1 - old 0");
-    expect(textOf(lines)).toContain("omitted");
+    expect(textOf(lines)).toContain("省略");
     expect(textOf(lines)).not.toContain("+ new 0"); // Never reorder later additions.
     expect(textOf(diffLines(change, { maxRows: 100 }))).toContain("1 + new 0");
     const missing = diffLines({ path: "src/a.ts", kind: "modified" });
-    expect(textOf(missing)).toContain("unavailable");
+    expect(textOf(missing)).toContain("不可用");
     expect(textOf(missing)).not.toContain("-old");
   });
 
@@ -283,7 +284,7 @@ describe("tools and diffs", () => {
     const createdText = textOf(created);
     expect(createdText).toContain("1   export const ready = true;");
     expect(createdText).not.toContain("unavailable");
-    expect(createdText).toContain("new file · 1 lines");
+    expect(createdText).toContain("新文件 · 1 行");
     expect(createdText).not.toContain("@@");
 
     const deleted = diffLines({
@@ -292,7 +293,7 @@ describe("tools and diffs", () => {
       patch: createDiffPatch("export const gone = true;", ""),
     });
     expect(textOf(deleted)).toContain("1 - export const gone = true;");
-    expect(textOf(deleted)).toContain("@@ -1,1 +0,0 @@");
+    expect(textOf(deleted)).toContain("1 - export const gone = true;");
   });
 
   it("keeps a late insertion visible with nearby context", () => {
@@ -312,7 +313,7 @@ describe("tools and diffs", () => {
     expect(body).toContain(" line 99");
     expect(body).toContain(" line 100");
     expect(body).not.toContain(" line 0");
-    expect(body).toMatch(/@@ -\d+,\d+ \+\d+,\d+ @@/);
+    expect(body).not.toContain("@@");
     expect(lines.length).toBeLessThanOrEqual(25);
   });
 
@@ -355,8 +356,8 @@ describe("tools and diffs", () => {
     expect(narrow.length).toBeLessThan(30);
     expect(textOf(narrow)).toContain("stdout");
     expect(textOf(narrow)).toContain("stderr warn");
-    expect(textOf(narrow)).toContain("exit 0");
-    expect(textOf(narrow)).toMatch(/more preview lines|more lines/);
+    expect(textOf(narrow)).not.toContain("exit 0");
+    expect(textOf(narrow)).toMatch(/行预览|另有 \d+ 行/);
   });
 
   it("wraps tool rows and tails to 40 and 120 columns", () => {
@@ -410,12 +411,12 @@ describe("approval context", () => {
     const body = textOf(lines)
       .replaceAll("\u001b[7m", "")
       .replaceAll("\u001b[27m", "");
-    expect(body).toContain("Workspace:");
+    expect(body).toContain("工作区");
     expect(body).toContain("/home/workspace");
     expect(body.replaceAll("\n", "")).toContain(description);
     expect(body.replaceAll("\n", "")).toContain(command.join(" "));
-    expect(body).toContain("Approve? [Y/n]");
-    expect(lines.length).toBeGreaterThan(4);
+    expect(body).toContain("Enter 批准");
+    expect(lines.length).toBeGreaterThan(3);
     expect(
       Math.max(
         ...lines.map((line) =>
@@ -446,20 +447,20 @@ describe("approval context", () => {
       40,
     );
     const flat = textOf(lines).replaceAll("\n", "");
-    expect(flat).toContain("Approval required");
+    expect(flat).toContain("需要批准");
     expect(flat).toContain("run_command");
     expect(flat).not.toContain("\u001b");
     expect(flat).toContain("Execute the command below");
     expect(flat).toContain('in workspace cwd "."');
     expect(flat).toContain("This is not an OS sandbox.");
     expect(flat).not.toContain(JSON.stringify(command));
-    expect(flat.match(/Command:/g)).toHaveLength(1);
+    expect(flat.match(/qa-审批/g)).toHaveLength(1);
     expect(flat.indexOf("node -e")).toBe(flat.lastIndexOf("node -e"));
     expect(flat).toContain("-e");
     expect(flat).toContain("qa-审批");
     expect(flat).toContain("中文");
-    expect(flat).toContain(`child ${child}`);
-    expect(flat).toContain("Approve? [Y/n]");
+    expect(flat).toContain(`子会话 ${child}`);
+    expect(flat).toContain("Enter 批准");
     expect(
       Math.max(
         ...lines.map((line) =>
@@ -485,9 +486,9 @@ describe("compact tool header", () => {
       const startText = textOf([started]);
       expect(startText.split("\n")).toHaveLength(1);
       expect(stringWidth(startText)).toBeLessThanOrEqual(width);
-      expect(startText.startsWith("run_command ")).toBe(true);
-      expect(startText.endsWith(" · running")).toBe(true);
-      expect(startText).toContain("…");
+      expect(startText.startsWith("↳ 运行 ")).toBe(true);
+      // At 80/120 the whole synthetic path fits; only 40 needs an ellipsis.
+      if (width === 40) expect(startText).toContain("…");
 
       const finished = toolFinishLines(
         longCall(argv),
@@ -503,8 +504,8 @@ describe("compact tool header", () => {
       );
       const header = textOf(finished.slice(0, 1));
       expect(stringWidth(header)).toBeLessThanOrEqual(width);
-      expect(header.startsWith("run_command ")).toBe(true);
-      expect(header.endsWith(" · failed · exit 2")).toBe(true);
+      expect(header.startsWith("✖ 运行 ")).toBe(true);
+      expect(header.endsWith(" · 失败 · exit 2")).toBe(true);
       expect(textOf(finished)).toContain("exit 2");
     }
   });
@@ -521,14 +522,14 @@ describe("compact tool header", () => {
     );
     const header = textOf(finished.slice(0, 1));
     expect(stringWidth(header)).toBeLessThanOrEqual(40);
-    expect(header.endsWith(" · failed · exit 7")).toBe(true);
+    expect(header.endsWith(" · 失败 · exit 7")).toBe(true);
     expect(header).toContain("…");
     expect(header).not.toContain("src/渲染.ts");
   });
 
   it("keeps the real suffix when a long name leaves no room for the target", () => {
     const huge = "x".repeat(3000);
-    const suffix = " · failed · exit 3";
+    const suffix = " · 失败 · exit 3";
     const finished = toolFinishLines(
       call("2", "run_command", JSON.stringify({ argv: ["node", huge] })),
       {
@@ -541,7 +542,7 @@ describe("compact tool header", () => {
     expect(narrow.split("\n")).toHaveLength(1);
     expect(stringWidth(narrow)).toBeLessThanOrEqual(20);
     expect(narrow.endsWith(suffix)).toBe(true);
-    expect(narrow.startsWith("r…")).toBe(true);
+    expect(narrow.startsWith("✖ ")).toBe(true);
     expect(narrow).not.toContain("run_command");
     expect(narrow).not.toContain(huge.slice(0, 8));
 

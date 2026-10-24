@@ -134,20 +134,22 @@ describe("Formatters", () => {
       theme,
     );
     expect(output).toContain(
-      "Approval required: run_command (child 10000000-0000-4000-8000-000000000099)",
+      "需要批准 run_command（子会话 10000000-0000-4000-8000-000000000099）",
     );
-    expect(output).toContain("Workspace:");
+    expect(output).toContain("工作区");
     expect(output).toContain("Execute bash command");
     expect(output).toContain("npm test");
     expect(output).not.toContain('["npm","test"]');
-    expect(output).toContain("Approve? [Y/n]");
+    expect(output).toContain("Enter 批准");
   });
 
   it("renders markdown without box-drawing walls", () => {
     const md = "# Title\n## Section\n- item 1\n```ts\nconst x = 1;\n```";
     const output = renderMarkdown(md, theme);
-    expect(output).toContain("# Title");
-    expect(output).toContain("## Section");
+    expect(output).toContain("Title");
+    expect(output).not.toContain("# Title");
+    expect(output).toContain("Section");
+    expect(output).not.toContain("## ");
     expect(output).toContain("* item 1");
     expect(output).toContain("const x = 1;");
     expect(output).not.toContain("┌");

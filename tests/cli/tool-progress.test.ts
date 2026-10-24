@@ -21,13 +21,13 @@ it("reports tool start immediately in append-only fallback without duplicating r
   let err = "";
   const run = new LiveRun(ioFixture((value) => { out += value; }, (value) => { err += value; }), createTheme({ isTTY: false }));
   run.event(start("one"));
-  expect(err).toContain("run_command echo one · running");
-  expect(out).not.toContain("done");
+  expect(err).toContain("运行 echo one");
+  expect(out).not.toContain("完成");
   run.event(finish("one"));
   run.dispose();
-  expect(out.match(/run_command/g)).toHaveLength(1);
-  expect(out).toContain("done");
-  expect(err.match(/running/g)).toHaveLength(1);
+  expect(out.match(/运行/g)).toHaveLength(1);
+  expect(out).toContain("无输出");
+  expect(err.match(/运行/g)).toHaveLength(1);
   expect(out + err).not.toContain("\u001b");
 });
 
@@ -39,11 +39,11 @@ it("replaces the transient tool with one done record, leaving concurrent tools r
   expect(renderer.push(start("one")).append).toEqual([]);
   expect(renderer.push(start("two")).tail).toHaveLength(2);
   const first = renderer.push(finish("two"));
-  expect(text(first.append)).toContain("echo two · done");
-  expect(text(first.tail)).toContain("echo one · running");
+  expect(text(first.append)).toContain("运行 echo two");
+  expect(text(first.tail)).toContain("运行 echo one");
   expect(text(first.tail)).not.toContain("echo two");
   const last = renderer.push(finish("one", 3));
-  expect(text(last.append)).toContain("failed · exit 3");
+  expect(text(last.append)).toContain("失败 · exit 3");
   expect(last.tail).toEqual([]);
   expect(renderer.finish().append).toEqual([]);
 });
@@ -52,13 +52,13 @@ it("keeps progress through approval/plan events and clears it on cancellation wi
   const renderer = createEventRenderer();
   renderer.push(start("one"));
   const approval = renderer.push({ type: "approval_requested" } as AgentEvent);
-  expect(text(approval.tail)).toContain("running");
+  expect(text(approval.tail)).toContain("运行 echo one");
   const plan = renderer.push({ type: "plan_updated", plan: { steps: [], explanation: "working" } } as unknown as AgentEvent);
-  expect(text(plan.tail)).toContain("running");
+  expect(text(plan.tail)).toContain("运行 echo one");
   const cancelled = renderer.push({ type: "state_changed", status: "cancelled" } as AgentEvent);
   expect(cancelled.tail).toEqual([]);
-  expect(text(cancelled.append)).toContain("cancelled");
-  expect(text(cancelled.append)).not.toContain("done");
+  expect(text(cancelled.append)).toContain("已取消");
+  expect(text(cancelled.append)).not.toContain("完成");
   expect(renderer.finish().append).toEqual([]);
 });
 
@@ -68,7 +68,7 @@ it("finalizes an interrupted tool once on disposal or error", () => {
     renderer.push(start("one"));
     const stopped = error ? renderer.push({ type: "error", error: { message: "lost connection" } } as AgentEvent) : renderer.finish();
     expect(stopped.tail).toEqual([]);
-    expect(text(stopped.append)).toContain("interrupted");
+    expect(text(stopped.append)).toContain("已中断");
     expect(text(stopped.append)).not.toContain("done");
     expect(renderer.finish().append).toEqual([]);
   }
@@ -91,13 +91,13 @@ it("animates while no new events arrive, then stops after completion and disposa
     run.event(start("one"));
     expect(bytes).toContain("⠋");
     expect(bytes).toContain("echo one");
-    expect(bytes).toContain("running");
+    expect(bytes).toContain("运行");
     expect(bytes).not.toContain("done");
     bytes = "";
     vi.advanceTimersByTime(100);
     expect(bytes).toContain("⠙");
     run.event(finish("one"));
-    expect(bytes).toContain("done");
+    expect(bytes).toContain("思考中");
     run.dispose();
     reader.ui.setStatus(null);
     bytes = "";
