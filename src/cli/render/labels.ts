@@ -24,6 +24,8 @@ const verbs: Readonly<Record<string, string>> = {
   list_models: "models",
   create_plan: "plan",
   update_plan: "plan",
+  list_agent_profiles: "agent profiles",
+  answer_advisor: "answer advisor",
   spawn_agent: "agent",
   list_agents: "agents",
   wait_agents: "wait",

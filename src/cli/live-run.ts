@@ -1,7 +1,7 @@
 import type { AgentEvent, ApprovalRequest } from "@forge/core/shared/schemas";
 import { webSearchStatus } from "./render/web-search";
 import type { CliIO } from "./cli";
-import { createEventRenderer, previewSummary } from "./render/events";
+import { createEventRenderer, previewSummary, advisorSummary } from "./render/events";
 import { renderRichLine } from "./render/rich";
 import { ToolTranscript } from "./render/tool-transcript";
 import { toolStartLine } from "./render/tools";
@@ -80,6 +80,7 @@ export class LiveRun {
       this.announced.clear();
     }
     if (this.ui) return;
+    if (event.type === "advisor_update") this.io.stderr(`${advisorSummary(event)}\n`);
     if (event.type === "web_search") this.io.stderr(`${webSearchStatus(event.search)}\n`);
     if (event.type === "tool_call_preview") {
       // One line per pending tool, not one per argument chunk. The rich tail

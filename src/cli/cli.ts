@@ -32,7 +32,7 @@ import {
 } from "./model-access";
 import { createNodeIO } from "./node-io";
 import { runPluginsCommand } from "./plugins";
-import { previewSummary } from "./render/events";
+import { previewSummary, advisorSummary } from "./render/events";
 import { toolVerb } from "./render/labels";
 export { createNodeIO, nodeIO } from "./node-io";
 export type { CreateNodeIOOptions } from "./node-io";
@@ -357,6 +357,9 @@ const renderEvent = (output: CliIO, event: AgentEvent): void => {
     case "plan_updated":
       io.stdout(`Plan: ${JSON.stringify(event.plan)}\n`);
       break;
+    case "advisor_update":
+      io.stderr(`${advisorSummary(event)}\n`);
+      return;
     case "agent_update":
       io.stdout(
         `\nChild ${event.childSessionId}: ${event.status}; model=${event.model}\n${event.summary}\n`,

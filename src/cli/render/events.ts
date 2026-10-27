@@ -141,6 +141,17 @@ export const providerAttemptLine = (
   ];
 };
 
+type AdvisorUpdate = Extract<AgentEvent, { type: "advisor_update" }>;
+const advisorLabel = (request: AdvisorUpdate["request"]): string => request.status === "pending"
+  ? "awaiting advisor" : request.status === "answered"
+    ? request.deliveredAt ? "advisor delivered" : "advisor answered (delivery pending)"
+    : `advisor ${request.status}`;
+
+/** Metadata only: child questions/answers must not become parent reply text. */
+export const advisorSummary = (event: AdvisorUpdate): string => sanitizeText(
+  `Child ${event.request.childSessionId.slice(0, 8)}: ${advisorLabel(event.request)}; request=${event.request.id.slice(0, 8)}`,
+);
+
 export const createEventRenderer = (
   options: EventRendererOptions = {},
 ): EventRenderer => {
@@ -202,6 +213,7 @@ export const createEventRenderer = (
     { model: string; status: string; activity: string }
   >();
   const settled = new Set<string>();
+  const awaitingAdvisor = new Map<string, string>();
   const childLine = (
     id: string,
     child: { model: string; status: string; activity: string },
@@ -227,6 +239,7 @@ export const createEventRenderer = (
       return childLine(id, { ...child, status: "interrupted", activity: "" });
     });
     children.clear();
+    awaitingAdvisor.clear();
     return lines;
   };
   const active = new Map<string, ToolCall>();
@@ -559,6 +572,20 @@ export const createEventRenderer = (
           }
           return { append: [], tail };
         }
+        case "advisor_update": {
+          const request = event.request;
+          const id = request.childSessionId;
+          if (settled.has(id) || request.parentSessionId !== event.sessionId) return { append: [], tail };
+          const pending = awaitingAdvisor.get(id);
+          if (pending && pending !== request.id && request.status !== "pending") return { append: [], tail };
+          const previous = children.get(id);
+          if (!previous && (request.status !== "pending" || children.size >= 4)) return { append: [], tail };
+          if (request.status === "pending") awaitingAdvisor.set(id, request.id);
+          else awaitingAdvisor.delete(id);
+          children.set(id, { model: previous?.model ?? "", status: request.status === "pending" ? "awaiting advisor" : "running",
+            activity: request.status === "pending" ? `request ${request.id.slice(0, 8)}` : advisorLabel(request) });
+          return update([], messageTail, currentStatus);
+        }
         case "agent_update": {
           const id = event.childSessionId;
           if (settled.has(id)) return { append: [], tail };
@@ -575,6 +602,7 @@ export const createEventRenderer = (
             )
           ) {
             children.delete(id);
+            awaitingAdvisor.delete(id);
             settled.add(id);
             // Do not dump the child's summary/logs or finalize parent Markdown.
             return update(
@@ -583,7 +611,9 @@ export const createEventRenderer = (
               currentStatus,
             );
           }
-          if (children.has(id) || children.size < 4) children.set(id, child);
+          const question = awaitingAdvisor.get(id);
+          if (children.has(id) || children.size < 4) children.set(id, question
+            ? { ...child, status: "awaiting advisor", activity: `request ${question.slice(0, 8)}` } : child);
           return update([], messageTail, currentStatus);
         }
         case "agent_progress": // Do not mix the child's reply into parent Markdown.
